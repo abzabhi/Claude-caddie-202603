@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virtual Caddie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4efe6;
+  --bg2:#ede7da;
+  --sf:#ffffff;
+  --sf2:#f9f6f0;
+  --br:#ddd5c4;
+  --br2:#c8bba6;
+  --gr:#3d6b35;
+  --gr2:#4e8843;
+  --gr3:#e8f0e5;
+  --ac:#3d6b35;
+  --ac2:#2d5127;
+  --sky:#6898b4;
+  --sky2:#edf3f7;
+  --heather:#7b6e8f;
+  --sand:#b89a5a;
+  --sand2:#f5edda;
+  --tx:#2c3a28;
+  --tx2:#5a6e52;
+  --tx3:#8a9e82;
+  --danger:#a03030;
+  --gold:#9a7a2a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(104,152,180,.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 100%, rgba(61,107,53,.08) 0%, transparent 50%);
+  font-family:'DM Mono',monospace;
+  color:var(--tx);
+  min-height:100vh;
+}
+.app{max-width:820px;margin:0 auto;padding:24px 16px 80px;}
+
+/* Header */
+.hdr{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px;padding-bottom:14px;border-bottom:2px solid var(--gr);}
+.hdr-title{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--ac2);letter-spacing:-.01em;line-height:1;}
+.hdr-sub{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3);margin-top:5px;}
+.hdr-flag{font-size:1.5rem;opacity:.8;}
+
+/* Toolbar */
+.toolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:16px;flex-wrap:wrap;}
+
+/* Tabs */
+.tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--br);flex-wrap:wrap;}
+.tab{flex:1;min-width:60px;padding:9px 8px 8px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--tx3);font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .18s;text-align:center;}
+.tab.active{color:var(--ac2);border-bottom-color:var(--gr);font-weight:500;}
+.tab:hover:not(.active){color:var(--tx2);background:var(--sf2);}
+.badge{display:inline-block;background:var(--gr3);color:var(--ac);border-radius:9px;padding:0 5px;font-size:.54rem;margin-left:3px;vertical-align:middle;}
+.tab.active .badge{background:var(--gr);color:#fff;}
+.panel{display:none;}.panel.active{display:block;}
+
+/* Status bar */
+.sbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:9px 12px;background:var(--sf);border:1px solid var(--br);border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.sbar-lbl{font-size:.62rem;color:var(--tx2);white-space:nowrap;}
+.sbar-track{flex:1;height:4px;background:var(--br);border-radius:2px;overflow:hidden;}
+.sbar-fill{height:100%;border-radius:2px;transition:width .4s;}
+.sbar-fill.ok{background:var(--gr2);}.sbar-fill.warn{background:var(--sand);}.sbar-fill.over{background:var(--danger);}
+.sbar-cnt{font-size:.65rem;font-weight:500;white-space:nowrap;}
+.sbar-cnt.over{color:var(--danger);}.sbar-cnt.warn{color:var(--gold);}.sbar-cnt.ok{color:var(--ac);}
+
+/* Section labels */
+.slbl{font-size:.56rem;letter-spacing:.16em;text-transform:uppercase;color:var(--tx3);margin:16px 0 8px;display:flex;align-items:center;gap:10px;}
+.slbl::after{content:'';flex:1;height:1px;background:var(--br);}
+.slbl.pur{color:var(--heather);}
+
+/* Club rows */
+.crow{background:var(--sf);border:1px solid var(--br);border-radius:6px;margin-bottom:5px;overflow:hidden;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.crow:hover{border-color:var(--br2);box-shadow:0 2px 6px rgba(0,0,0,.07);}
+.crow.open{border-color:var(--gr2);}
+.crow.excl{opacity:.45;}
+.cmain{display:flex;align-items:stretch;user-select:none;}
+.ctblk{display:flex;flex-direction:column;align-items:center;justify-content:center;width:52px;flex-shrink:0;padding:7px 3px;border-right:1px solid var(--br);background:var(--sf2);}
+.ctlbl{font-size:.76rem;font-weight:500;line-height:1.1;text-align:center;}
+.cloftlbl{font-size:.52rem;color:var(--tx3);margin-top:2px;text-align:center;}
+.cmid{flex:1;min-width:0;padding:9px 11px;cursor:pointer;display:flex;align-items:center;}
+.cdist{font-size:.76rem;color:var(--tx);}
+.csess{font-size:.58rem;color:var(--tx3);margin-top:2px;}
+.cnodata{font-size:.7rem;color:var(--tx3);font-style:italic;}
+.cctrl{display:flex;align-items:stretch;flex-shrink:0;border-left:1px solid var(--br);}
+.opttog{background:none;border:none;border-right:1px solid var(--br);cursor:pointer;padding:0 9px;display:flex;align-items:center;justify-content:center;}
+.opticon{width:17px;height:17px;border-radius:50%;border:1.5px solid var(--br2);display:flex;align-items:center;justify-content:center;font-size:.65rem;transition:all .15s;}
+.opticon.on{background:var(--gr);border-color:var(--gr2);color:#fff;}
+.opticon.off{color:transparent;}
+.expbtn,.delx{background:none;border:none;border-right:1px solid var(--br);color:var(--tx3);cursor:pointer;font-size:.65rem;padding:0 9px;min-height:44px;}
+.delx{border-right:none;}
+.expbtn:hover{color:var(--tx2);}.delx:hover{color:var(--danger);}
+
+/* Club panel */
+.cpanel{border-top:1px solid var(--br);background:var(--sf2);padding:0 11px 11px;}
+.specs{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 78px;gap:7px;padding-top:10px;}
+.sf-lbl{font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:3px;}
+.sf input,.sf select{width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 7px;outline:none;}
+.sf input:focus,.sf select:focus{border-color:var(--gr2);box-shadow:0 0 0 2px rgba(78,136,67,.12);}
+.sf input::placeholder{color:var(--tx3);}
+.sf select option{background:#fff;}
+
+/* Sessions */
+.sess-sec{margin-top:10px;padding-top:10px;border-top:1px solid var(--br);}
+.sess-hdr{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:6px;display:flex;justify-content:space-between;}
+.sess-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--br);}
+.sess-row:last-child{border-bottom:none;}
+.sess-dt{font-size:.68rem;color:var(--tx2);min-width:65px;}
+.sess-rng{font-size:.72rem;color:var(--tx);flex:1;}
+.sess-del{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:.68rem;padding:2px 4px;}
+.sess-del:hover{color:var(--danger);}
+.add-sess{display:flex;gap:6px;align-items:flex-end;margin-top:8px;flex-wrap:wrap;}
+.asf{display:flex;flex-direction:column;gap:3px;}
+.asf label{font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);}
+.asf input{background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 7px;outline:none;width:84px;}
+.asf input[type=date]{width:126px;}
+.asf input:focus{border-color:var(--gr2);}
+
+/* Buttons */
+.add-club-btn{width:100%;margin-top:8px;padding:8px;background:none;border:1px dashed var(--br2);border-radius:6px;color:var(--tx2);font-family:'DM Mono',monospace;font-size:.68rem;cursor:pointer;letter-spacing:.07em;transition:all .2s;}
+.add-club-btn:hover{border-color:var(--gr2);color:var(--ac);background:var(--gr3);}
+.btn{padding:5px 12px;background:var(--gr);border:none;border-radius:4px;color:#fff;font-family:'DM Mono',monospace;font-size:.68rem;cursor:pointer;transition:all .18s;}
+.btn:hover{background:var(--gr2);}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn.sec{background:none;border:1px solid var(--br2);color:var(--tx2);}
+.btn.sec:hover{border-color:var(--gr2);color:var(--ac);background:var(--gr3);}
+.btn.danger{background:none;border:1px solid var(--danger);color:var(--danger);}
+.btn.gold{background:none;border:1px solid var(--sand);color:var(--gold);}
+.btn.gold:hover{background:var(--sand2);}
+.rbtn{width:100%;padding:13px;background:var(--gr);border:none;border-radius:6px;color:#fff;font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;cursor:pointer;letter-spacing:.02em;transition:all .22s;margin-top:4px;box-shadow:0 2px 8px rgba(61,107,53,.25);}
+.rbtn:hover:not(:disabled){background:var(--ac2);box-shadow:0 4px 14px rgba(61,107,53,.3);}
+.rbtn:disabled{opacity:.35;cursor:not-allowed;}
+
+/* Cards */
+.card{background:var(--sf);border:1px solid var(--br);border-radius:8px;padding:18px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.card-title{font-family:'Playfair Display',serif;font-size:.95rem;font-weight:600;color:var(--ac2);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+.card-title::after{content:'';flex:1;height:1px;background:var(--br);}
+.flbl{font-size:.57rem;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);margin-bottom:3px;}
+.field{margin-bottom:10px;}
+.field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.74rem;padding:6px 9px;outline:none;transition:border-color .15s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gr2);box-shadow:0 0 0 2px rgba(78,136,67,.1);}
+.field input::placeholder,.field textarea::placeholder{color:var(--tx3);}
+.field textarea{resize:vertical;}
+.field select option{background:#fff;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;}
+@media(max-width:540px){.g2,.g3,.g4,.specs{grid-template-columns:1fr 1fr!important;}}
+
+/* Handicap */
+.hcp-display{text-align:center;padding:22px;background:linear-gradient(135deg,var(--gr3),var(--sky2));border:1px solid var(--br);border-radius:8px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.hcp-num{font-family:'Playfair Display',serif;font-size:2.8rem;font-weight:700;color:var(--ac2);line-height:1;}
+.hcp-lbl{font-size:.62rem;color:var(--tx2);letter-spacing:.15em;text-transform:uppercase;margin-top:4px;}
+.hcp-meta{font-size:.64rem;color:var(--tx3);margin-top:5px;}
+.rnd-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--br);font-size:.72rem;}
+.rnd-row:last-child{border-bottom:none;}
+.rnd-dt{color:var(--tx3);min-width:58px;flex-shrink:0;}
+.rnd-course{color:var(--tx2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rnd-score{color:var(--tx);min-width:28px;text-align:center;flex-shrink:0;}
+.rnd-diff{color:var(--gold);min-width:40px;text-align:right;flex-shrink:0;}
+.rnd-del{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:.68rem;padding:2px 5px;flex-shrink:0;}
+.rnd-del:hover{color:var(--danger);}
+
+/* Courses */
+.course-card{background:var(--sf);border:1px solid var(--br);border-radius:6px;padding:14px;margin-bottom:8px;cursor:pointer;transition:all .18s;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.course-card:hover{border-color:var(--gr2);box-shadow:0 3px 8px rgba(61,107,53,.1);}
+.course-name{font-family:'Playfair Display',serif;font-size:.95rem;font-weight:600;color:var(--ac2);}
+.course-meta{font-size:.62rem;color:var(--tx3);margin-top:3px;}
+.htable{width:100%;border-collapse:collapse;font-size:.68rem;margin-top:10px;}
+.htable th{color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;font-size:.55rem;padding:5px 6px;border-bottom:2px solid var(--br);text-align:left;}
+.htable td{padding:4px 6px;border-bottom:1px solid var(--br);}
+.htable td input{width:100%;background:transparent;border:none;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:2px 4px;outline:none;}
+.htable td input:focus{background:var(--gr3);border-radius:2px;}
+.htable .tot td{color:var(--ac);font-weight:500;border-top:2px solid var(--br);}
+.tee-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:.62rem;}
+.pill.green{background:var(--gr3);color:var(--ac);border:1px solid rgba(61,107,53,.3);}
+.pill.gold{background:var(--sand2);color:var(--gold);border:1px solid rgba(154,122,42,.3);}
+.phcp-badge{padding:10px 14px;background:var(--sky2);border:1px solid rgba(104,152,180,.3);border-radius:6px;margin-bottom:12px;font-size:.75rem;color:var(--tx2);}
+.phcp-badge strong{color:var(--ac2);font-size:1.1rem;font-family:'Playfair Display',serif;}
+
+/* Results / history */
+.result-card{background:var(--sf);border:1px solid var(--gr2);border-radius:8px;padding:22px;margin-top:12px;animation:fadeUp .3s ease;box-shadow:0 2px 8px rgba(61,107,53,.1);}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.res-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--ac2);margin-bottom:3px;}
+.res-meta{font-size:.61rem;color:var(--tx3);margin-bottom:14px;}
+.res-body{font-size:.77rem;line-height:1.95;color:var(--tx);white-space:pre-wrap;}
+.res-actions{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--br);}
+.loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px;}
+.dots{display:flex;gap:6px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gr2);animation:pulse 1.3s ease-in-out infinite;}
+.dot:nth-child(2){animation-delay:.2s;}.dot:nth-child(3){animation-delay:.4s;}
+@keyframes pulse{0%,80%,100%{opacity:.15;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
+.loading-txt{font-size:.68rem;color:var(--tx3);letter-spacing:.1em;animation:blink 1.5s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:.4}50%{opacity:1}}
+.error-box{background:#fdf2f2;border:1px solid #e0b0b0;border-radius:4px;padding:11px;color:var(--danger);font-size:.74rem;margin-top:9px;}
+
+/* Hole cards */
+.hole-card{background:var(--sf);border:1px solid var(--br);border-radius:6px;margin-bottom:5px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.hole-hdr{display:flex;align-items:stretch;cursor:pointer;user-select:none;}
+.hole-num-blk{width:44px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 6px;border-right:1px solid var(--br);background:var(--gr3);}
+.hole-num{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--ac2);line-height:1;}
+.hole-par-lbl{font-size:.54rem;color:var(--tx3);text-transform:uppercase;}
+.hole-info{flex:1;padding:9px 12px;min-width:0;}
+.hole-yds{font-size:.8rem;color:var(--tx);font-weight:500;}
+.hole-preview{font-size:.7rem;color:var(--sky);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hole-exp{background:none;border:none;border-left:1px solid var(--br);color:var(--tx3);cursor:pointer;font-size:.62rem;padding:0 10px;display:flex;align-items:center;}
+.hole-detail{border-top:1px solid var(--br);padding:12px;background:var(--sf2);font-size:.76rem;line-height:1.85;color:var(--tx);white-space:pre-wrap;display:none;}
+.hole-card.open .hole-detail{display:block;}
+.hole-skel{height:52px;background:var(--sf);border:1px solid var(--br);border-radius:6px;margin-bottom:5px;animation:shimmer 1.5s ease-in-out infinite;}
+@keyframes shimmer{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* History / sessions */
+.hist-empty{text-align:center;padding:40px 20px;color:var(--tx3);font-size:.74rem;line-height:2.4;}
+.hist-item{background:var(--sf);border:1px solid var(--br);border-radius:6px;padding:14px;margin-bottom:8px;cursor:pointer;transition:all .18s;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.hist-item:hover{border-color:var(--br2);box-shadow:0 2px 6px rgba(0,0,0,.07);}
+.hist-item.open{border-color:var(--gr2);box-shadow:0 2px 8px rgba(61,107,53,.1);}
+.hist-course{font-family:'Playfair Display',serif;font-size:.92rem;font-weight:600;color:var(--ac2);}
+.hist-preview{font-size:.68rem;color:var(--tx2);margin-top:4px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.hist-body{margin-top:12px;padding-top:11px;border-top:1px solid var(--br);font-size:.75rem;line-height:1.9;color:var(--tx);white-space:pre-wrap;display:none;}
+.hist-item.open .hist-preview{display:none;}
+.hist-item.open .hist-body{display:block;}
+
+/* Search / misc */
+.srow{display:flex;gap:8px;margin-bottom:14px;}
+.sinput{flex:1;background:var(--sf);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.76rem;padding:8px 11px;outline:none;}
+.sinput:focus{border-color:var(--gr2);}
+.sinput::placeholder{color:var(--tx3);}
+.note{font-size:.61rem;color:var(--tx3);margin-top:8px;font-style:italic;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="hdr">
+    <div>
+      <div class="hdr-title">Virtual Caddie</div>
+      <div class="hdr-sub">Clubs · Courses · Handicap · Optimise · Caddie</div>
+    </div>
+    <div class="hdr-flag">⛳</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn gold" onclick="exportData()">⬇ Export Data</button>
+    <label class="btn sec" style="cursor:pointer;">⬆ Import Data<input type="file" accept=".txt" style="display:none" onchange="importData(event)"></label>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('clubs')">Clubs <span class="badge" id="clubsBadge">0</span></button>
+    <button class="tab" onclick="showTab('courses')">Courses <span class="badge" id="coursesBadge">0</span></button>
+    <button class="tab" onclick="showTab('handicap')">Handicap</button>
+    <button class="tab" onclick="showTab('sessions')">Caddie <span class="badge" id="sessionsBadge">0</span></button>
+  </div>
+
+  <!-- CLUBS -->
+  <div id="tab-clubs" class="panel active">
+    <div class="sbar">
+      <span class="sbar-lbl" id="clubCountLbl">0 clubs + putter</span>
+      <div class="sbar-track"><div class="sbar-fill" id="clubBar" style="width:0%"></div></div>
+      <span class="sbar-cnt" id="clubBarLbl">0 free</span>
+    </div>
+    <div class="slbl">● = included in optimisation</div>
+    <div id="clubList"></div>
+    <button class="add-club-btn" onclick="addClub()">＋ Add Club</button>
+    <div class="slbl pur" style="margin-top:16px;">Putter — always in bag</div>
+    <div id="putterSlot"></div>
+    <p class="note">Expand any club to log distance sessions or edit specs. Click ● to toggle optimisation inclusion.</p>
+  </div>
+
+  <!-- COURSES -->
+  <div id="tab-courses" class="panel">
+    <div id="courseListView">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="btn" onclick="editCourse(null)">+ Add Course Manually</button>
+        <span style="font-size:.62rem;color:var(--tx3);">To look up a course, export your data and ask Claude.</span>
+      </div>
+      <div id="courseCards"></div>
+    </div>
+    <div id="courseEditView" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font:600 1rem 'Cormorant Garamond',serif;color:var(--ac)" id="courseEditTitle">New Course</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="saveCourse()">Save</button>
+          <button class="btn sec" onclick="cancelCourseEdit()">Cancel</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="g2">
+          <div class="field"><div class="flbl">Course Name</div><input id="cName" placeholder="e.g. Pebble Beach"></div>
+          <div class="field"><div class="flbl">City / Location</div><input id="cCity" placeholder="City, Province"></div>
+        </div>
+        <div class="g4">
+          <div class="field"><div class="flbl">Rating</div><input id="cRating" placeholder="71.4" inputmode="decimal"></div>
+          <div class="field"><div class="flbl">Slope</div><input id="cSlope" placeholder="128" inputmode="numeric"></div>
+          <div class="field"><div class="flbl">Par</div><input id="cPar" placeholder="72" inputmode="numeric"></div>
+          <div class="field"><div class="flbl">Yardage</div><input id="cYardage" placeholder="6800" inputmode="numeric"></div>
+        </div>
+        <div class="flbl" style="margin-bottom:6px;">Tees</div>
+        <div class="tee-btns" id="teeButtons"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;" id="teeEditRow" style="display:none">
+          <input id="teeNameInput" placeholder="Tee name (e.g. Blue)" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:100px;">
+          <input id="teeRatingInput" placeholder="Rating" inputmode="decimal" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:72px;">
+          <input id="teeSlopeInput" placeholder="Slope" inputmode="numeric" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:66px;">
+          <input id="teeYardageInput" placeholder="Yardage" inputmode="numeric" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:76px;">
+          <button class="btn" onclick="confirmAddTee()">Add</button>
+          <button class="btn sec" onclick="cancelAddTee()">Cancel</button>
+        </div>
+        <button class="btn sec" id="addTeeBtn" onclick="showAddTeeRow()" style="margin-top:8px;font-size:.66rem;padding:4px 10px;">+ Add Tee</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Hole by Hole</div>
+        <table class="htable">
+          <thead><tr><th>Hole</th><th>Par</th><th>Yards</th><th>HCP</th></tr></thead>
+          <tbody id="holeTableBody"></tbody>
+          <tfoot><tr class="tot"><td>Total</td><td id="parTotal">—</td><td id="yardsTotal">—</td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HANDICAP -->
+  <div id="tab-handicap" class="panel">
+    <div class="hcp-display">
+      <div class="hcp-num" id="hcpNum">—</div>
+      <div class="hcp-lbl" id="hcpLbl">Handicap Index</div>
+      <div class="hcp-meta" id="hcpMeta">Log a round to calculate</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Handicap Source</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="btn" id="toggleCalc" onclick="setHcpMode('calculated')">Calculated</button>
+        <button class="btn sec" id="toggleManual" onclick="setHcpMode('manual')">Manual</button>
+      </div>
+      <div id="manualHcpField" style="display:none;">
+        <div class="flbl">Enter Handicap Index</div>
+        <input id="manualHcp" type="text" inputmode="decimal" placeholder="e.g. 25.4" oninput="onManualHcpChange()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.74rem;padding:6px 9px;outline:none;margin-top:3px;">
+        <div style="font-size:.61rem;color:var(--tx3);margin-top:6px;font-style:italic;">Manual handicap will be used for Optimise and Caddie, and recorded in your data export.</div>
+      </div>
+      <div id="calcHcpField">
+        <div style="font-size:.68rem;color:var(--tx2);">Handicap is calculated automatically from your round history using the WHS formula.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Log a Round</div>
+      <div class="g2">
+        <div class="field"><div class="flbl">Date</div><input type="date" id="rDate"></div>
+        <div class="field"><div class="flbl">Course Name</div><input id="rCourse" placeholder="e.g. Forest City National" list="savedCoursesList"><datalist id="savedCoursesList"></datalist></div>
+      </div>
+      <div class="g3">
+        <div class="field"><div class="flbl">Rating</div><input id="rRating" placeholder="69.2" inputmode="decimal" oninput="updateDiffPreview()"></div>
+        <div class="field"><div class="flbl">Slope</div><input id="rSlope" placeholder="124" inputmode="numeric" oninput="updateDiffPreview()"></div>
+        <div class="field"><div class="flbl">Par</div><input id="rPar" placeholder="72" inputmode="numeric"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="flbl">Gross Score</div><input id="rScore" placeholder="95" inputmode="numeric" oninput="updateDiffPreview()"></div>
+        <div class="field" style="display:flex;align-items:flex-end;padding-bottom:10px;">
+          <span id="diffPreview" style="font-size:.7rem;color:var(--gold)"></span>
+        </div>
+      </div>
+      <button class="btn" onclick="addRound()">+ Add Round</button>
+    </div>
+    <div class="card" id="roundHistCard" style="display:none">
+      <div class="card-title">Round History <span id="roundCount" style="font-size:.62rem;font-family:'IBM Plex Mono';color:var(--tx3)"></span></div>
+      <div id="roundList"></div>
+    </div>
+    <p class="note">Up to 20 rounds stored. WHS formula used — best differentials averaged × 0.96.</p>
+  </div>
+
+  <!-- CADDIE (unified) -->
+  <div id="tab-sessions" class="panel">
+    <div id="sessionsList"></div>
+  </div>
+
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
+const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
+const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];
+const TYPE_COLOR = {"Driver":"#3d7a2e","Fairway Wood":"#2a6a50","Hybrid":"#2a507a","Iron":"#5a4a2a","Wedge":"#6a3a2a","Putter":"#4a2a6a","Chipper":"#5a2a4a"};
+
+const APP_VERSION = '15';
+// Clear stale localStorage from older app versions
+if(localStorage.getItem('vc:version') !== APP_VERSION) {
+  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:hcpMode','vc:manualHcp'].forEach(k=>localStorage.removeItem(k));
+  localStorage.setItem('vc:version', APP_VERSION);
+}
+let bag = [], courses = [], rounds = [], history = [];
+let editingCourseId = null;
+let currentEditTeeId = null;
+
+function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
+function today() { return new Date().toISOString().slice(0,10); }
+function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
+
+function calcDiff(gross, rating, slope) {
+  const g=+gross, r=+rating, s=+slope;
+  if(!g||!r||!s) return null;
+  return Math.round((g-r)*113/s*10)/10;
+}
+function calcHandicap(rounds) {
+  const diffs = rounds.map(r=>r.diff).filter(d=>d!==null&&d!==undefined).sort((a,b)=>a-b);
+  if(!diffs.length) return null;
+  const n=diffs.length;
+  const take = n>=20?8:n>=17?7:n>=15?6:n>=12?5:n>=10?4:n>=9?3:n>=7?2:1;
+  const use = diffs.slice(0,take);
+  return Math.round(use.reduce((a,b)=>a+b,0)/use.length*0.96*10)/10;
+}
+function getHandicap() {
+  const mode = localStorage.getItem('vc:hcpMode')||'calculated';
+  if(mode==='manual') {
+    const manual = localStorage.getItem('vc:manualHcp');
+    if(manual&&manual!=='') return parseFloat(manual);
+  }
+  return calcHandicap(rounds);
+}
+function setHcpMode(mode) {
+  localStorage.setItem('vc:hcpMode', mode);
+  renderHandicap();
+}
+function onManualHcpChange() {
+  const val = document.getElementById('manualHcp').value.trim();
+  if(val==='') localStorage.removeItem('vc:manualHcp');
+  else localStorage.setItem('vc:manualHcp', val);
+  renderHandicap();
+}
+function clearManualHcp() {
+  localStorage.removeItem('vc:manualHcp');
+  const el = document.getElementById('manualHcp');
+  if(el) el.value='';
+  renderHandicap();
+}
+function calcPlayHcp(idx, slope, rating, par) {
+  if(idx===null||!slope||!rating||!par) return null;
+  return Math.round(idx*(+slope/113)+(+rating-+par));
+}
+function deriveStats(sessions) {
+  if(!sessions||!sessions.length) return null;
+  const mins=sessions.map(s=>+s.min).filter(n=>n>0);
+  const maxs=sessions.map(s=>+s.max).filter(n=>n>0);
+  if(!mins.length&&!maxs.length) return null;
+  const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):null;
+  return {avgMin:avg(mins),avgMax:avg(maxs),count:sessions.length,lastDate:[...sessions].sort((a,b)=>b.date.localeCompare(a.date))[0]?.date};
+}
+function getTypeLabel(club) {
+  const id=(club.identifier||'').trim(), t=club.type;
+  if(t==='Driver') return {type:'Driver',loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};
+  if(t==='Fairway Wood'){const n=id.match(/(\d+)[Ww]/);return{type:n?n[1]+'W':'FW',loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};}
+  if(t==='Hybrid'){const n=id.match(/(\d+)[Hh]/);return{type:n?n[1]+'H':'HYB',loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};}
+  if(t==='Iron'){const n=id.match(/^(\d+)/);return{type:n?n[1]+'I':'IRN',loft:''};}
+  if(t==='Wedge'){const nm=id.match(/^(PW|GW|SW|LW|AW)/i);if(nm)return{type:nm[1].toUpperCase(),loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};const d=id.match(/([\d.]+)°/);return{type:d?d[1]+'°':'WDG',loft:''};}
+  if(t==='Putter') return{type:'PUT',loft:''};
+  return{type:t.slice(0,3).toUpperCase(),loft:''};
+}
+
+const DEFAULT_BAG = [];
+const DEFAULT_COURSES = [];
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('vc:bag', JSON.stringify(bag));
+  localStorage.setItem('vc:courses', JSON.stringify(courses));
+  localStorage.setItem('vc:rounds', JSON.stringify(rounds));
+  localStorage.setItem('vc:history', JSON.stringify(history));
+}
+function load() {
+  try { const b=JSON.parse(localStorage.getItem('vc:bag')); bag=Array.isArray(b)?b.filter(x=>x&&x.id):[]; } catch { bag=[]; }
+  try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)?c.filter(x=>x&&x.id):[]; } catch { courses=[]; }
+  try { const r=JSON.parse(localStorage.getItem('vc:rounds')); rounds=Array.isArray(r)?r:[]; } catch { rounds=[]; }
+  try { const h=JSON.parse(localStorage.getItem('vc:history')); history=Array.isArray(h)?h.filter(x=>x&&x.id):[]; } catch { history=[]; }
+  // Filter any null/malformed entries
+  bag=bag.filter(x=>x&&x.id);
+  courses=courses.filter(x=>x&&x.id);
+  rounds=rounds.filter(x=>x&&x.id);
+}
+// ── Export / Import ───────────────────────────────────────────────────────────
+function serialise() {
+  const lines = ['VIRTUAL CADDIE DATA — v1', 'Exported: '+today(), ''];
+  lines.push('=== CLUBS ===');
+  bag.forEach(c => {
+    const opt = c.type==='Putter'?'PUTTER':c.tested?'YES':'NO';
+    lines.push('');
+    lines.push('CLUB | '+[c.brand||'',c.type,c.identifier||'',c.stiffness,c.shaftLength||'',opt].join(' | '));
+    (c.sessions||[]).forEach(s=>lines.push('  SESSION | '+s.date+' | '+s.min+' | '+s.max));
+  });
+  // Courses section
+  lines.push(''); lines.push('=== COURSES ===');
+  lines.push('# id | name | city | par | rating | slope | yardage | selectedTee | updatedAt');
+  courses.forEach(c => {
+    lines.push('');
+    lines.push('COURSE | '+[c.id,c.name||'',c.city||'',c.par||'',c.rating||'',c.slope||'',c.yardage||'',c.selectedTee||'',c.updatedAt||''].join(' | '));
+    (c.tees||[]).forEach(t => {
+      lines.push('  TEE | '+[t.id,t.name||'',t.rating||'',t.slope||'',t.yardage||''].join(' | '));
+      (t.holes||[]).forEach(h => {
+        lines.push('    HOLE | '+[h.number,h.par||'',h.yards||'',h.handicap||'',h.note||''].join(' | '));
+      });
+    });
+  });
+  lines.push(''); lines.push('=== ROUNDS ===');
+  rounds.forEach(r=>lines.push('ROUND | '+[r.date,r.courseName||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:''].join(' | ')));
+  lines.push('');
+  const mode = localStorage.getItem('vc:hcpMode')||'calculated';
+  const manualVal = localStorage.getItem('vc:manualHcp')||'';
+  const calcVal = calcHandicap(rounds);
+  lines.push('=== HANDICAP ===');
+  lines.push('MODE | '+mode);
+  lines.push('DATE | '+today());
+  if(mode==='manual'&&manualVal) lines.push('MANUAL | '+manualVal);
+  if(calcVal!==null) lines.push('CALCULATED | '+calcVal+' | from '+rounds.length+' round'+(rounds.length!==1?'s':''));
+  lines.push('ACTIVE | '+(mode==='manual'&&manualVal?manualVal:calcVal!==null?calcVal:'not set'));
+  lines.push('');
+  lines.push('=== HISTORY ===');
+  history.forEach(h => {
+    lines.push('');
+    lines.push('ENTRY | '+[
+      h.id, h.date||today(),
+      h.type||'result',
+      h.course||'',
+      h.tee||'',
+      h.hcp||'',
+      h.playHcp||'',
+      h.conditions||'',
+      h.holes||''
+    ].join(' | '));
+    (h.text||'').split('\n').forEach(l => lines.push('  TEXT | '+l));
+  });
+  lines.push('');
+  return lines.join('\n');
+}
+function exportData() {
+  const txt = serialise();
+  const blob = new Blob([txt], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'virtual-caddie-data-'+today()+'.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importData(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const lines = ev.target.result.split('\n');
+    const newBag=[], newRounds=[];
+    let section=null, cur=null, currentCourse=null, currentTee=null, currentEntry=null;
+    const newCourses=[], newHistory=[];
+    for(const raw of lines) {
+      const line=raw.trim();
+      if(!line||line.startsWith('#')) continue;
+      if(line==='=== CLUBS ==='){section='clubs';continue;}
+      if(line==='=== COURSES ==='){section='courses';continue;}
+      if(line==='=== ROUNDS ==='){section='rounds';continue;}
+      if(line==='=== HANDICAP ==='){section='handicap';continue;}
+      if(line==='=== HISTORY ==='){section='history';continue;}
+      if(section==='clubs'&&line.startsWith('CLUB |')) {
+        const p=line.split('|').map(s=>s.trim());
+        cur={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',sessions:[]};
+        newBag.push(cur);
+      } else if(section==='clubs'&&line.startsWith('SESSION |')&&cur) {
+        const p=line.split('|').map(s=>s.trim());
+        cur.sessions.push({id:uid(),date:p[1]||today(),min:p[2]||'',max:p[3]||''});
+      }
+      if(section==='courses') {
+        if(line.startsWith('COURSE |')) {
+          const p=line.split('|').map(s=>s.trim());
+          currentCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||'',tees:[],holes:[]};
+          newCourses.push(currentCourse);
+          currentTee=null;
+        } else if(line.startsWith('TEE |')&&currentCourse) {
+          const p=line.split('|').map(s=>s.trim());
+          currentTee={id:p[1]||uid(),name:p[2]||'',rating:p[3]||'',slope:p[4]||'',yardage:p[5]||'',holes:[]};
+          currentCourse.tees.push(currentTee);
+        } else if(line.startsWith('HOLE |')&&currentTee) {
+          const p=line.split('|').map(s=>s.trim());
+          currentTee.holes.push({number:parseInt(p[1])||0,par:p[2]||'',yards:p[3]||'',handicap:p[4]||'',note:p[5]||''});
+        }
+      }
+      if(section==='rounds'&&line.startsWith('ROUND |')) {
+        const p=line.split('|').map(s=>s.trim());
+        newRounds.push({id:uid(),date:p[1]||today(),courseName:p[2]||'',rating:p[3]||'',slope:p[4]||'',par:p[5]||'',score:p[6]||'',diff:p[7]?parseFloat(p[7]):calcDiff(p[6],p[3],p[4])});
+      }
+      if(section==='history') {
+        if(raw.trimStart().startsWith('ENTRY |')) {
+          const p=raw.trim().split('|').map(s=>s.trim());
+          currentEntry={id:p[1]||uid(),date:p[2]||today(),type:p[3]||'result',course:p[4]||'',tee:p[5]||'',hcp:p[6]||'',playHcp:p[7]||'',conditions:p[8]||'',holes:p[9]||'',text:''};
+          newHistory.push(currentEntry);
+        } else if(raw.trimStart().startsWith('TEXT |')&&currentEntry) {
+          const txt=raw.replace(/^\s*TEXT \| /,'');
+          currentEntry.text = currentEntry.text ? currentEntry.text+'\n'+txt : txt;
+        }
+      }
+    }
+    if(newBag.length) bag=newBag;
+    if(newRounds.length) rounds=newRounds;
+    if(newCourses.length) {
+      // Merge: for each imported course, replace existing by id if newer or not present
+      newCourses.forEach(ic => {
+        // Rebuild selectedTee holes reference
+        const selTee = ic.tees.find(t=>t.id===ic.selectedTee);
+        if(selTee) ic.holes = selTee.holes;
+        const existing = courses.find(c=>c.id===ic.id);
+        if(!existing) {
+          courses.push(ic);
+        } else if(!existing.updatedAt || (ic.updatedAt && ic.updatedAt >= existing.updatedAt)) {
+          courses = courses.map(c=>c.id===ic.id?ic:c);
+        }
+      });
+    }
+    if(newHistory.length) {
+      const existingIds = new Set(history.map(h=>h.id));
+      newHistory.forEach(h=>{ if(!existingIds.has(h.id)) history.unshift(h); });
+    }
+    save(); renderAll();
+    alert('Data imported successfully.');
+  };
+  reader.readAsText(file); e.target.value='';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(id) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(id==='clubs') renderClubs();
+  if(id==='courses') renderCourseList();
+  if(id==='handicap') renderHandicap();
+  if(id==='sessions') renderSessions();
+}
+
+// ── Clubs tab ─────────────────────────────────────────────────────────────────
+function renderClubs() {
+  const playing = bag.filter(c=>c.type!=='Putter');
+  const putter  = bag.find(c=>c.type==='Putter');
+  const total   = bag.length;
+  const over    = total-14;
+  const cls     = over>0?'over':total===14?'ok':'warn';
+  const pct     = Math.min(total/14*100,100);
+  document.getElementById('clubCountLbl').textContent = playing.length+' clubs + putter';
+  const bar = document.getElementById('clubBar');
+  bar.style.width = pct+'%';
+  bar.className = 'sbar-fill '+cls;
+  const cnt = document.getElementById('clubBarLbl');
+  cnt.textContent = over>0?over+' over limit':total===14?'14 — at limit':(14-total)+' free';
+  cnt.className = 'sbar-cnt '+cls;
+  document.getElementById('clubsBadge').textContent = bag.length;
+  document.getElementById('clubList').innerHTML = playing.map(c=>clubRowHTML(c,false)).join('');
+  document.getElementById('putterSlot').innerHTML = putter?clubRowHTML(putter,true):'';
+}
+
+function clubRowHTML(c, isPutter) {
+  const {type:tl,loft} = getTypeLabel(c);
+  const dot = TYPE_COLOR[c.type]||'#555';
+  const stats = deriveStats(c.sessions);
+  const inc = isPutter?false:!!c.tested;
+  const distHTML = stats
+    ? `<div class="cdist">${stats.avgMin&&stats.avgMax?stats.avgMin+'–'+stats.avgMax+' yds':stats.avgMax?'≤'+stats.avgMax+' yds':stats.avgMin+'+ yds'}</div><div class="csess">${stats.count} session${stats.count!==1?'s':''} · ${fmtDate(stats.lastDate)}</div>`
+    : `<div class="cnodata">No sessions — tap ▼ to add</div>`;
+  const sessHTML = (c.sessions||[]).map(s=>`
+    <div class="sess-row">
+      <div class="sess-dt">${fmtDate(s.date)}</div>
+      <div class="sess-rng">${s.min&&s.max?s.min+'–'+s.max+' yds':s.min?s.min+'+ yds':'≤'+s.max+' yds'}</div>
+      <button class="sess-del" onclick="deleteSession('${c.id}','${s.id}')">✕</button>
+    </div>`).join('');
+  const brands = BRANDS.map(b=>`<option ${b===c.brand?'selected':''}>${b}</option>`).join('');
+  const types  = CLUB_TYPES.map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
+  const stiffs = STIFFNESS.map(s=>`<option ${s===c.stiffness?'selected':''}>${s}</option>`).join('');
+  return `
+  <div class="crow${inc?'':' excl'}" id="crow-${c.id}">
+    <div class="cmain">
+      <div class="ctblk" style="background:${dot}1a;border-right-color:${dot}44">
+        <div class="ctlbl" style="color:${dot}">${tl}</div>
+        ${loft?`<div class="cloftlbl">${loft}</div>`:''}
+      </div>
+      <div class="cmid" onclick="toggleClub('${c.id}')">${distHTML}</div>
+      <div class="cctrl">
+        ${!isPutter?`<button class="opttog" title="${inc?'In optimisation':'Excluded'}" onclick="toggleOpt('${c.id}')"><div class="opticon ${inc?'on':'off'}">✓</div></button>`:''}
+        <button class="expbtn" onclick="toggleClub('${c.id}')">▼</button>
+        ${!isPutter?`<button class="delx" onclick="deleteClub('${c.id}')">✕</button>`:''}
+      </div>
+    </div>
+    <div class="cpanel" id="cpanel-${c.id}" style="display:none">
+      <div class="specs">
+        <div class="sf"><div class="sf-lbl">Brand</div><select onchange="updateClub('${c.id}','brand',this.value)">${brands}</select></div>
+        <div class="sf"><div class="sf-lbl">Type</div><select onchange="updateClub('${c.id}','type',this.value)">${types}</select></div>
+        <div class="sf"><div class="sf-lbl">Loft/No.</div><input value="${c.identifier||''}" placeholder="—" onchange="updateClub('${c.id}','identifier',this.value)"></div>
+        <div class="sf"><div class="sf-lbl">Stiffness</div><select onchange="updateClub('${c.id}','stiffness',this.value)">${stiffs}</select></div>
+        <div class="sf"><div class="sf-lbl">Length</div><input value="${c.shaftLength||''}" placeholder="in" onchange="updateClub('${c.id}','shaftLength',this.value)"></div>
+      </div>
+      ${!isPutter?`
+      <div class="sess-sec">
+        <div class="sess-hdr"><span>Distance Sessions</span>${stats?`<span>${stats.avgMin}–${stats.avgMax} yds avg</span>`:''}</div>
+        ${!c.sessions?.length?'<div style="font-size:.65rem;color:var(--tx3);margin-bottom:6px">No sessions yet.</div>':''}
+        ${sessHTML}
+        <div class="add-sess">
+          <div class="asf"><label>Date</label><input type="date" id="sd-${c.id}" value="${today()}"></div>
+          <div class="asf"><label>Min yds</label><input type="text" inputmode="numeric" id="smin-${c.id}" placeholder="140" style="width:84px"></div>
+          <div class="asf"><label>Max yds</label><input type="text" inputmode="numeric" id="smax-${c.id}" placeholder="160" style="width:84px"></div>
+          <button class="btn" onclick="addSession('${c.id}')">+ Log</button>
+        </div>
+      </div>`:''}
+    </div>
+  </div>`;
+}
+
+function toggleClub(id) {
+  const panel = document.getElementById('cpanel-'+id);
+  const crow  = document.getElementById('crow-'+id);
+  const btn   = crow?.querySelector('.expbtn');
+  if(!panel) return;
+  const open = panel.style.display!=='none';
+  panel.style.display = open?'none':'block';
+  crow?.classList.toggle('open',!open);
+  if(btn) btn.textContent = open?'▼':'▲';
+}
+function toggleOpt(id) {
+  const c = bag.find(x=>x.id===id); if(!c) return;
+  c.tested = !c.tested;
+  save(); renderClubs();
+}
+function updateClub(id, field, val) {
+  const c = bag.find(x=>x.id===id); if(!c) return;
+  c[field] = val;
+  save();
+  // Re-render just the label parts without closing panel
+  const {type:tl,loft} = getTypeLabel(c);
+  const dot = TYPE_COLOR[c.type]||'#555';
+  const blk = document.querySelector(`#crow-${id} .ctblk`);
+  if(blk){blk.style.background=dot+'1a';blk.style.borderRightColor=dot+'44';blk.querySelector('.ctlbl').style.color=dot;blk.querySelector('.ctlbl').textContent=tl;const ll=blk.querySelector('.cloftlbl');if(loft){if(ll)ll.textContent=loft;else{const d=document.createElement('div');d.className='cloftlbl';d.textContent=loft;blk.appendChild(d);}}else if(ll)ll.remove();}
+}
+function addSession(id) {
+  const c = bag.find(x=>x.id===id); if(!c) return;
+  const dt  = document.getElementById('sd-'+id)?.value||today();
+  const mn  = document.getElementById('smin-'+id)?.value||'';
+  const mx  = document.getElementById('smax-'+id)?.value||'';
+  if(!mn&&!mx) return;
+  c.sessions = [{id:uid(),date:dt,min:mn,max:mx},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  save(); renderClubs();
+  // Re-open the panel
+  setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
+}
+function deleteSession(cid, sid) {
+  const c = bag.find(x=>x.id===cid); if(!c) return;
+  c.sessions = c.sessions.filter(s=>s.id!==sid);
+  save(); renderClubs();
+  setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
+}
+function deleteClub(id) { bag=bag.filter(c=>c.id!==id); save(); renderClubs(); }
+function addClub() { bag.push({id:uid(),brand:'',type:'Iron',identifier:'',shaftLength:'',stiffness:'Regular',tested:false,sessions:[]}); save(); renderClubs(); }
+
+// ── Courses tab ───────────────────────────────────────────────────────────────
+let editCourseData = null;
+
+function renderCourseList() {
+  document.getElementById('coursesBadge').textContent = courses.length;
+  document.getElementById('courseCards').innerHTML = courses.length
+    ? courses.map(c=>`
+      <div class="course-card" onclick="editCourse('${c.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="course-name">${c.name||'Unnamed'}</div>
+            <div class="course-meta">${c.city?c.city+' · ':''}Par ${c.par} · ${c.yardage}yds · Rating ${c.rating}/Slope ${c.slope}${c.tees?.length?' · '+c.tees.length+' tees':''}</div>
+          </div>
+          <button class="btn danger" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button>
+        </div>
+      </div>`).join('')
+    : '<div class="hist-empty">No courses saved yet.</div>';
+  // Update datalists
+  const dl = document.getElementById('savedCoursesList');
+  if(dl) dl.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
+  updateCourseSelects();
+}
+function deleteCourse(id) { courses=courses.filter(c=>c.id!==id); save(); renderCourseList(); }
+
+function editCourse(id) {
+  const foundCourse = id ? courses.find(c=>c.id===id) : null;
+  if(id && !foundCourse) return; // safety: id given but not found
+  editCourseData = foundCourse
+    ? JSON.parse(JSON.stringify(foundCourse))
+    : {id:uid(),name:'',city:'',par:'72',rating:'',slope:'',yardage:'',tees:[],selectedTee:'',holes:Array.from({length:18},(_,i)=>({number:i+1,par:'4',yards:'',handicap:''}))};
+  currentEditTeeId = editCourseData.selectedTee||editCourseData.tees[0]?.id||null;
+  document.getElementById('courseListView').style.display='none';
+  document.getElementById('courseEditView').style.display='block';
+  document.getElementById('courseEditTitle').textContent = id?'Edit Course':'New Course';
+  document.getElementById('cName').value=editCourseData.name||'';
+  document.getElementById('cCity').value=editCourseData.city||'';
+  document.getElementById('cRating').value=editCourseData.rating||'';
+  document.getElementById('cSlope').value=editCourseData.slope||'';
+  document.getElementById('cPar').value=editCourseData.par||'';
+  document.getElementById('cYardage').value=editCourseData.yardage||'';
+  renderTeeButtons(); renderHoleTable();
+}
+function cancelCourseEdit() {
+  editCourseData=null;
+  document.getElementById('courseListView').style.display='block';
+  document.getElementById('courseEditView').style.display='none';
+}
+function renderTeeButtons() {
+  if(!editCourseData) return;
+  const btns = document.getElementById('teeButtons');
+  btns.innerHTML = editCourseData.tees.map(t=>`
+    <div style="display:inline-flex;align-items:stretch;margin:0 4px 4px 0;border-radius:3px;overflow:hidden;border:1px solid ${t.id===currentEditTeeId?'var(--gr2)':'var(--br2)'};">
+      <button style="background:${t.id===currentEditTeeId?'var(--gr)':'var(--sf)'};color:${t.id===currentEditTeeId?'var(--ac2)':'var(--tx2)'};border:none;padding:5px 10px;font-family:'IBM Plex Mono',monospace;font-size:.67rem;cursor:pointer;" onclick="selectEditTee('${t.id}')">
+        ${t.name}${t.yardage?' <span style="opacity:.6;font-size:.58rem;">('+t.yardage+')</span>':''}
+      </button>
+      <button title="Delete tee" onclick="deleteTee('${t.id}')" style="background:${t.id===currentEditTeeId?'rgba(0,0,0,.2)':'var(--sf)'};border:none;border-left:1px solid var(--br);color:var(--tx3);cursor:pointer;padding:5px 7px;font-size:.65rem;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--tx3)'">✕</button>
+    </div>`).join('');
+}
+function showAddTeeRow() {
+  document.getElementById('teeEditRow').style.display='flex';
+  document.getElementById('addTeeBtn').style.display='none';
+  document.getElementById('teeNameInput').focus();
+}
+function cancelAddTee() {
+  document.getElementById('teeEditRow').style.display='none';
+  document.getElementById('addTeeBtn').style.display='inline-block';
+  ['teeNameInput','teeRatingInput','teeSlopeInput','teeYardageInput'].forEach(id=>{document.getElementById(id).value='';});
+}
+function confirmAddTee() {
+  const name = document.getElementById('teeNameInput').value.trim();
+  if(!name){alert('Please enter a tee name.');return;}
+  // Save current holes to current tee
+  if(currentEditTeeId && editCourseData) {
+    const cur = editCourseData.tees.find(t=>t.id===currentEditTeeId);
+    if(cur) cur.holes = editCourseData.holes.map(h=>({...h}));
+  }
+  const rating = document.getElementById('teeRatingInput').value.trim();
+  const slope  = document.getElementById('teeSlopeInput').value.trim();
+  const yardage= document.getElementById('teeYardageInput').value.trim();
+  // Copy par/handicap from first tee as template, clear yardages
+  const templateHoles = editCourseData.tees[0]?.holes
+    ? editCourseData.tees[0].holes.map(h=>({...h, yards:''}))
+    : Array.from({length:18},(_,i)=>({number:i+1,par:'4',yards:'',handicap:''}));
+  const newTee = {id:uid(), name, rating, slope, yardage, holes: templateHoles};
+  editCourseData.tees.push(newTee);
+  currentEditTeeId = newTee.id;
+  editCourseData.holes = templateHoles.map(h=>({...h}));
+  document.getElementById('cRating').value=rating;
+  document.getElementById('cSlope').value=slope;
+  document.getElementById('cYardage').value=yardage;
+  cancelAddTee();
+  renderTeeButtons(); renderHoleTable();
+}
+function deleteTee(id) {
+  if(editCourseData.tees.length<=1){alert('A course must have at least one tee.');return;}
+  if(!confirm('Delete this tee and its hole data?')) return;
+  editCourseData.tees = editCourseData.tees.filter(t=>t.id!==id);
+  if(currentEditTeeId===id) {
+    currentEditTeeId = editCourseData.tees[0].id;
+    const t = editCourseData.tees[0];
+    editCourseData.holes = t.holes.map(h=>({...h}));
+    document.getElementById('cRating').value=t.rating;
+    document.getElementById('cSlope').value=t.slope;
+    document.getElementById('cYardage').value=t.yardage;
+  }
+  renderTeeButtons(); renderHoleTable();
+}
+function selectEditTee(id) {
+  // Save current holes to current tee first
+  if(currentEditTeeId && editCourseData) {
+    const cur = editCourseData.tees.find(t=>t.id===currentEditTeeId);
+    if(cur) cur.holes = editCourseData.holes.map(h=>({...h}));
+  }
+  currentEditTeeId = id;
+  const tee = editCourseData.tees.find(t=>t.id===id);
+  if(tee){
+    editCourseData.rating=tee.rating;editCourseData.slope=tee.slope;editCourseData.yardage=tee.yardage;
+    editCourseData.holes=tee.holes.map(h=>({...h}));
+    document.getElementById('cRating').value=tee.rating;
+    document.getElementById('cSlope').value=tee.slope;
+    document.getElementById('cYardage').value=tee.yardage;
+  }
+  renderTeeButtons(); renderHoleTable();
+}
+function renderHoleTable() {
+  if(!editCourseData) return;
+  const tbody = document.getElementById('holeTableBody');
+  tbody.innerHTML = editCourseData.holes.map(h=>`
+    <tr>
+      <td style="color:var(--tx3)">${h.number}</td>
+      <td><input value="${h.par}" onchange="updateHole(${h.number},'par',this.value)" placeholder="4"></td>
+      <td><input value="${h.yards}" onchange="updateHole(${h.number},'yards',this.value)" placeholder="380"></td>
+      <td><input value="${h.handicap}" onchange="updateHole(${h.number},'handicap',this.value)" placeholder="9"></td>
+    </tr>`).join('');
+  updateHoleTotals();
+}
+function updateHole(num,field,val) {
+  if(!editCourseData) return;
+  const h=editCourseData.holes.find(x=>x.number===num);
+  if(h) h[field]=val;
+  if(currentEditTeeId){const t=editCourseData.tees.find(x=>x.id===currentEditTeeId);if(t)t.holes=editCourseData.holes.map(x=>({...x}));}
+  updateHoleTotals();
+}
+function updateHoleTotals() {
+  if(!editCourseData) return;
+  document.getElementById('parTotal').textContent=editCourseData.holes.reduce((s,h)=>s+(+h.par||0),0)||'—';
+  document.getElementById('yardsTotal').textContent=editCourseData.holes.reduce((s,h)=>s+(+h.yards||0),0)||'—';
+}
+function saveCourse() {
+  if(!editCourseData) return;
+  editCourseData.name=document.getElementById('cName').value;
+  editCourseData.city=document.getElementById('cCity').value;
+  editCourseData.rating=document.getElementById('cRating').value;
+  editCourseData.slope=document.getElementById('cSlope').value;
+  editCourseData.par=document.getElementById('cPar').value;
+  editCourseData.yardage=document.getElementById('cYardage').value;
+  if(currentEditTeeId){const t=editCourseData.tees.find(x=>x.id===currentEditTeeId);if(t)t.holes=editCourseData.holes.map(h=>({...h}));}
+  editCourseData.updatedAt = new Date().toISOString().slice(0,10);
+  const idx=courses.findIndex(c=>c.id===editCourseData.id);
+  if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
+  save(); cancelCourseEdit(); renderCourseList();
+}
+
+
+// ── Handicap tab ──────────────────────────────────────────────────────────────
+function renderHandicap() {
+  const rDateEl=document.getElementById('rDate'); if(rDateEl) rDateEl.value=today();
+  const mode = localStorage.getItem('vc:hcpMode')||'calculated';
+  const calcHcp = calcHandicap(rounds);
+  const manualVal = localStorage.getItem('vc:manualHcp')||'';
+  const hcp = mode==='manual'&&manualVal?parseFloat(manualVal):calcHcp;
+  const isManual = mode==='manual';
+  // Toggle buttons
+  const tc=document.getElementById('toggleCalc'), tm=document.getElementById('toggleManual');
+  if(tc&&tm){tc.className=isManual?'btn sec':'btn';tm.className=isManual?'btn':'btn sec';}
+  // Show/hide fields
+  const mf=document.getElementById('manualHcpField'), cf=document.getElementById('calcHcpField');
+  if(mf) mf.style.display=isManual?'block':'none';
+  if(cf) cf.style.display=isManual?'none':'block';
+  // Restore manual input value
+  const mInput=document.getElementById('manualHcp');
+  if(mInput&&manualVal) mInput.value=manualVal;
+  // Display
+  document.getElementById('hcpNum').textContent = hcp!==null?hcp:'—';
+  document.getElementById('hcpNum').style.fontSize = hcp!==null?'2.8rem':'1.3rem';
+  document.getElementById('hcpNum').style.color = isManual?'var(--gold)':hcp!==null?'var(--ac2)':'var(--tx3)';
+  document.getElementById('hcpLbl').textContent = isManual?'Handicap Index (Manual)':'Handicap Index';
+  const n=rounds.length;
+  const take=n>=20?8:n>=17?7:n>=15?6:n>=12?5:n>=10?4:n>=9?3:n>=7?2:1;
+  document.getElementById('hcpMeta').textContent = hcp!==null?`${n} round${n!==1?'s':''} · best ${Math.min(take,n)} differentials · WHS formula`:'Log a round to calculate';
+  document.getElementById('roundCount').textContent=`(${n}/20)`;
+  document.getElementById('roundHistCard').style.display=n?'block':'none';
+  document.getElementById('roundList').innerHTML=rounds.map(r=>`
+    <div class="rnd-row">
+      <div class="rnd-dt">${fmtDate(r.date)}</div>
+      <div class="rnd-course">${r.courseName||'—'}</div>
+      <div class="rnd-score">${r.score}</div>
+      <div class="rnd-diff">${r.diff!==null?r.diff:'—'}</div>
+      <button class="rnd-del" onclick="deleteRound('${r.id}')">✕</button>
+    </div>`).join('');
+  // rCourse listener set once in renderAll
+}
+function updateDiffPreview() {
+  const d=calcDiff(document.getElementById('rScore').value,document.getElementById('rRating').value,document.getElementById('rSlope').value);
+  document.getElementById('diffPreview').textContent=d!==null?'Differential: '+d:'';
+}
+function addRound() {
+  const score=document.getElementById('rScore').value;
+  const rating=document.getElementById('rRating').value;
+  const slope=document.getElementById('rSlope').value;
+  if(!score||!rating||!slope){alert('Score, rating and slope are required.');return;}
+  const diff=calcDiff(score,rating,slope);
+  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName:document.getElementById('rCourse').value||'',rating,slope,par:document.getElementById('rPar').value||'',score,diff},...rounds].slice(0,20);
+  save(); renderHandicap();
+  document.getElementById('rScore').value='';document.getElementById('rCourse').value='';
+  document.getElementById('rRating').value='';document.getElementById('rSlope').value='';
+  document.getElementById('rPar').value='';document.getElementById('diffPreview').textContent='';
+}
+function deleteRound(id){rounds=rounds.filter(r=>r.id!==id);save();renderHandicap();}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+function updateCourseSelects() { updateCourseDropdowns(); }
+
+function renderSessions() {
+  const badge = document.getElementById('sessionsBadge');
+  if(badge) badge.textContent = history.length;
+  const el = document.getElementById('sessionsList');
+  if(!el) return;
+  if(!history.length) {
+    el.innerHTML = '<div class="hist-empty">No sessions yet.<br><br>Upload your data file and this skill to Claude,<br>run a caddie session, then import the updated TXT.</div>';
+    return;
+  }
+  el.innerHTML = history.map(h => {
+    const d = new Date(h.date).toLocaleDateString('en-CA', {year:'numeric', month:'short', day:'numeric'});
+    const typeLabel = h.type==='optimisation' ? '🎯 Bag Optimisation' : h.type==='caddie' ? '🏌️ Hole-by-Hole Caddie' : '📋 Session';
+    const meta = [
+      h.tee ? h.tee + ' tees' : '',
+      h.holes && h.holes !== 'all 18' ? h.holes : '',
+      h.hcp && h.hcp !== 'not set' ? 'HCP ' + h.hcp : '',
+      h.conditions && h.conditions !== 'calm' ? h.conditions : '',
+    ].filter(Boolean).join(' · ');
+    return `
+    <div class="hist-item" id="si-${h.id}" onclick="toggleSession('${h.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">${typeLabel}</div>
+          <div class="hist-course">${h.course||'Unnamed'}${h.tee ? ' — ' + h.tee + ' tees' : ''}</div>
+          <div style="font-size:.62rem;color:var(--tx3);margin-top:2px;">${meta}</div>
+          <div class="hist-preview" style="margin-top:4px;">${h.text}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+          <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
+          <button class="sess-del" onclick="event.stopPropagation();deleteSession('${h.id}')">✕</button>
+        </div>
+      </div>
+      <div class="hist-body">${h.text}</div>
+    </div>`;
+  }).join('');
+}
+function toggleSession(id) { document.getElementById('si-' + id)?.classList.toggle('open'); }
+function deleteSession(id) {
+  history = history.filter(h => h.id !== id);
+  save(); renderSessions();
+}
+// Keep renderHistory as alias so import logic still works
+function renderHistory() { renderSessions(); }
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function updateCourseDropdowns() {
+  // Course dropdowns removed from UI — kept as no-op for import compat
+}
+function syncCadTees() {}
+function updateCadHcpHint() {}
+
+function renderAll(){
+  renderClubs(); renderCourseList(); renderHandicap(); updateCourseSelects(); renderSessions();
+  // Set rCourse autofill once
+  const rc=document.getElementById('rCourse');
+  if(rc&&!rc._listenerSet){rc._listenerSet=true;rc.addEventListener('change',function(){
+    const c=courses.find(x=>x.name===this.value);
+    if(c){const r=document.getElementById('rRating'),s=document.getElementById('rSlope'),p=document.getElementById('rPar');if(r)r.value=c.rating;if(s)s.value=c.slope;if(p)p.value=c.par;updateDiffPreview();}
+  });}
+}
+
+load();
+// Restore API key
+renderAll();
+</script>
+</body>
+</html>
