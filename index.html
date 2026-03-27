@@ -297,6 +297,7 @@ body{
   <div class="toolbar">
     <button class="btn gold" onclick="saveData()">⬇ Save Data</button>
     <label class="btn sec" style="cursor:pointer;">⬆ Import Data<input type="file" accept=".txt" style="display:none" onchange="importData(event)"></label>
+    <button class="btn sec" onclick="document.getElementById('clearModal').style.display='flex'" style="color:var(--danger);border-color:var(--danger)">🗑 Clear All Data</button>
     <span id="saveStatus" style="font-size:.62rem;align-self:center;transition:color .3s"></span>
   </div>
 
@@ -740,12 +741,14 @@ body{
     </div>
   </div>
 
+  </div>
+
   <!-- NOTES -->
   <div id="tab-notes" class="panel">
     <div class="card">
       <div class="card-title">About This App</div>
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
-        Virtual Caddie is a personal bag management and course strategy tool. All Optimizations are done by Claude AI or some other AI and can vary based on model and model provider. Use at your own risk. All in browser calculations are deterministic — the same inputs always produce the same outputs. This tab documents every assumption baked into those calculations.
+        Virtual Caddie is a personal bag management and course strategy tool. All Optimizations are done by Claude AI or some other AI and can vary based on model and model provider. Use at your own risk. All in browser calculations are deterministic — the same inputs always produce the same outputs. This tab documents some of the key assumptions baked into those calculations.
       </div>
     </div>
 
@@ -768,19 +771,40 @@ body{
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">Session Averages</div>
         <code>avgMin</code> and <code>avgMax</code> are simple means of all logged session values for that club. Each session contributes equally regardless of date.
-        <div class="slbl" style="margin-top:12px">Yardage Type</div>
-        Default is <strong>Total</strong> (carry + roll). Set a global preference in Profile, or override per club in its specs panel. The label shown on each club reflects whichever is in effect — the data itself is whatever you logged.
-        <div class="slbl" style="margin-top:12px">Implied Yardage (Confidence Scaling)</div>
-        Adjusts the displayed range based on your confidence in the club. The adjustment is symmetrical — both ends of the range move by the same percentage:
+        <div class="slbl" style="margin-top:12px">Yardage Type — Carry vs Total</div>
+        Each club can be logged as <strong>Carry</strong> (ball flight only) or <strong>Total</strong> (carry + roll). Set a global default in Profile, or override per club in its specs panel. When the Viz tab is set to Total and a club is logged as Carry, the app converts automatically using the roll % table. The reverse applies when Viz is set to Carry.
+        <div class="slbl" style="margin-top:12px">Carry to Total Conversion (Roll %)</div>
+        Roll is expressed as a percentage of carry distance and varies by club type and handicap tier. Higher-lofted clubs land steeper and roll less; lower-lofted clubs run out more. Example: a Driver at tier 3 (HCP 15–19) rolls approximately 16% of carry — a 230 yd carry becomes ~267 yds total. Wedges at tier 5+ roll 0–1% (high spin, holds or spins back). Values are based on TrackMan, Arccos, and MyGolfSpy data under typical firm-to-moderate fairway conditions. Soft/wet conditions reduce roll by 3–5%; firm/links conditions add 5–8%.
+        <div class="slbl" style="margin-top:12px">Implied Yardage — How It Works</div>
+        Implied yardage adjusts <strong>only the minimum (floor)</strong> of the range based on your confidence score. The maximum always stays at <code>avgMax</code> — the app assumes your best strike is your ceiling, and confidence reflects how reliably you reach the floor.
         <ul style="margin:6px 0 6px 16px">
-          <li>Score 5 (Highest): range tightens by 5% each end</li>
-          <li>Score 4 (Baseline): no adjustment — raw avg used</li>
-          <li>Score 3: range widens by 5% each end</li>
-          <li>Score 1–2 (Low/Least): range widens by 10% each end</li>
+          <li><strong>Confidence 5</strong> — floor raised by 5% (consistent striker, tight window)</li>
+          <li><strong>Confidence 4</strong> — no adjustment, raw avg floor used (baseline)</li>
+          <li><strong>Confidence 3</strong> — floor lowered by 5% (some variability)</li>
+          <li><strong>Confidence 1–2</strong> — floor lowered by 10% (high variability, treat range as wider)</li>
         </ul>
-        <strong>Gap suppression:</strong> if <code>avgMax − avgMin</code> is already tight (≤ 15 yds for short clubs; ≤ 20 yds for long clubs including Driver, Fairway Wood, and hybrids with loft ≤ 30° or number ≤ 6H), confidence scaling is not applied — the raw range is already precise enough. Toggle implied yardage display on/off in the Clubs tab.
+        <strong>Gap suppression:</strong> if <code>avgMax − avgMin</code> is already tight (≤ 15 yds for short clubs; ≤ 20 yds for long clubs), confidence scaling is skipped entirely — the raw range is already precise enough and further adjustment would distort it. Toggle implied yardage display on/off in the Clubs tab.
         <div class="slbl" style="margin-top:12px">Long vs Short Club Threshold</div>
-        Driver, Fairway Wood, hybrids ≤ 6H or loft ≤ 30° → Long (20 yd gap threshold). All other irons, hybrids ≥ 7H or loft > 30°, Wedges, Chipper → Short (15 yd gap threshold).
+        Driver, Fairway Wood, hybrids ≤ 6H or loft ≤ 30° → Long (20 yd gap threshold). Hybrids ≥ 7H or loft > 30°, Irons, Wedges, Chipper → Short (15 yd gap threshold).
+        <div class="slbl" style="margin-top:12px">Simple vs Detailed Club Entry</div>
+        The Clubs tab has a <strong>Simple</strong> mode (default) and a <strong>Detailed</strong> mode toggle. Simple mode asks only for max distance and derives the minimum using a 20-yard default window. Confidence is set to 3 automatically in Simple mode. Detailed mode lets you enter both min and max explicitly and set all specs. Use Simple for new clubs and switch to Detailed once you have real session data.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Optimisation Tiers</div>
+      <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
+        When you export a session file, you choose an optimisation tier. This tells the AI how much depth to apply. The tier is embedded in the export and the AI reads it on load.
+        <div class="slbl" style="margin-top:10px">Tier 1 — Basic</div>
+        Midpoint yardage only: <code>round((impMin + impMax) / 2)</code>. No session data required. Output is club name and midpoint. Fastest; suitable when you have minimal data or just want a rough bag list.
+        <div class="slbl" style="margin-top:10px">Tier 2 — Standard</div>
+        Full implied ranges (impMin–impMax), gap and overlap analysis, stroke allocation per hole. Brief reasoning per club. Adds YARDAGE GAPS and basic COURSE STRATEGY. Best for everyday use.
+        <div class="slbl" style="margin-top:10px">Tier 3 — Advanced</div>
+        Everything in Tier 2, plus dispersion radius, bias offset, longitudinal miss probability for forced carries, hole notes from your data, handedness adjustment. Pulls in prior session and round history at the same course. Recommended when you have multiple sessions of data.
+        <div class="slbl" style="margin-top:10px">Tier 4 — Full</div>
+        Everything in Tier 3, plus conditions woven throughout, confidence scaling rationale in LEFT OUT notes, fitting insights, full strategy with stroke allocation called out hole by hole. Most thorough; longest output. Use when preparing for a meaningful round at a known course.
+        <div class="slbl" style="margin-top:10px">What the AI Optimises For</div>
+        At all tiers: only clubs marked Active with at least one distance session are eligible. Putter is always carried and never counted in the 14-club limit. Clubs are selected to maximise coverage with minimal gaps, weighted by the holes actually in play (front 9, back 9, or all 18). At Tier 2+, the AI factors in stroke allocation — holes where you get extra strokes lower the bar for a bogey and change which distances matter most.
       </div>
     </div>
 
@@ -788,15 +812,45 @@ body{
       <div class="card-title">Ball Flight &amp; Dispersion</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">Sources</div>
-        Spin RPM and launch angle benchmarks from TrackMan published amateur data. Lateral dispersion calibrated against GOLFTEC launch monitor study (7-iron: scratch ~25 yds width, 8 HCP ~30 yds, 13 HCP ~35 yds) and DECADE / Practical Golf (driver: scratch ~65–70 yds total width). Longitudinal miss distances from HackMotion research. Arccos GPS data used for cross-validation.
+        Spin RPM and launch angle benchmarks from TrackMan published amateur data. Lateral dispersion calibrated against GOLFTEC launch monitor study and DECADE / Practical Golf. Longitudinal miss distances from HackMotion research. Roll percentages from Arccos GPS analytics and MyGolfSpy ball speed studies. Arccos GPS data used for cross-validation.
         <div class="slbl" style="margin-top:12px">Handicap Tiers</div>
-        Six tiers: 0–4 · 5–9 · 10–14 · 15–19 · 20–24 · 25+. If no handicap is set, tier 3 (15–19) is assumed.
+        Six tiers used for dispersion and roll lookups: 0–4 · 5–9 · 10–14 · 15–19 · 20–24 · 25+. If no handicap is set, tier 3 (15–19) is assumed.
         <div class="slbl" style="margin-top:12px">Iron Classification</div>
-        Irons are split into Long (2–4i, loft ≤ 27°), Mid (5–7i, 28–38°), and Short (8–9i, 39–46°) groups for dispersion lookup. Classification uses the loft° value in the identifier field first, then the iron number.
+        Irons are split into Long (2–4i, loft ≤ 27°), Mid (5–7i, 28–38°), and Short (8–9i, 39–46°) groups for dispersion lookup. Classification uses the loft° value first, then the iron number.
         <div class="slbl" style="margin-top:12px">Lateral Dispersion</div>
-        Expressed as a ± radius (half of total lateral width). Adjusted by bias multiplier: Straight ×1.00 · Draw ×0.95 · Fade ×0.95 · Hook ×1.15 · Slice ×1.20. Lateral offset applied to centreline: Draw −5 yds · Hook −15 yds · Fade +5 yds · Slice +15 yds (positive = right for right-handed player; mirrored for left-handed).
+        Expressed as a ± radius (half of total lateral width). Adjusted by bias multiplier: Straight ×1.00 · Draw ×0.95 · Fade ×0.95 · Hook ×1.15 · Slice ×1.20 · Push Right ×1.00 · Push Left ×1.00. Lateral offset applied to centreline: Draw −5 yds · Hook −15 yds · Fade +5 yds · Slice +15 yds · Push Right +20 yds · Push Left −20 yds (positive = right for right-handed; mirrored for left-handed). Push biases translate the entire pattern sideways rather than widening it.
         <div class="slbl" style="margin-top:12px">Longitudinal Dispersion</div>
-        Short and long miss distances are tracked separately — players at all levels tend to miss shorter more than longer. These values inform forced-carry decisions in the caddie session.
+        Short and long miss distances are tracked separately — players at all levels miss shorter more than longer. These inform forced-carry decisions in the caddie session.
+        <div class="slbl" style="margin-top:12px">Ellipse Asymmetry</div>
+        The dispersion ellipse is not a symmetric oval. Right misses (open face) produce higher spin and shorter carry — the ellipse is narrower on the right. Left misses (closed face / hook) travel farther, making the ellipse wider on the left. The ellipse tilts clockwise from vertical for right-handed players. Push biases have near-symmetric ellipses since the miss is directional, not spin-induced.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Visualisation</div>
+      <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
+        <div class="slbl">Bag Coverage Mode</div>
+        Shows stacked dispersion ellipses for the selected club set, sorted by carry distance descending. Gap markers appear between clubs where the gap exceeds 12 yards. Fairway hit % chips are colour-coded: green ≥ 60%, amber 35–59%, red &lt; 35%. Clubs can be sourced from an AI optimisation session (auto-preselects the recommended bag) or a custom selection of up to 13 clubs (excluding Putter).
+        <div class="slbl" style="margin-top:12px">Hole Planning Mode</div>
+        Renders a single hole as a fairway corridor scaled to the hole's yardage from the selected tee. Overlays tee shot and approach dispersion ellipses at their correct positions from the tee marker. Club selection defaults to the AI caddie session's hole-by-hole recommendation and updates automatically as you move between holes. The advisory note from the session is shown above the canvas for context.
+        <div class="slbl" style="margin-top:12px">Carry / Total Toggle</div>
+        Switches all ellipse widths and distance markers between carry and total yardage. Total is the default. When a club is logged as Carry and Total is selected, distances are scaled up using the roll % table. When logged as Total and Carry is selected, distances are scaled down.
+        <div class="slbl" style="margin-top:12px">Display Modes</div>
+        <strong>Both</strong> — shape outline plus probability shading (default). <strong>Shape</strong> — outline only, no fill. <strong>Prob</strong> — probability zones only, no outline. Four shaded zones per ellipse represent right miss, left miss, short miss, and long miss probabilities derived from the bias and longitudinal tables.
+        <div class="slbl" style="margin-top:12px">Fairway Width</div>
+        Entered in yards. Used to calculate the fairway hit percentage shown in the chips below the canvas. Adjust to match the hole you are planning for.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">AI Caddie Sessions</div>
+      <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
+        <div class="slbl">How Sessions Work</div>
+        Export a session file from the Caddie tab and upload it to any AI chat (Claude, ChatGPT, etc.). The AI reads your clubs, course, and handicap, then produces a bag optimisation and hole-by-hole strategy. Import the result back into the app.
+        <div class="slbl" style="margin-top:12px">Structured Data Blocks</div>
+        When the AI produces a session result, it appends two machine-readable blocks that the app uses for visualisation: a <strong>BAG-MAP</strong> listing the exact recommended club identifiers in order, and a <strong>HOLE-MAP</strong> listing the primary tee and approach club for each hole. These are stripped from the displayed scorecard text — they exist solely for the app to drive the Viz tab without text parsing.
+        <div class="slbl" style="margin-top:12px">AI Output Varies</div>
+        Recommendations depend on the AI model and provider in use. The same input may produce different advice on different models or on different days. Treat all AI output as a starting point, not a definitive prescription.
       </div>
     </div>
 
@@ -812,43 +866,88 @@ body{
     <div class="card">
       <div class="card-title">Data &amp; Privacy</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
-        All data is stored locally in your browser's <code>localStorage</code>. Nothing is sent to any server. Exporting a <code>.txt</code> file is the only way to back up or transfer your data between devices. Clearing browser data or using a different browser will reset the app — always export before clearing. The app version key (<code>APP_VERSION</code>) is used to detect stale data from older versions and will reset stored data on a major version change.
+        All personal data is stored exclusively in your browser's <code>localStorage</code>. Nothing is transmitted to any server operated by this app. Use <strong>Save Data</strong> to download a backup file — this is the only way to transfer data between devices or browsers. Clearing browser data will erase all app data; always save first.
+        <br><br>
+        <strong>Gist sync</strong> (optional): if configured, the app will push your data file to a GitHub Gist when you save. This is a convenience backup only — the Gist is operated by GitHub under their own terms. The skill and reference files the app fetches on load are also hosted on GitHub Gist.
+        <br><br>
+        If you export a session file to an AI service, that data is processed under the terms of that AI provider.
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Flight Data Version</div>
+      <div class="card-title">Reference Data &amp; Versions</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
-        Current flight reference data version: <strong>1</strong>. When this version is bumped in a future update, exported TXT files will carry the old version number in their <code>FlightDataVersion</code> header — this allows the caddie skill to detect and flag any mismatch between stored session data and the dispersion tables in use.
+        The app fetches skill and reference data from GitHub Gist on load and caches it locally. The reference data includes dispersion tables, carry-to-total roll percentages, confidence scaling rules, bias multipliers, and yardage defaults by club type and handicap tier. When the reference version is updated, the cache refreshes automatically on next load.
+        <br><br>
+        The <code>FlightDataVersion</code> field in exported data files records which version of the dispersion engine was active when the session was run. This allows the AI caddie to detect mismatches between stored sessions and the current tables.
       </div>
     </div>
   </div>
 
-  <div class="app-footer">
-    <button class="disc-link" onclick="showDisclaimer()">Terms of Use &amp; Liability Disclaimer</button>
-  </div>
+<div class="app-footer">
+  <button class="disc-link" onclick="showDisclaimer()">Terms of Use &amp; Liability Disclaimer</button>
+</div>
 
+</div>
+
+<!-- Clear All Data modal -->
+<div id="clearModal" class="disc-overlay" style="display:none">
+  <div class="disc-box" style="max-width:420px">
+    <div class="disc-title" style="color:var(--danger)">⚠️ Clear All Data</div>
+    <div class="disc-section">
+      <div class="disc-body" style="line-height:1.8">
+        This will permanently erase <strong>all</strong> clubs, courses, rounds, history, and profile data from this device.<br><br>
+        <strong>Have you saved your data file?</strong> Use <em>Save Data</em> first to download a backup — once cleared, this action cannot be undone.
+      </div>
+    </div>
+    <div class="disc-footer" style="gap:10px;display:flex;flex-direction:column">
+      <div class="disc-agree" style="color:var(--danger);font-weight:600">This action is permanent and irrevocable.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn sec" onclick="document.getElementById('clearModal').style.display='none'">Cancel — keep my data</button>
+        <button class="btn" onclick="confirmClearAll()" style="background:var(--danger);border-color:var(--danger);color:#fff">Yes, delete everything</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Disclaimer modal -->
 <div id="discModal" class="disc-overlay" style="display:none">
   <div class="disc-box">
-    <div class="disc-title">Before You Play</div>
-    <div class="disc-sub">Terms of Use &amp; Liability Disclaimer</div>
+    <div class="disc-title">Before You Continue</div>
+    <div class="disc-sub">Terms of Use, Liability Disclaimer &amp; Privacy Notice</div>
+
     <div class="disc-section">
       <div class="disc-section-title">Informational Use Only</div>
-      <div class="disc-body">Virtual Caddie is provided for informational and entertainment purposes only. Club recommendations, yardage calculations, and course strategies are estimates based on user-entered data and are not a substitute for professional instruction or on-course judgment.</div>
+      <div class="disc-body">Virtual Caddie is provided for informational and entertainment purposes only. Nothing in this app constitutes professional golf instruction, coaching, or certified course advice. Club recommendations, yardage calculations, dispersion estimates, and course strategies are outputs based solely on user-entered data and should be treated as a starting point for your own judgment, not a substitute for it.</div>
     </div>
+
+    <div class="disc-section">
+      <div class="disc-section-title">AI-Generated Content</div>
+      <div class="disc-body">Bag optimisations, hole-by-hole strategies, and caddie advice are generated by third-party AI models (such as Claude, ChatGPT, or others). AI output can vary by model, model version, and provider. It may be incomplete, inconsistent, or incorrect. The developer of this app has no control over and bears no responsibility for the content, accuracy, or reliability of any AI-generated recommendation. You use AI output entirely at your own risk and remain solely responsible for all decisions made on the course.</div>
+    </div>
+
     <div class="disc-section">
       <div class="disc-section-title">Assumption of Risk</div>
-      <div class="disc-body">Golf involves inherent risks including injury to yourself or others, and damage to property from errant shots. By using this app you acknowledge these risks and agree that the app and its developer bear no liability for any incident, injury, property damage, or poor play resulting from reliance on its output.</div>
+      <div class="disc-body">Golf involves inherent physical risks including injury to yourself or others and damage to property. By using this app you acknowledge these risks and agree that the developer bears no liability for any incident, injury, property damage, financial loss, or poor play arising from reliance on this app or its output, whether generated by the app itself or by any AI model used in conjunction with it.</div>
     </div>
+
     <div class="disc-section">
       <div class="disc-section-title">Data Accuracy</div>
-      <div class="disc-body">Course data, yardages, and GPS-derived measurements are subject to signal accuracy, atmospheric conditions, and third-party map update cycles. All figures should be verified against official course materials before play.</div>
+      <div class="disc-body">Course data, hole yardages, ratings, and slope figures are user-entered and unverified. They may differ from official course materials, printed scorecards, or GPS measurements. Always verify yardages and course conditions through official sources before play.</div>
     </div>
+
+    <div class="disc-section">
+      <div class="disc-section-title">Privacy &amp; Data Storage</div>
+      <div class="disc-body">All personal data — including your clubs, courses, rounds, handicap, and caddie history — is stored exclusively in your browser's local storage on your device. No data is transmitted to, collected by, or stored on any server operated by the developer. If you choose to use Gist sync or export files to an AI service, you do so under the terms of those third-party providers. The developer has no access to your data at any time.</div>
+    </div>
+
+    <div class="disc-section">
+      <div class="disc-section-title">No Warranty</div>
+      <div class="disc-body">This app is provided "as is" without warranty of any kind, express or implied. The developer makes no guarantees regarding availability, accuracy, fitness for a particular purpose, or freedom from error. Use of this app is entirely at your own risk.</div>
+    </div>
+
     <div class="disc-footer">
-      <div class="disc-agree">By continuing you confirm you have read and accepted these terms.</div>
+      <div class="disc-agree">By continuing you confirm that you have read, understood, and accepted these terms.</div>
       <button class="btn" onclick="acceptDisclaimer()">I Understand &amp; Accept</button>
     </div>
   </div>
@@ -1316,7 +1415,7 @@ function save() {
   localStorage.setItem('vc:profile', JSON.stringify(profile));
   syncSave(); // 2.5 — async, fire-and-forget
 }
-const _SEED={"bag":[{"id":"1bcf4491","brand":"TaylorMade","type":"Driver","identifier":"Driver","stiffness":"Regular","shaftLength":"45.75","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"10.5","model":"SIM 2 Max","sessions":[{"id":"8a79abda","date":"2026-03-20","min":"220","max":"260","notes":""}]},{"id":"70c61343","brand":"TaylorMade","type":"Fairway Wood","identifier":"5W","stiffness":"Stiff","shaftLength":"42.25","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"18","model":"SIM2 Max","sessions":[{"id":"49a8a7b1","date":"2026-03-21","min":"190","max":"220","notes":""}]},{"id":"085acee4","brand":"Lazrus","type":"Fairway Wood","identifier":"7W","stiffness":"Regular","shaftLength":"41.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"21","model":"LAZ2","sessions":[{"id":"b8957973","date":"2026-03-20","min":"165","max":"185","notes":""}]},{"id":"dc594b4a","brand":"Lazrus","type":"Hybrid","identifier":"3H","stiffness":"Regular","shaftLength":"40.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"18","model":"LAZ2-H","sessions":[{"id":"199bbe47","date":"2026-03-20","min":"170","max":"190","notes":""}]},{"id":"3c2899f2","brand":"MacGregor","type":"Hybrid","identifier":"4H","stiffness":"Regular","shaftLength":"38.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"20","model":"Wizard","sessions":[{"id":"68006976","date":"2026-03-20","min":"160","max":"178","notes":""}]},{"id":"63c13e8b","brand":"MacGregor","type":"Hybrid","identifier":"5H","stiffness":"Regular","shaftLength":"38","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"23","model":"Wizard","sessions":[{"id":"568d9739","date":"2026-03-20","min":"148","max":"166","notes":""}]},{"id":"bff99818","brand":"MacGregor","type":"Hybrid","identifier":"6H","stiffness":"Regular","shaftLength":"37.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"26","model":"Wizard","sessions":[{"id":"5fa73dab","date":"2026-03-20","min":"138","max":"155","notes":""}]},{"id":"6cf1c5ca","brand":"MacGregor","type":"Hybrid","identifier":"7H","stiffness":"Regular","shaftLength":"37","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"30","model":"Wizard","sessions":[{"id":"abee6929","date":"2026-03-20","min":"128","max":"145","notes":""}]},{"id":"149da029","brand":"MacGregor","type":"Hybrid","identifier":"8H","stiffness":"Regular","shaftLength":"36.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"35","model":"Wizard","sessions":[{"id":"e3c1682c","date":"2026-03-20","min":"118","max":"135","notes":""}]},{"id":"1a89f598","brand":"MacGregor","type":"Hybrid","identifier":"9H","stiffness":"Regular","shaftLength":"36","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"40","model":"Wizard","sessions":[{"id":"9f0e5e73","date":"2026-03-20","min":"108","max":"125","notes":""}]},{"id":"dbb558a1","brand":"MacGregor","type":"Wedge","identifier":"PW","stiffness":"Regular","shaftLength":"35.75","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"45","model":"Wizard","sessions":[{"id":"70a6837c","date":"2026-03-20","min":"98","max":"115","notes":""}]},{"id":"65e933a2","brand":"Kirkland","type":"Wedge","identifier":"GW 52","stiffness":"Stiff","shaftLength":"35.75","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"52","model":"Kirkland","sessions":[{"id":"32e48982","date":"2026-03-20","min":"85","max":"100","notes":""}]},{"id":"e2ac926b","brand":"Kirkland","type":"Wedge","identifier":"SW 56","stiffness":"Stiff","shaftLength":"35.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"56","model":"Kirkland","sessions":[{"id":"181d8beb","date":"2026-03-20","min":"55","max":"70","notes":""}]},{"id":"818ad07b","brand":"Kirkland","type":"Wedge","identifier":"LW 60","stiffness":"Stiff","shaftLength":"35.25","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"60","model":"Kirkland","sessions":[{"id":"6462f7cc","date":"2026-03-20","min":"45","max":"60","notes":""}]},{"id":"3e98c83b","brand":"Cleveland","type":"Putter","identifier":"Putter","stiffness":"Regular","shaftLength":"35","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"3","model":"HB Soft 2 #11 OS","sessions":[]}],"courses":[{"id":"c8","name":"King Valley Golf Club","city":"King City, Ontario","par":"72","rating":"70.3","slope":"139","yardage":"6185","selectedTee":"t-kv-white","updatedAt":"2026-03-22","tees":[{"id":"t-kv-lion","name":"Lion","rating":"73.8","slope":"147","yardage":"7008","holes":[{"number":1,"par":"4","yards":"414","handicap":"11","note":""},{"number":2,"par":"3","yards":"179","handicap":"17","note":""},{"number":3,"par":"4","yards":"411","handicap":"3","note":""},{"number":4,"par":"4","yards":"418","handicap":"5","note":""},{"number":5,"par":"5","yards":"519","handicap":"15","note":""},{"number":6,"par":"4","yards":"403","handicap":"9","note":""},{"number":7,"par":"3","yards":"200","handicap":"13","note":""},{"number":8,"par":"5","yards":"517","handicap":"1","note":""},{"number":9,"par":"4","yards":"438","handicap":"7","note":""},{"number":10,"par":"4","yards":"372","handicap":"10","note":""},{"number":11,"par":"4","yards":"350","handicap":"14","note":""},{"number":12,"par":"3","yards":"218","handicap":"8","note":""},{"number":13,"par":"4","yards":"433","handicap":"2","note":""},{"number":14,"par":"5","yards":"513","handicap":"18","note":""},{"number":15,"par":"4","yards":"440","handicap":"4","note":""},{"number":16,"par":"3","yards":"173","handicap":"16","note":""},{"number":17,"par":"4","yards":"425","handicap":"6","note":""},{"number":18,"par":"5","yards":"585","handicap":"12","note":""}]},{"id":"t-kv-black","name":"Black","rating":"73.0","slope":"145","yardage":"6800","holes":[{"number":1,"par":"4","yards":"408","handicap":"11","note":""},{"number":2,"par":"3","yards":"169","handicap":"17","note":""},{"number":3,"par":"4","yards":"401","handicap":"3","note":""},{"number":4,"par":"4","yards":"411","handicap":"5","note":""},{"number":5,"par":"5","yards":"501","handicap":"15","note":""},{"number":6,"par":"4","yards":"396","handicap":"9","note":""},{"number":7,"par":"3","yards":"187","handicap":"13","note":""},{"number":8,"par":"5","yards":"503","handicap":"1","note":""},{"number":9,"par":"4","yards":"424","handicap":"7","note":""},{"number":10,"par":"4","yards":"372","handicap":"10","note":""},{"number":11,"par":"4","yards":"350","handicap":"14","note":""},{"number":12,"par":"3","yards":"193","handicap":"8","note":""},{"number":13,"par":"4","yards":"429","handicap":"2","note":""},{"number":14,"par":"5","yards":"509","handicap":"18","note":""},{"number":15,"par":"4","yards":"433","handicap":"4","note":""},{"number":16,"par":"3","yards":"166","handicap":"16","note":""},{"number":17,"par":"4","yards":"420","handicap":"6","note":""},{"number":18,"par":"5","yards":"528","handicap":"12","note":""}]},{"id":"t-kv-blue","name":"Blue","rating":"72.0","slope":"143","yardage":"6511","holes":[{"number":1,"par":"4","yards":"383","handicap":"11","note":""},{"number":2,"par":"3","yards":"156","handicap":"17","note":""},{"number":3,"par":"4","yards":"401","handicap":"3","note":""},{"number":4,"par":"4","yards":"385","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"485","handicap":"1","note":""},{"number":9,"par":"4","yards":"407","handicap":"7","note":""},{"number":10,"par":"4","yards":"351","handicap":"10","note":""},{"number":11,"par":"4","yards":"338","handicap":"14","note":""},{"number":12,"par":"3","yards":"193","handicap":"8","note":""},{"number":13,"par":"4","yards":"406","handicap":"2","note":""},{"number":14,"par":"5","yards":"482","handicap":"18","note":""},{"number":15,"par":"4","yards":"417","handicap":"4","note":""},{"number":16,"par":"3","yards":"162","handicap":"16","note":""},{"number":17,"par":"4","yards":"390","handicap":"6","note":""},{"number":18,"par":"5","yards":"528","handicap":"12","note":""}]},{"id":"t-kv-maroon","name":"Maroon","rating":"70.9","slope":"141","yardage":"6349","holes":[{"number":1,"par":"4","yards":"374","handicap":"11","note":""},{"number":2,"par":"3","yards":"156","handicap":"17","note":""},{"number":3,"par":"4","yards":"378","handicap":"3","note":""},{"number":4,"par":"4","yards":"385","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"485","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"351","handicap":"10","note":""},{"number":11,"par":"4","yards":"338","handicap":"14","note":""},{"number":12,"par":"3","yards":"171","handicap":"8","note":""},{"number":13,"par":"4","yards":"399","handicap":"2","note":""},{"number":14,"par":"5","yards":"482","handicap":"18","note":""},{"number":15,"par":"4","yards":"384","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"380","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]},{"id":"t-kv-white","name":"White","rating":"70.3","slope":"139","yardage":"6185","holes":[{"number":1,"par":"4","yards":"374","handicap":"11","note":""},{"number":2,"par":"3","yards":"133","handicap":"17","note":""},{"number":3,"par":"4","yards":"378","handicap":"3","note":""},{"number":4,"par":"4","yards":"335","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"464","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"322","handicap":"10","note":""},{"number":11,"par":"4","yards":"317","handicap":"14","note":""},{"number":12,"par":"3","yards":"171","handicap":"8","note":""},{"number":13,"par":"4","yards":"399","handicap":"2","note":""},{"number":14,"par":"5","yards":"462","handicap":"18","note":""},{"number":15,"par":"4","yards":"384","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"380","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]},{"id":"t-kv-green","name":"Green","rating":"68.3","slope":"132","yardage":"5781","holes":[{"number":1,"par":"4","yards":"338","handicap":"11","note":""},{"number":2,"par":"3","yards":"133","handicap":"17","note":""},{"number":3,"par":"4","yards":"330","handicap":"3","note":""},{"number":4,"par":"4","yards":"285","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"142","handicap":"13","note":""},{"number":8,"par":"5","yards":"408","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"322","handicap":"10","note":""},{"number":11,"par":"4","yards":"317","handicap":"14","note":""},{"number":12,"par":"3","yards":"108","handicap":"8","note":""},{"number":13,"par":"4","yards":"354","handicap":"2","note":""},{"number":14,"par":"5","yards":"462","handicap":"18","note":""},{"number":15,"par":"4","yards":"337","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"353","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]},{"id":"t-kv-red","name":"Red","rating":"67.0","slope":"125","yardage":"5495","holes":[{"number":1,"par":"4","yards":"338","handicap":"11","note":""},{"number":2,"par":"3","yards":"109","handicap":"17","note":""},{"number":3,"par":"4","yards":"330","handicap":"3","note":""},{"number":4,"par":"4","yards":"285","handicap":"5","note":""},{"number":5,"par":"5","yards":"427","handicap":"15","note":""},{"number":6,"par":"4","yards":"330","handicap":"9","note":""},{"number":7,"par":"3","yards":"142","handicap":"13","note":""},{"number":8,"par":"5","yards":"408","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"280","handicap":"10","note":""},{"number":11,"par":"4","yards":"308","handicap":"14","note":""},{"number":12,"par":"3","yards":"108","handicap":"8","note":""},{"number":13,"par":"4","yards":"354","handicap":"2","note":""},{"number":14,"par":"5","yards":"406","handicap":"18","note":""},{"number":15,"par":"4","yards":"337","handicap":"4","note":""},{"number":16,"par":"3","yards":"125","handicap":"16","note":""},{"number":17,"par":"4","yards":"353","handicap":"6","note":""},{"number":18,"par":"5","yards":"455","handicap":"12","note":""}]}],"holes":[{"number":1,"par":"4","yards":"374","handicap":"11","note":""},{"number":2,"par":"3","yards":"133","handicap":"17","note":""},{"number":3,"par":"4","yards":"378","handicap":"3","note":""},{"number":4,"par":"4","yards":"335","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"464","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"322","handicap":"10","note":""},{"number":11,"par":"4","yards":"317","handicap":"14","note":""},{"number":12,"par":"3","yards":"171","handicap":"8","note":""},{"number":13,"par":"4","yards":"399","handicap":"2","note":""},{"number":14,"par":"5","yards":"462","handicap":"18","note":""},{"number":15,"par":"4","yards":"384","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"380","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]}],"history":[{"id":"ff1829fe","date":"2026-03-23T01:13:30.331565","type":"caddie","course":"King Valley Golf Club","tee":"Maroon","hcp":"25","playHcp":"30","conditions":"calm","holes":"all 18","text":"OPTIMISED BAG \u2014 King Valley (Maroon tees, all 18)\nHandicap: 25 | Playing HCP: 30 | Conditions: Calm\n\n1.  Driver SIM 2 Max \u2014 220-260 yds \u2014 Essential off every par 4 and 5\n2.  5 Wood SIM2 Max \u2014 190-220 yds \u2014 Par 5 lay-ups, long second shots\n3.  3 Hybrid LAZ2-H \u2014 170-190 yds \u2014 H9/H13 approaches, bridges 5W down\n4.  4 Hybrid Wizard \u2014 160-178 yds \u2014 H7 (174) and H12 (171) par 3s\n5.  5 Hybrid Wizard \u2014 148-166 yds \u2014 H2 (156) par 3, mid approaches\n6.  6 Hybrid Wizard \u2014 138-155 yds \u2014 H1/H3/H6/H15/H17 approaches\n7.  7 Hybrid Wizard \u2014 128-145 yds \u2014 H10 approach, scoring holes\n8.  8 Hybrid Wizard \u2014 118-135 yds \u2014 Short par 4 approaches\n9.  9 Hybrid Wizard \u2014 108-125 yds \u2014 H11 approach, lay-up targets\n10. PW Wizard 45 \u2014 98-115 yds \u2014 H16 par 3, scoring\n11. GW Kirkland 52 \u2014 85-100 yds \u2014 Par 5 finishers, short approaches\n12. SW Kirkland 56 \u2014 55-70 yds \u2014 Bunkers, short pitches\n13. LW Kirkland 60 \u2014 45-60 yds \u2014 Tight chips, par 5 close pitches\n+   Putter Cleveland HB Soft 2 \u2014 Always carried\nTotal: 14 clubs\nLEFT OUT: 7 Wood LAZ2 \u2014 overlapped by 3 Hybrid; hybrid more versatile from rough\nYARDAGE GAPS: 70-85 yds minor \u2014 cover with partial GW\n\nCOURSE STRATEGY\n1. Playing HCP 30 \u2014 HCP 1-12 holes get 2 strokes (bogey = net par). Never feel pressure on them.\n2. Par 3s: H2=5H, H7=4H, H12=4H, H16=6H. Centre of green every time.\n3. Par 5s: always 3 shots. Driver, lay-up to 80-100 yds, wedge on.\n\nHOLE-BY-HOLE\nH1  | Par 4 | 374 yds | HCP 11 | 2 strokes | Tee: Driver | Approach: 6H or 7H | Bogey = net par\nH2  | Par 3 | 156 yds | HCP 17 | 1 stroke  | Club: 5 Hybrid | Centre of green\nH3  | Par 4 | 378 yds | HCP 3  | 2 strokes | Tee: Driver | Approach: 7H or 6H | Bogey = net par\nH4  | Par 4 | 385 yds | HCP 5  | 2 strokes | Tee: Driver | Approach: 5H or 6H | Bogey = net par\nH5  | Par 5 | 475 yds | HCP 15 | 1 stroke  | Tee: Driver | 2nd: 5W lay-up | Approach: GW\nH6  | Par 4 | 378 yds | HCP 9  | 2 strokes | Tee: Driver | Approach: 7H or 6H | Bogey = net par\nH7  | Par 3 | 174 yds | HCP 13 | 1 stroke  | Club: 4 Hybrid | Centre of green\nH8  | Par 5 | 485 yds | HCP 1  | 2 strokes | Tee: Driver | 2nd: 3H/4H lay-up | Approach: GW | Best birdie chance\nH9  | Par 4 | 400 yds | HCP 7  | 2 strokes | Tee: Driver | Approach: 4H or 3H | Centre green\nH10 | Par 4 | 351 yds | HCP 10 | 2 strokes | Tee: Driver | Approach: 9H or PW | Net birdie chance\nH11 | Par 4 | 338 yds | HCP 14 | 1 stroke  | Tee: 5 Wood | Approach: 9H | Club down for control\nH12 | Par 3 | 171 yds | HCP 8  | 2 strokes | Club: 4 Hybrid | 2 strokes \u2014 no pressure\nH13 | Par 4 | 399 yds | HCP 2  | 2 strokes | Tee: Driver | Approach: 4H or 3H | Safe centre line\nH14 | Par 5 | 482 yds | HCP 18 | 1 stroke  | Tee: Driver | 2nd: 3H/5W lay-up | Approach: GW\nH15 | Par 4 | 384 yds | HCP 4  | 2 strokes | Tee: Driver | Approach: 5H or 6H | Bogey = net par\nH16 | Par 3 | 149 yds | HCP 16 | 1 stroke  | Club: 6 Hybrid | Smoothest par 3 for your bag\nH17 | Par 4 | 380 yds | HCP 6  | 2 strokes | Tee: Driver | Approach: 6H or 5H | Bogey = net par\nH18 | Par 5 | 490 yds | HCP 12 | 2 strokes | Tee: Driver | 2nd: 5W lay-up | Approach: GW | Finish clean"}]};
+const _SEED={bag:[],courses:[],history:[]};
 function load() {
   try { const b=JSON.parse(localStorage.getItem('vc:bag')); bag=Array.isArray(b)&&b.length?b.filter(x=>x&&x.id):_SEED.bag; } catch { bag=_SEED.bag; }
   try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)&&c.length?c.filter(x=>x&&x.id):_SEED.courses; } catch { courses=_SEED.courses; }
@@ -3785,6 +3884,13 @@ function showDisclaimer() {
 function acceptDisclaimer() {
   localStorage.setItem('vc:disc', '1');
   document.getElementById('discModal').style.display = 'none';
+}
+function confirmClearAll() {
+  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version'].forEach(k=>localStorage.removeItem(k));
+  bag=[]; courses=[]; rounds=[]; history=[]; profile={};
+  document.getElementById('clearModal').style.display='none';
+  document.getElementById('uploadBanner').style.display='flex';
+  renderAll();
 }
 if(!localStorage.getItem('vc:disc') && window.self === window.top) showDisclaimer();
 </script>
