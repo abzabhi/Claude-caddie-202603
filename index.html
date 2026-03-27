@@ -149,6 +149,7 @@ body{
 .hcp-num{font-family:'Playfair Display',serif;font-size:2.8rem;font-weight:700;color:var(--ac2);line-height:1;}
 .hcp-lbl{font-size:.62rem;color:var(--tx2);letter-spacing:.15em;text-transform:uppercase;margin-top:4px;}
 .hcp-meta{font-size:.64rem;color:var(--tx3);margin-top:5px;}
+.rnd-header{display:flex;align-items:center;gap:8px;padding:4px 0 6px;border-bottom:2px solid var(--br);font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:2px;}
 .rnd-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--br);font-size:.72rem;}
 .rnd-row:last-child{border-bottom:none;}
 .rnd-dt{color:var(--tx3);min-width:58px;flex-shrink:0;}
@@ -250,7 +251,8 @@ body{
 .profile-hcp-num{font-family:'Playfair Display',serif;font-size:2.4rem;font-weight:700;color:var(--ac2);line-height:1;}
 .profile-hcp-lbl{font-size:.54rem;letter-spacing:.14em;text-transform:uppercase;color:var(--tx3);margin-top:2px;}
 .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
-.stat-card{background:var(--sf);border:1px solid var(--br);border-radius:8px;padding:14px 12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.stat-card{background:var(--sf);border:1px solid var(--br);border-radius:8px;padding:14px 12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.04);transition:all .15s;}
+.stat-card:hover{border-color:var(--gr2);box-shadow:0 2px 8px rgba(61,107,53,.1);}
 .stat-num{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--ac2);line-height:1;}
 .stat-lbl{font-size:.54rem;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);margin-top:4px;}
 .club-type-group{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--br);font-size:.7rem;}
@@ -273,6 +275,11 @@ body{
 .app-footer{text-align:center;margin-top:32px;padding-top:12px;border-top:1px solid var(--br);}
 .disc-link{background:none;border:none;font-family:'DM Mono',monospace;font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
 .disc-link:hover{color:var(--tx2);}
+
+/* Upload prompt banner */
+#uploadBanner{background:var(--gr3);border:1px solid var(--br);border-left:4px solid var(--gr);border-radius:8px;padding:14px 16px;margin-bottom:14px;display:none;align-items:center;gap:12px;flex-wrap:wrap;}
+#uploadBanner .ub-text{flex:1;min-width:160px;font-size:.72rem;color:var(--tx2);line-height:1.6;}
+#uploadBanner .ub-text strong{color:var(--ac2);display:block;margin-bottom:2px;font-size:.78rem;}
 </style>
 </head>
 <body>
@@ -288,8 +295,20 @@ body{
 
   <!-- Toolbar -->
   <div class="toolbar">
-    <button class="btn gold" onclick="exportData()">⬇ Export Data</button>
+    <button class="btn gold" onclick="saveData()">⬇ Save Data</button>
     <label class="btn sec" style="cursor:pointer;">⬆ Import Data<input type="file" accept=".txt" style="display:none" onchange="importData(event)"></label>
+    <span id="saveStatus" style="font-size:.62rem;align-self:center;transition:color .3s"></span>
+  </div>
+
+  <!-- Upload prompt banner -->
+  <div id="uploadBanner">
+    <div class="ub-text">
+      <strong>Welcome to Virtual Caddie</strong>
+      Import an existing data file, or start fresh and use AI to set up your clubs and courses.
+    </div>
+    <label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);document.getElementById('uploadBanner').style.display='none'"></label>
+    <button class="btn sec" onclick="exportStarterTxt()" style="white-space:nowrap">🤖 Set Up with AI</button>
+    <button class="btn sec" onclick="document.getElementById('uploadBanner').style.display='none'" style="white-space:nowrap">Start fresh</button>
   </div>
 
   <!-- Tabs -->
@@ -299,6 +318,7 @@ body{
     <button class="tab" onclick="showTab('courses')">Courses <span class="badge" id="coursesBadge">0</span></button>
     <button class="tab" onclick="showTab('handicap')">Handicap</button>
     <button class="tab" onclick="showTab('sessions')">Caddie <span class="badge" id="sessionsBadge">0</span></button>
+    <button class="tab" onclick="showTab('viz')">Viz</button>
     <button class="tab" onclick="showTab('notes')">Notes</button>
   </div>
 
@@ -314,16 +334,18 @@ body{
       <div class="profile-hcp-block">
         <div class="profile-hcp-num" id="profileHcpNum">—</div>
         <div class="profile-hcp-lbl">Handicap Index</div>
+        <button class="btn sec" style="font-size:.55rem;padding:3px 8px;margin-top:6px" onclick="exportProfilePdf()">⬇ Player Card</button>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-num" id="statActiveClubs">0</div><div class="stat-lbl">Active Clubs</div></div>
-      <div class="stat-card"><div class="stat-num" id="statRounds">0</div><div class="stat-lbl">Rounds Logged</div></div>
-      <div class="stat-card"><div class="stat-num" id="statCourses">0</div><div class="stat-lbl">Courses Saved</div></div>
-      <div class="stat-card"><div class="stat-num" id="statSessions">0</div><div class="stat-lbl">Caddie Sessions</div></div>
-      <div class="stat-card"><div class="stat-num" id="statOptimisations">0</div><div class="stat-lbl">Optimisations</div></div>
-      <div class="stat-card"><div class="stat-num" id="statClubSessions">0</div><div class="stat-lbl">Club Sessions</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('sessions')" style="cursor:pointer" title="Go to Caddie tab"><div class="stat-num" id="statSessions">0</div><div class="stat-lbl">Caddie Sessions</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('handicap')" style="cursor:pointer" title="Go to Handicap tab"><div class="stat-num" id="statRounds">0</div><div class="stat-lbl">Rounds Logged</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('clubs')" style="cursor:pointer" title="Go to Clubs tab"><div class="stat-num" id="statClubSessions">0</div><div class="stat-lbl">Club Sessions</div></div>
+    </div>
+    <div class="stats-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+      <div class="stat-card" onclick="showTabFromProfile('courses')" style="cursor:pointer" title="Go to Courses tab"><div class="stat-num" id="statCourses">0</div><div class="stat-lbl">Courses Saved</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('clubs')" style="cursor:pointer" title="Go to Clubs tab"><div class="stat-num" id="statActiveClubs">0</div><div class="stat-lbl">Active Clubs</div></div>
     </div>
 
     <div class="card">
@@ -352,8 +374,8 @@ body{
         <div class="field">
           <div class="flbl">Yardage Preference</div>
           <select id="pfYardType" onchange="saveProfile()">
-            <option value="Total" ${(profile.yardType||'Total')==='Total'?'selected':''}>Total (incl. roll)</option>
-            <option value="Carry" ${profile.yardType==='Carry'?'selected':''}>Carry only</option>
+            <option value="Total">Total (incl. roll)</option>
+            <option value="Carry">Carry only</option>
           </select>
         </div>
         <div class="field">
@@ -364,9 +386,10 @@ body{
           </select>
         </div>
         <div class="field pf-full">
-          <div class="flbl">Home / Favourite Club</div>
-          <input id="pfHomeClub" type="text" list="homeClubList" placeholder="Type or select from your courses…" oninput="onHomeClubInput()" autocomplete="off">
-          <datalist id="homeClubList"></datalist>
+          <div class="flbl">Home / Favourite Course</div>
+          <select id="pfHomeClubSelect" onchange="onHomeClubSelect()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 7px;outline:none;">
+            <option value="">— Select from your courses —</option>
+          </select>
         </div>
         <div class="field pf-full">
           <div class="flbl">Notes</div>
@@ -374,19 +397,25 @@ body{
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- CLUBS -->
+    <div class="card" id="gistSettingsCard">
+      <!-- rendered by renderGistSettings() -->
+    </div>
+  </div>
   <div id="tab-clubs" class="panel">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <div class="slbl" style="margin:0;flex:1">Active clubs are included in bag optimisation</div>
-      <button id="impliedTogBtn" class="implied-tog" onclick="toggleImplied()" title="Show or hide confidence-adjusted yardage ranges">Implied Yds: <span id="impliedTogLbl">Off</span></button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn sec" style="font-size:.62rem;padding:4px 10px" onclick="exportClubTask()" title="Export a file to drop into an AI chat to add clubs by name">🤖 Get AI Help</button>
+        <button id="clubModeBtn" class="implied-tog" onclick="toggleClubMode()" title="Switch between simple and detailed club entry">Simple</button>
+        <button id="impliedTogBtn" class="implied-tog" onclick="toggleImplied()" title="Show or hide confidence-adjusted yardage ranges">Implied Yds: <span id="impliedTogLbl">Off</span></button>
+      </div>
     </div>
     <div id="clubList"></div>
     <button class="add-club-btn" onclick="addClub()">＋ Add Club</button>
     <div class="slbl pur" style="margin-top:16px;">Putter — always in bag</div>
     <div id="putterSlot"></div>
-    <p class="note">Expand any club to log distance sessions or edit specs. Toggle Active/Retired to include or exclude from bag optimisation.</p>
+    <p class="note">Expand any club to log distance sessions or edit specs. Toggle Active/Retired to include or exclude from bag optimisation. Use <strong>Get AI Help</strong> to add clubs by name via any AI chat.</p>
   </div>
 
   <!-- COURSES -->
@@ -394,7 +423,7 @@ body{
     <div id="courseListView">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
         <button class="btn" onclick="editCourse(null)">+ Add Course Manually</button>
-        <span style="font-size:.62rem;color:var(--tx3);">To look up a course, export your data and ask Claude.</span>
+        <button class="btn sec" onclick="exportCourseTask()" title="Export a file to drop into an AI chat to look up a course scorecard">🤖 Get AI Help</button>
       </div>
       <div id="courseCards"></div>
     </div>
@@ -465,32 +494,250 @@ body{
     <div class="card">
       <div class="card-title">Log a Round</div>
       <div class="g2">
-        <div class="field"><div class="flbl">Date</div><input type="date" id="rDate"></div>
-        <div class="field"><div class="flbl">Course Name</div><input id="rCourse" placeholder="e.g. Forest City National" list="savedCoursesList"><datalist id="savedCoursesList"></datalist></div>
+        <div class="field">
+          <div class="flbl">Date</div>
+          <input type="date" id="rDate">
+        </div>
+        <div class="field">
+          <div class="flbl">Course</div>
+          <select id="rCourseSelect" onchange="onRoundCourseSelect()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 7px;outline:none;">
+            <option value="">— Select saved course —</option>
+            <option value="__manual__">Enter manually…</option>
+          </select>
+        </div>
+      </div>
+      <div class="g2" id="rManualCourseRow" style="display:none">
+        <div class="field">
+          <div class="flbl">Course Name (manual)</div>
+          <input id="rCourse" placeholder="e.g. Forest City National" list="savedCoursesList">
+          <datalist id="savedCoursesList"></datalist>
+        </div>
+        <div class="field">
+          <div class="flbl">Tee Name (manual)</div>
+          <input id="rTeeManual" placeholder="e.g. Blue">
+        </div>
+      </div>
+      <div class="field" id="rTeeSelectRow" style="display:none">
+        <div class="flbl">Tee</div>
+        <select id="rTeeSelect" onchange="onRoundTeeSelect()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 7px;outline:none;"></select>
       </div>
       <div class="g3">
-        <div class="field"><div class="flbl">Rating</div><input id="rRating" placeholder="69.2" inputmode="decimal" oninput="updateDiffPreview()"></div>
-        <div class="field"><div class="flbl">Slope</div><input id="rSlope" placeholder="124" inputmode="numeric" oninput="updateDiffPreview()"></div>
-        <div class="field"><div class="flbl">Par</div><input id="rPar" placeholder="72" inputmode="numeric"></div>
+        <div class="field">
+          <div class="flbl">Course Rating</div>
+          <input id="rRating" placeholder="69.2" inputmode="decimal" oninput="updateDiffPreview()">
+        </div>
+        <div class="field">
+          <div class="flbl">Slope Rating</div>
+          <input id="rSlope" placeholder="124" inputmode="numeric" oninput="updateDiffPreview()">
+        </div>
+        <div class="field">
+          <div class="flbl">Par</div>
+          <input id="rPar" placeholder="72" inputmode="numeric">
+        </div>
       </div>
       <div class="g2">
-        <div class="field"><div class="flbl">Gross Score</div><input id="rScore" placeholder="95" inputmode="numeric" oninput="updateDiffPreview()"></div>
+        <div class="field">
+          <div class="flbl">Gross Score</div>
+          <input id="rScore" placeholder="95" inputmode="numeric" oninput="updateDiffPreview()">
+        </div>
         <div class="field" style="display:flex;align-items:flex-end;padding-bottom:10px;">
           <span id="diffPreview" style="font-size:.7rem;color:var(--gold)"></span>
         </div>
+      </div>
+      <div class="field">
+        <div class="flbl">Round Notes (optional)</div>
+        <input id="rNotes" placeholder="e.g. Windy, drove well, struggled with irons…">
       </div>
       <button class="btn" onclick="addRound()">+ Add Round</button>
     </div>
     <div class="card" id="roundHistCard" style="display:none">
       <div class="card-title">Round History <span id="roundCount" style="font-size:.62rem;font-family:'IBM Plex Mono';color:var(--tx3)"></span></div>
+      <div class="rnd-header">
+        <span style="width:100px">Date</span>
+        <span style="flex:1;min-width:80px">Course</span>
+        <span style="width:70px">Tee</span>
+        <span style="width:48px;text-align:center">Score</span>
+        <span style="width:38px;text-align:center">Rating</span>
+        <span style="width:36px;text-align:center">Slope</span>
+        <span style="width:44px;text-align:right">Diff</span>
+        <span style="flex:1;min-width:60px">Notes</span>
+        <span style="width:24px"></span>
+      </div>
       <div id="roundList"></div>
     </div>
     <p class="note">Up to 20 rounds stored. WHS formula used — best differentials averaged × 0.96.</p>
   </div>
 
-  <!-- CADDIE (unified) -->
+  <!-- CADDIE -->
   <div id="tab-sessions" class="panel">
+    <div class="card">
+      <div class="card-title">Session Parameters</div>
+      <div class="g2" style="margin-bottom:10px">
+        <div class="field">
+          <div class="flbl">Session Type</div>
+          <select id="cadType">
+            <option value="both">Bag + Hole-by-Hole</option>
+            <option value="optimisation">Bag Optimisation</option>
+            <option value="caddie">Hole-by-Hole</option>
+            <option value="data-update">Data Update</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="flbl">Holes</div>
+          <select id="cadHoles">
+            <option value="all 18">All 18</option>
+            <option value="front 9">Front 9 (1–9)</option>
+            <option value="back 9">Back 9 (10–18)</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="flbl">Course</div>
+          <select id="cadCourse" onchange="updateCadTees()"></select>
+        </div>
+        <div class="field">
+          <div class="flbl">Tee</div>
+          <select id="cadTee"></select>
+        </div>
+      </div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field">
+          <div class="flbl">Conditions</div>
+          <select id="cadConditions">
+            <option value="calm">Calm</option>
+            <option value="light wind">Light Wind</option>
+            <option value="moderate wind">Moderate Wind</option>
+            <option value="strong wind">Strong Wind</option>
+            <option value="wet / soft">Wet / Soft</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="flbl">Optimisation Tier</div>
+          <select id="cadOptTier" onchange="localStorage.setItem('vc:optTier',this.value)">
+            <option value="4">4 — Full</option>
+            <option value="3">3 — Advanced</option>
+            <option value="2">2 — Standard</option>
+            <option value="1">1 — Basic</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn gold" onclick="exportForAI()">&#8679; Export for AI</button>
+        <label class="btn sec" style="cursor:pointer">&#8681; Import Session Result<input type="file" accept=".txt" style="display:none" onchange="importSessionResult(event)"></label>
+      </div>
+      <div id="cadStatus" style="font-size:.62rem;color:var(--tx3);margin-top:6px;min-height:1em">Set your session parameters, then export for AI. Import the session result when done.</div>
+      <div style="margin-top:10px">
+        <div class="flbl" style="margin-bottom:4px">Or paste session result text</div>
+        <textarea id="pasteResult" rows="4" placeholder="Paste the AI's session result here if you can't save it as a file…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
+        <button class="btn sec" style="margin-top:6px" onclick="importPastedResult()">&#8681; Import Pasted Result</button>
+      </div>
+    </div>
     <div id="sessionsList"></div>
+  </div>
+
+  <!-- VIZ -->
+  <div id="tab-viz" class="panel">
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button class="implied-tog on" id="vmode-coverage" onclick="onVizModeChange('coverage')" style="flex:1;padding:7px 4px;font-size:.68rem">📊 Bag coverage</button>
+        <button class="implied-tog"    id="vmode-hole"     onclick="onVizModeChange('hole')"     style="flex:1;padding:7px 4px;font-size:.68rem">⛳ Hole planning</button>
+      </div>
+
+      <!-- MODE 1: Bag coverage controls -->
+      <div id="vizCoverageControls">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:8px">
+          <div class="field">
+            <div class="flbl">Clubs from</div>
+            <select id="vizClubSrcSel" onchange="onVizClubSrcChange()" style="min-width:160px">
+              <option value="optimised">Optimised bag</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="field" id="vizOptSessionField">
+            <div class="flbl">Session</div>
+            <select id="vizOptSessionSelect" onchange="onVizOptSessionChange()" style="min-width:190px"></select>
+          </div>
+          <div class="field">
+            <div class="flbl">Distance target</div>
+            <select id="vizDistTarget" onchange="renderViz()" style="min-width:110px">
+              <option value="">All distances</option>
+            </select>
+          </div>
+        </div>
+        <div id="vizClubShelf" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;padding:8px;background:var(--bg);border:1px solid var(--br);border-radius:4px"></div>
+      </div>
+
+      <!-- MODE 2: Hole planning controls -->
+      <div id="vizHoleControls" style="display:none">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:8px">
+          <div class="field">
+            <div class="flbl">Course</div>
+            <select id="vizCourseSelect" onchange="onVizCourseChange()" style="min-width:150px"></select>
+          </div>
+          <div class="field">
+            <div class="flbl">Tee</div>
+            <select id="vizTeeSelect" onchange="onVizTeeChange()" style="min-width:110px"></select>
+          </div>
+          <div class="field">
+            <div class="flbl">Session</div>
+            <select id="vizHoleSessionSelect" onchange="onVizHoleSessionChange()" style="min-width:190px"></select>
+          </div>
+        </div>
+        <div id="vizHoleClubRow" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:8px">
+          <div class="field">
+            <div class="flbl">Tee</div>
+            <select id="vizHoleTee" onchange="renderViz()" style="min-width:120px"></select>
+          </div>
+          <div id="vizHoleShotSlots" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end"></div>
+          <div style="display:flex;gap:4px;align-items:flex-end;padding-bottom:2px">
+            <button class="implied-tog" onclick="vizAddShot()" title="Add shot" style="padding:4px 8px;font-size:.75rem">+</button>
+            <button class="implied-tog" onclick="vizRemoveShot()" title="Remove shot" style="padding:4px 8px;font-size:.75rem">−</button>
+          </div>
+        </div>
+        <div id="vizHoleShelf" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
+      </div>
+
+      <!-- Shared: yardage mode + fairway + display -->
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
+        <div class="field">
+          <div class="flbl">Yardage</div>
+          <div style="display:flex;gap:3px">
+            <button class="implied-tog"    id="vytgl-carry" onclick="setVizYard('carry')">Carry</button>
+            <button class="implied-tog on" id="vytgl-total" onclick="setVizYard('total')">Total</button>
+          </div>
+        </div>
+        <div class="field">
+          <div class="flbl">Fairway (yds)</div>
+          <input type="number" id="vizFwWidth" min="15" max="80" value="35" step="5" oninput="renderViz()" style="width:72px">
+        </div>
+        <div class="field">
+          <div class="flbl">Display</div>
+          <div style="display:flex;gap:3px">
+            <button class="implied-tog on" id="vptgl-both"  onclick="setVizDisplay('both')">Both</button>
+            <button class="implied-tog"    id="vptgl-shape" onclick="setVizDisplay('shape')">Shape</button>
+            <button class="implied-tog"    id="vptgl-prob"  onclick="setVizDisplay('prob')">Prob</button>
+          </div>
+        </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
+        <div class="field">
+          <div class="flbl">Fairway (yds)</div>
+          <input type="number" id="vizFwWidth" min="15" max="80" value="35" step="5" oninput="renderViz()" style="width:72px">
+        </div>
+        <div class="field">
+          <div class="flbl">Display</div>
+          <div style="display:flex;gap:3px">
+            <button class="implied-tog on" id="vptgl-both"  onclick="setVizDisplay('both')">Both</button>
+            <button class="implied-tog"    id="vptgl-shape" onclick="setVizDisplay('shape')">Shape</button>
+            <button class="implied-tog"    id="vptgl-prob"  onclick="setVizDisplay('prob')">Prob</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:12px">
+      <div id="vizHoleNote" style="display:none;margin-bottom:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--br);border-radius:4px;font-size:.66rem;color:var(--tx2);line-height:1.7;white-space:pre-wrap"></div>
+      <svg id="vizSvg" viewBox="0 0 440 520" style="display:block;width:100%;height:auto"><text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="12" fill="#c8bba6">Select a mode above</text></svg>
+      <div id="vizLegend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
+      <div id="vizChips"  style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
+    </div>
   </div>
 
   <!-- NOTES -->
@@ -612,6 +859,31 @@ body{
 const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
 const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];
+const CLUB_VARIANTS = {
+  'Driver':       [{id:'Driver', loft:'10.5',shaft:45.75,stiffness:'Regular'}],
+  'Fairway Wood': [{id:'3W',loft:'15',shaft:43.00,stiffness:'Regular'},{id:'5W',loft:'18',shaft:42.25,stiffness:'Regular'},
+                   {id:'7W',loft:'21',shaft:41.50,stiffness:'Regular'},{id:'9W',loft:'24',shaft:40.75,stiffness:'Regular'}],
+  'Hybrid':       [{id:'1H',loft:'16',shaft:40.50,stiffness:'Regular'},{id:'2H',loft:'17',shaft:40.25,stiffness:'Regular'},
+                   {id:'3H',loft:'19',shaft:40.00,stiffness:'Regular'},{id:'4H',loft:'22',shaft:39.50,stiffness:'Regular'},
+                   {id:'5H',loft:'25',shaft:39.00,stiffness:'Regular'},{id:'6H',loft:'28',shaft:38.50,stiffness:'Regular'},
+                   {id:'7H',loft:'31',shaft:38.00,stiffness:'Regular'},{id:'8H',loft:'35',shaft:37.50,stiffness:'Regular'},
+                   {id:'9H',loft:'38',shaft:37.00,stiffness:'Regular'}],
+  'Iron':         [{id:'1i',loft:'16',shaft:39.50,stiffness:'Stiff'},{id:'2i',loft:'18',shaft:39.00,stiffness:'Stiff'},
+                   {id:'3i',loft:'21',shaft:38.50,stiffness:'Regular'},{id:'4i',loft:'24',shaft:38.00,stiffness:'Regular'},
+                   {id:'5i',loft:'27',shaft:37.50,stiffness:'Regular'},{id:'6i',loft:'30',shaft:37.00,stiffness:'Regular'},
+                   {id:'7i',loft:'34',shaft:36.50,stiffness:'Regular'},{id:'8i',loft:'38',shaft:36.00,stiffness:'Regular'},
+                   {id:'9i',loft:'42',shaft:35.50,stiffness:'Regular'}],
+  'Wedge':        [{id:'PW',loft:'45',shaft:35.50,stiffness:'Regular'},{id:'GW 50',loft:'50',shaft:35.25,stiffness:'Stiff'},
+                   {id:'GW 52',loft:'52',shaft:35.25,stiffness:'Stiff'},{id:'SW 54',loft:'54',shaft:35.00,stiffness:'Stiff'},
+                   {id:'SW 56',loft:'56',shaft:35.00,stiffness:'Stiff'},{id:'LW 58',loft:'58',shaft:35.00,stiffness:'Stiff'},
+                   {id:'LW 60',loft:'60',shaft:35.00,stiffness:'Stiff'},{id:'LW 62',loft:'62',shaft:35.00,stiffness:'Stiff'},
+                   {id:'LW 64',loft:'64',shaft:35.00,stiffness:'Stiff'}],
+  'Putter':       [{id:'Putter',loft:'3',shaft:34.50,stiffness:'Regular'}],
+  'Chipper':      [{id:'Chipper',loft:'35',shaft:35.00,stiffness:'Regular'}]
+};
+function getVariantDefault(type, variantId) {
+  return (CLUB_VARIANTS[type]||[]).find(v=>v.id===variantId)||null;
+}
 const TYPE_COLOR = {"Driver":"#3d7a2e","Fairway Wood":"#2a6a50","Hybrid":"#2a507a","Iron":"#5a4a2a","Wedge":"#6a3a2a","Putter":"#4a2a6a","Chipper":"#5a2a4a"};
 
 // ── Ball Flight Reference Data ─────────────────────────────────────────────────
@@ -627,7 +899,7 @@ const TYPE_COLOR = {"Driver":"#3d7a2e","Fairway Wood":"#2a6a50","Hybrid":"#2a507
 // launchDeg= launch angle (degrees)
 // spinCat  = 'Low' | 'Mid' | 'High'  (trajectory character)
 // flight   = typical flight shape descriptor
-const FLIGHT_DATA = {
+let FLIGHT_DATA = {
   tiers: ['0-4','5-9','10-14','15-19','20-24','25+'],
   // Club type keys must match CLUB_TYPES values (Iron maps to 'Mid Iron' tier below)
   // For Irons we split by loft group via identifier heuristics at runtime.
@@ -708,13 +980,83 @@ const FLIGHT_DATA = {
 };
 
 // Bias lateral offset (yds, +ve = right for RH golfer) and dispersion multiplier
-const BIAS_DATA = {
-  'Straight': { offset:  0, mult: 1.00 },
-  'Draw':     { offset: -5, mult: 0.95 },
-  'Hook':     { offset:-15, mult: 1.15 },
-  'Fade':     { offset: +5, mult: 0.95 },
-  'Slice':    { offset:+15, mult: 1.20 }
+let BIAS_DATA = {
+  'Straight':   { offset:  0, mult: 1.00 },
+  'Draw':       { offset: -5, mult: 0.95 },
+  'Hook':       { offset:-15, mult: 1.15 },
+  'Fade':       { offset: +5, mult: 0.95 },
+  'Slice':      { offset:+15, mult: 1.20 },
+  'Push Right': { offset:+20, mult: 1.05 },
+  'Push Left':  { offset:-20, mult: 1.05 }
 };
+
+// ── Phase 1.2 — Parse FLIGHT_DATA + BIAS_DATA from reference-data.md cache ──
+function parseRefData(text) {
+  if(!text) return null;
+  try {
+    const lines = text.split('\n');
+    // Extract rows from a markdown table under a given ## heading
+    function tableRows(heading) {
+      let inSection=false, rows=[];
+      for(const line of lines) {
+        if(line.startsWith('## ')) { inSection=line.includes(heading); continue; }
+        if(!inSection||!line.includes('|')) continue;
+        const cells=line.split('|').map(s=>s.trim()).filter((_,i,a)=>i>0&&i<a.length-1);
+        if(!cells.length||cells.every(c=>!c||/^[-:]+$/.test(c))) continue;
+        rows.push(cells);
+      }
+      return rows;
+    }
+    const ns = s => s.trim().split(/\s+/).map(Number);
+
+    // Ball Flight Characteristics: col0=group, col1=spinRpm, col2=launchDeg, col3=spinCat, col4=flight
+    const spinRpmMap={},launchMap={},spinCatMap={},flightMap={};
+    for(const r of tableRows('Ball Flight').slice(1)) {
+      const k=r[0]; if(!k||k.startsWith('-')) continue;
+      spinRpmMap[k]=ns(r[1]); launchMap[k]=ns(r[2]);
+      spinCatMap[k]=(r[3]||'Mid').trim(); flightMap[k]=(r[4]||'').trim();
+    }
+    // Lateral Dispersion: col0=group, col1-6=T0-T5
+    const latMap={};
+    for(const r of tableRows('Lateral Dispersion').slice(1)) {
+      const k=r[0]; if(!k||k.startsWith('-')) continue;
+      latMap[k]=[r[1],r[2],r[3],r[4],r[5],r[6]].map(Number);
+    }
+    // Longitudinal Dispersion: col0=group, col1-6="short/long"
+    const shortMap={},longMap={};
+    for(const r of tableRows('Longitudinal Dispersion').slice(1)) {
+      const k=r[0]; if(!k||k.startsWith('-')) continue;
+      const parse=(v,i)=>parseFloat((v||'0').split('/')[i]||0);
+      shortMap[k]=[r[1],r[2],r[3],r[4],r[5],r[6]].map(v=>parse(v,0));
+      longMap[k] =[r[1],r[2],r[3],r[4],r[5],r[6]].map(v=>parse(v,1));
+    }
+    // Bias Adjustments: col0=bias, col1=mult (xN.NN), col2=offset (N yds)
+    const biasData={};
+    for(const r of tableRows('Bias Adjustments').slice(1)) {
+      const k=r[0]; if(!k||k.startsWith('-')) continue;
+      biasData[k]={
+        mult:   parseFloat((r[1]||'1').replace('x',''))||1,
+        offset: parseFloat((r[2]||'0').replace(/[^0-9.\-+]/g,''))||0
+      };
+    }
+    // Validate minimum data present
+    if(!spinRpmMap['Driver']||!latMap['Driver']||!shortMap['Driver']||!biasData['Straight']) return null;
+    const KEYS=['Driver','Fairway Wood','Hybrid','Iron-Long','Iron-Mid','Iron-Short','Wedge','Chipper'];
+    const clubs={};
+    for(const k of KEYS) {
+      if(!spinRpmMap[k]) continue;
+      clubs[k]={spinRpm:spinRpmMap[k],launchDeg:launchMap[k],latDisp:latMap[k],
+                depShort:shortMap[k],depLong:longMap[k],spinCat:spinCatMap[k],flight:flightMap[k]};
+    }
+    return {flightData:{tiers:['0-4','5-9','10-14','15-19','20-24','25+'],clubs}, biasData};
+  } catch(e) { return null; }
+}
+function applyRefDataCache() {
+  const parsed = parseRefData(localStorage.getItem('vc:ref'));
+  if(!parsed) return;
+  FLIGHT_DATA = parsed.flightData;
+  BIAS_DATA   = parsed.biasData;
+}
 
 // Helper: map a club record to its FLIGHT_DATA key
 function flightKey(c) {
@@ -778,12 +1120,74 @@ function getDispersion(c) {
   };
 }
 
-const APP_VERSION = '16';
-// Clear stale localStorage from older app versions
+const APP_VERSION = '20';
+// Clear stale localStorage from older app versions (preserve Gist settings)
 if(localStorage.getItem('vc:version') !== APP_VERSION) {
   ['vc:bag','vc:courses','vc:rounds','vc:history','vc:hcpMode','vc:manualHcp','vc:profile'].forEach(k=>localStorage.removeItem(k));
   localStorage.setItem('vc:version', APP_VERSION);
 }
+
+// ── Gist cache (skill + reference data + task mini-skills) ───────────────────
+const GIST_SKILL_URL     = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/skill.md';
+const GIST_REF_URL       = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/reference-data.md';
+const GIST_CLUB_TASK_URL  = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/club-task.md';
+const GIST_CRSE_TASK_URL  = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/course-task.md';
+const GIST_SETUP_SKILL_URL= 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/setup-skill.md';
+
+async function _fetchAndCache(url, storeKey, verField) {
+  try {
+    const r = await fetch(url);
+    if(!r.ok) return;
+    const text = await r.text();
+    const m = text.match(new RegExp(verField + ':\\s*(\\d+)'));
+    const newVer = m ? parseInt(m[1]) : 0;
+    const curVer = parseInt(localStorage.getItem(storeKey+':ver')||'0');
+    if(newVer > curVer || !localStorage.getItem(storeKey)) {
+      localStorage.setItem(storeKey, text);
+      localStorage.setItem(storeKey+':ver', String(newVer));
+    }
+  } catch {}
+}
+function getSkillText() {
+  return localStorage.getItem('vc:skill') ||
+    '[Skill unavailable — cache empty and Gist unreachable. Upload skill.md alongside this export file in your AI chat.]';
+}
+function getRefText() {
+  return localStorage.getItem('vc:ref') ||
+    '[Reference data unavailable — cache empty and Gist unreachable. Upload reference-data.md alongside this export file in your AI chat.]';
+}
+function getClubTaskText() {
+  return localStorage.getItem('vc:clubTask') || `ClubTaskVersion: 1
+# Virtual Caddie — Club Setup Task (bundled fallback)
+Ask the user to list their clubs. Derive type/loft/shaft/stiffness from standard defaults. Use Y2 yardage ranges (HCP 15-19) unless user gives distances. Confirm full set in one block before writing. One club set per chat.
+Y2 defaults: Driver 200-230 | 3W 175-200 | 5W 160-185 | 7W 150-170 | 3H 165-185 | 4H 155-175 | 5H 145-165 | 6H 135-155 | 7H 125-145 | 8H 115-135 | 9H 105-125 | 7i 125-145 | 8i 115-135 | 9i 105-125 | PW 95-115 | GW52 80-100 | SW56 60-80 | LW60 45-65
+Output: standard session result, Type: data-update, DATA CHANGES with CLUB and SESSION lines. Putter uses PUTTER, no SESSION line. Confidence 3, Bias Straight.`;
+}
+function getCourseTaskText() {
+  return localStorage.getItem('vc:courseTask') || `CourseTaskVersion: 1
+# Virtual Caddie — Course Lookup Task (bundled fallback)
+Ask the user for the course name and region. Search: official site → golf association → 18Birdies (last resort, state source). Show tees found, ask which to save. Collect par/yards/stroke-index for all 18 holes per tee. Confirm before writing. One course per chat.
+Output: standard session result, Type: data-update, DATA CHANGES with COURSE / TEE / HOLE lines. IDs: c-[6chars] for course, t-[6chars] for tee. Leave yards blank (not zero) if unknown.`;
+}
+function getSetupSkillText() {
+  return localStorage.getItem('vc:setupSkill') || `SetupSkillVersion: 1
+# Virtual Caddie — First-Time Setup (bundled fallback)
+Read the uploaded file. Note what profile/clubs/courses are already present. Skip steps already done.
+Step 1 — Profile: ask name, handed, yardpref, handicap (optional) together in one message.
+Step 2 — Clubs: ask for free-text club list. Derive full set using Y2 defaults (HCP 15-19). Confirm in one block before writing. Confidence 3, Bias Straight.
+Step 3 — Course: ask course name, web search for scorecard, confirm tees, confirm hole data before writing. One course per chat.
+Step 4 — Offer optimization now or skip.
+Output: session result Type data-update or both. DATA CHANGES includes PROFILE fields collected, CLUB+SESSION lines, COURSE+TEE+HOLE lines.
+Resource rule: one course, one optimization per chat.`;
+}
+// Fetch on load — silent, non-blocking; re-parse flight data after ref update
+Promise.allSettled([
+  _fetchAndCache(GIST_SKILL_URL,      'vc:skill',      'SkillVersion'),
+  _fetchAndCache(GIST_REF_URL,        'vc:ref',        'ReferenceVersion').then(applyRefDataCache),
+  _fetchAndCache(GIST_CLUB_TASK_URL,  'vc:clubTask',   'ClubTaskVersion'),
+  _fetchAndCache(GIST_CRSE_TASK_URL,  'vc:courseTask', 'CourseTaskVersion'),
+  _fetchAndCache(GIST_SETUP_SKILL_URL,'vc:setupSkill', 'SetupSkillVersion')
+]);
 let bag = [], courses = [], rounds = [], history = [];
 let profile = {};
 let editingCourseId = null;
@@ -791,6 +1195,7 @@ let currentEditTeeId = null;
 
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
 function today() { return new Date().toISOString().slice(0,10); }
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
 
 function calcDiff(gross, rating, slope) {
@@ -869,32 +1274,24 @@ function calcImplied(stats, c) {
   const mx = stats.avgMax||mn;
   const gap = mx - mn;
   const threshold = isLongClub(c) ? 20 : 15;
-  // Gap suppression — no adjustment if gap is tight enough
+  // Gap suppression — no adjustment if gap is already tight enough
   if(gap <= threshold) {
     return {impMin:mn, impMax:mx, adjusted:false, suppressed:true,
-            reason:`Gap ${gap} yds ≤ ${threshold} yd threshold — unadjusted`};
+            reason:`Gap ${gap} yds <= ${threshold} yd threshold -- unadjusted`};
   }
-  const conf = c.confidence ?? 4;
-  let pct = 0;
-  if(conf<=2)     pct =  0.10;
-  else if(conf===3) pct =  0.05;
-  else if(conf===4) pct =  0.00;
-  else if(conf>=5)  pct = -0.05;
-  if(pct===0) {
-    return {impMin:mn, impMax:mx, adjusted:false, suppressed:false,
-            reason:'Confidence 4 — baseline yardages'};
+  const conf = parseInt(c.confidence) || 4;
+  // conf 1-2: widen both ends 10% | conf 3: widen 5% | conf 4: no change | conf 5: tighten 5%
+  // Max is always avgMax — confidence only adjusts the floor
+  let minMult, label;
+  if(conf <= 2)     { minMult = 0.90; label = 'Confidence 1-2 -- min -10%'; }
+  else if(conf===3) { minMult = 0.95; label = 'Confidence 3 -- min -5%'; }
+  else if(conf===4) { minMult = 1.00; label = 'Confidence 4 -- baseline'; }
+  else              { minMult = 1.05; label = 'Confidence 5 -- min +5% (consistent striker)'; }
+  if(minMult===1.00) {
+    return {impMin:mn, impMax:mx, adjusted:false, suppressed:false, reason:label};
   }
-  const impMin = Math.round(mn * (1 + pct));
-  const impMax = Math.round(mx * (1 + pct));  // same direction — widens or tightens both ends
-  // For scores 1-3 (expansion): lower end goes down, upper end goes up
-  // For score 5 (contraction): both ends move inward
-  const adjMin = pct>0 ? Math.round(mn*(1-pct)) : Math.round(mn*(1-pct));
-  const adjMax = Math.round(mx*(1+Math.abs(pct)));
-  const finalMin = pct>0 ? Math.round(mn*(1-pct)) : Math.round(mn*(1+pct));
-  const finalMax = Math.round(mx*(1+Math.abs(pct)));
-  const dir = pct>0 ? `+${Math.round(pct*100)}% each end` : `${Math.round(pct*100)}% each end`;
-  return {impMin:finalMin, impMax:finalMax, adjusted:true, suppressed:false,
-          reason:`Confidence ${conf} — ${dir}`};
+  return {impMin:Math.round(mn*minMult), impMax:mx,
+          adjusted:true, suppressed:false, reason:label};
 }
 function getTypeLabel(club) {
   const id=(club.identifier||'').trim(), t=club.type;
@@ -917,12 +1314,14 @@ function save() {
   localStorage.setItem('vc:rounds', JSON.stringify(rounds));
   localStorage.setItem('vc:history', JSON.stringify(history));
   localStorage.setItem('vc:profile', JSON.stringify(profile));
+  syncSave(); // 2.5 — async, fire-and-forget
 }
+const _SEED={"bag":[{"id":"1bcf4491","brand":"TaylorMade","type":"Driver","identifier":"Driver","stiffness":"Regular","shaftLength":"45.75","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"10.5","model":"SIM 2 Max","sessions":[{"id":"8a79abda","date":"2026-03-20","min":"220","max":"260","notes":""}]},{"id":"70c61343","brand":"TaylorMade","type":"Fairway Wood","identifier":"5W","stiffness":"Stiff","shaftLength":"42.25","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"18","model":"SIM2 Max","sessions":[{"id":"49a8a7b1","date":"2026-03-21","min":"190","max":"220","notes":""}]},{"id":"085acee4","brand":"Lazrus","type":"Fairway Wood","identifier":"7W","stiffness":"Regular","shaftLength":"41.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"21","model":"LAZ2","sessions":[{"id":"b8957973","date":"2026-03-20","min":"165","max":"185","notes":""}]},{"id":"dc594b4a","brand":"Lazrus","type":"Hybrid","identifier":"3H","stiffness":"Regular","shaftLength":"40.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"18","model":"LAZ2-H","sessions":[{"id":"199bbe47","date":"2026-03-20","min":"170","max":"190","notes":""}]},{"id":"3c2899f2","brand":"MacGregor","type":"Hybrid","identifier":"4H","stiffness":"Regular","shaftLength":"38.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"20","model":"Wizard","sessions":[{"id":"68006976","date":"2026-03-20","min":"160","max":"178","notes":""}]},{"id":"63c13e8b","brand":"MacGregor","type":"Hybrid","identifier":"5H","stiffness":"Regular","shaftLength":"38","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"23","model":"Wizard","sessions":[{"id":"568d9739","date":"2026-03-20","min":"148","max":"166","notes":""}]},{"id":"bff99818","brand":"MacGregor","type":"Hybrid","identifier":"6H","stiffness":"Regular","shaftLength":"37.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"26","model":"Wizard","sessions":[{"id":"5fa73dab","date":"2026-03-20","min":"138","max":"155","notes":""}]},{"id":"6cf1c5ca","brand":"MacGregor","type":"Hybrid","identifier":"7H","stiffness":"Regular","shaftLength":"37","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"30","model":"Wizard","sessions":[{"id":"abee6929","date":"2026-03-20","min":"128","max":"145","notes":""}]},{"id":"149da029","brand":"MacGregor","type":"Hybrid","identifier":"8H","stiffness":"Regular","shaftLength":"36.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"35","model":"Wizard","sessions":[{"id":"e3c1682c","date":"2026-03-20","min":"118","max":"135","notes":""}]},{"id":"1a89f598","brand":"MacGregor","type":"Hybrid","identifier":"9H","stiffness":"Regular","shaftLength":"36","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"40","model":"Wizard","sessions":[{"id":"9f0e5e73","date":"2026-03-20","min":"108","max":"125","notes":""}]},{"id":"dbb558a1","brand":"MacGregor","type":"Wedge","identifier":"PW","stiffness":"Regular","shaftLength":"35.75","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"45","model":"Wizard","sessions":[{"id":"70a6837c","date":"2026-03-20","min":"98","max":"115","notes":""}]},{"id":"65e933a2","brand":"Kirkland","type":"Wedge","identifier":"GW 52","stiffness":"Stiff","shaftLength":"35.75","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"52","model":"Kirkland","sessions":[{"id":"32e48982","date":"2026-03-20","min":"85","max":"100","notes":""}]},{"id":"e2ac926b","brand":"Kirkland","type":"Wedge","identifier":"SW 56","stiffness":"Stiff","shaftLength":"35.5","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"56","model":"Kirkland","sessions":[{"id":"181d8beb","date":"2026-03-20","min":"55","max":"70","notes":""}]},{"id":"818ad07b","brand":"Kirkland","type":"Wedge","identifier":"LW 60","stiffness":"Stiff","shaftLength":"35.25","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"60","model":"Kirkland","sessions":[{"id":"6462f7cc","date":"2026-03-20","min":"45","max":"60","notes":""}]},{"id":"3e98c83b","brand":"Cleveland","type":"Putter","identifier":"Putter","stiffness":"Regular","shaftLength":"35","tested":true,"confidence":4,"bias":"Straight","yardType":"","loft":"3","model":"HB Soft 2 #11 OS","sessions":[]}],"courses":[{"id":"c8","name":"King Valley Golf Club","city":"King City, Ontario","par":"72","rating":"70.3","slope":"139","yardage":"6185","selectedTee":"t-kv-white","updatedAt":"2026-03-22","tees":[{"id":"t-kv-lion","name":"Lion","rating":"73.8","slope":"147","yardage":"7008","holes":[{"number":1,"par":"4","yards":"414","handicap":"11","note":""},{"number":2,"par":"3","yards":"179","handicap":"17","note":""},{"number":3,"par":"4","yards":"411","handicap":"3","note":""},{"number":4,"par":"4","yards":"418","handicap":"5","note":""},{"number":5,"par":"5","yards":"519","handicap":"15","note":""},{"number":6,"par":"4","yards":"403","handicap":"9","note":""},{"number":7,"par":"3","yards":"200","handicap":"13","note":""},{"number":8,"par":"5","yards":"517","handicap":"1","note":""},{"number":9,"par":"4","yards":"438","handicap":"7","note":""},{"number":10,"par":"4","yards":"372","handicap":"10","note":""},{"number":11,"par":"4","yards":"350","handicap":"14","note":""},{"number":12,"par":"3","yards":"218","handicap":"8","note":""},{"number":13,"par":"4","yards":"433","handicap":"2","note":""},{"number":14,"par":"5","yards":"513","handicap":"18","note":""},{"number":15,"par":"4","yards":"440","handicap":"4","note":""},{"number":16,"par":"3","yards":"173","handicap":"16","note":""},{"number":17,"par":"4","yards":"425","handicap":"6","note":""},{"number":18,"par":"5","yards":"585","handicap":"12","note":""}]},{"id":"t-kv-black","name":"Black","rating":"73.0","slope":"145","yardage":"6800","holes":[{"number":1,"par":"4","yards":"408","handicap":"11","note":""},{"number":2,"par":"3","yards":"169","handicap":"17","note":""},{"number":3,"par":"4","yards":"401","handicap":"3","note":""},{"number":4,"par":"4","yards":"411","handicap":"5","note":""},{"number":5,"par":"5","yards":"501","handicap":"15","note":""},{"number":6,"par":"4","yards":"396","handicap":"9","note":""},{"number":7,"par":"3","yards":"187","handicap":"13","note":""},{"number":8,"par":"5","yards":"503","handicap":"1","note":""},{"number":9,"par":"4","yards":"424","handicap":"7","note":""},{"number":10,"par":"4","yards":"372","handicap":"10","note":""},{"number":11,"par":"4","yards":"350","handicap":"14","note":""},{"number":12,"par":"3","yards":"193","handicap":"8","note":""},{"number":13,"par":"4","yards":"429","handicap":"2","note":""},{"number":14,"par":"5","yards":"509","handicap":"18","note":""},{"number":15,"par":"4","yards":"433","handicap":"4","note":""},{"number":16,"par":"3","yards":"166","handicap":"16","note":""},{"number":17,"par":"4","yards":"420","handicap":"6","note":""},{"number":18,"par":"5","yards":"528","handicap":"12","note":""}]},{"id":"t-kv-blue","name":"Blue","rating":"72.0","slope":"143","yardage":"6511","holes":[{"number":1,"par":"4","yards":"383","handicap":"11","note":""},{"number":2,"par":"3","yards":"156","handicap":"17","note":""},{"number":3,"par":"4","yards":"401","handicap":"3","note":""},{"number":4,"par":"4","yards":"385","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"485","handicap":"1","note":""},{"number":9,"par":"4","yards":"407","handicap":"7","note":""},{"number":10,"par":"4","yards":"351","handicap":"10","note":""},{"number":11,"par":"4","yards":"338","handicap":"14","note":""},{"number":12,"par":"3","yards":"193","handicap":"8","note":""},{"number":13,"par":"4","yards":"406","handicap":"2","note":""},{"number":14,"par":"5","yards":"482","handicap":"18","note":""},{"number":15,"par":"4","yards":"417","handicap":"4","note":""},{"number":16,"par":"3","yards":"162","handicap":"16","note":""},{"number":17,"par":"4","yards":"390","handicap":"6","note":""},{"number":18,"par":"5","yards":"528","handicap":"12","note":""}]},{"id":"t-kv-maroon","name":"Maroon","rating":"70.9","slope":"141","yardage":"6349","holes":[{"number":1,"par":"4","yards":"374","handicap":"11","note":""},{"number":2,"par":"3","yards":"156","handicap":"17","note":""},{"number":3,"par":"4","yards":"378","handicap":"3","note":""},{"number":4,"par":"4","yards":"385","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"485","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"351","handicap":"10","note":""},{"number":11,"par":"4","yards":"338","handicap":"14","note":""},{"number":12,"par":"3","yards":"171","handicap":"8","note":""},{"number":13,"par":"4","yards":"399","handicap":"2","note":""},{"number":14,"par":"5","yards":"482","handicap":"18","note":""},{"number":15,"par":"4","yards":"384","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"380","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]},{"id":"t-kv-white","name":"White","rating":"70.3","slope":"139","yardage":"6185","holes":[{"number":1,"par":"4","yards":"374","handicap":"11","note":""},{"number":2,"par":"3","yards":"133","handicap":"17","note":""},{"number":3,"par":"4","yards":"378","handicap":"3","note":""},{"number":4,"par":"4","yards":"335","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"464","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"322","handicap":"10","note":""},{"number":11,"par":"4","yards":"317","handicap":"14","note":""},{"number":12,"par":"3","yards":"171","handicap":"8","note":""},{"number":13,"par":"4","yards":"399","handicap":"2","note":""},{"number":14,"par":"5","yards":"462","handicap":"18","note":""},{"number":15,"par":"4","yards":"384","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"380","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]},{"id":"t-kv-green","name":"Green","rating":"68.3","slope":"132","yardage":"5781","holes":[{"number":1,"par":"4","yards":"338","handicap":"11","note":""},{"number":2,"par":"3","yards":"133","handicap":"17","note":""},{"number":3,"par":"4","yards":"330","handicap":"3","note":""},{"number":4,"par":"4","yards":"285","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"142","handicap":"13","note":""},{"number":8,"par":"5","yards":"408","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"322","handicap":"10","note":""},{"number":11,"par":"4","yards":"317","handicap":"14","note":""},{"number":12,"par":"3","yards":"108","handicap":"8","note":""},{"number":13,"par":"4","yards":"354","handicap":"2","note":""},{"number":14,"par":"5","yards":"462","handicap":"18","note":""},{"number":15,"par":"4","yards":"337","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"353","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]},{"id":"t-kv-red","name":"Red","rating":"67.0","slope":"125","yardage":"5495","holes":[{"number":1,"par":"4","yards":"338","handicap":"11","note":""},{"number":2,"par":"3","yards":"109","handicap":"17","note":""},{"number":3,"par":"4","yards":"330","handicap":"3","note":""},{"number":4,"par":"4","yards":"285","handicap":"5","note":""},{"number":5,"par":"5","yards":"427","handicap":"15","note":""},{"number":6,"par":"4","yards":"330","handicap":"9","note":""},{"number":7,"par":"3","yards":"142","handicap":"13","note":""},{"number":8,"par":"5","yards":"408","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"280","handicap":"10","note":""},{"number":11,"par":"4","yards":"308","handicap":"14","note":""},{"number":12,"par":"3","yards":"108","handicap":"8","note":""},{"number":13,"par":"4","yards":"354","handicap":"2","note":""},{"number":14,"par":"5","yards":"406","handicap":"18","note":""},{"number":15,"par":"4","yards":"337","handicap":"4","note":""},{"number":16,"par":"3","yards":"125","handicap":"16","note":""},{"number":17,"par":"4","yards":"353","handicap":"6","note":""},{"number":18,"par":"5","yards":"455","handicap":"12","note":""}]}],"holes":[{"number":1,"par":"4","yards":"374","handicap":"11","note":""},{"number":2,"par":"3","yards":"133","handicap":"17","note":""},{"number":3,"par":"4","yards":"378","handicap":"3","note":""},{"number":4,"par":"4","yards":"335","handicap":"5","note":""},{"number":5,"par":"5","yards":"475","handicap":"15","note":""},{"number":6,"par":"4","yards":"378","handicap":"9","note":""},{"number":7,"par":"3","yards":"174","handicap":"13","note":""},{"number":8,"par":"5","yards":"464","handicap":"1","note":""},{"number":9,"par":"4","yards":"400","handicap":"7","note":""},{"number":10,"par":"4","yards":"322","handicap":"10","note":""},{"number":11,"par":"4","yards":"317","handicap":"14","note":""},{"number":12,"par":"3","yards":"171","handicap":"8","note":""},{"number":13,"par":"4","yards":"399","handicap":"2","note":""},{"number":14,"par":"5","yards":"462","handicap":"18","note":""},{"number":15,"par":"4","yards":"384","handicap":"4","note":""},{"number":16,"par":"3","yards":"149","handicap":"16","note":""},{"number":17,"par":"4","yards":"380","handicap":"6","note":""},{"number":18,"par":"5","yards":"490","handicap":"12","note":""}]}],"history":[{"id":"ff1829fe","date":"2026-03-23T01:13:30.331565","type":"caddie","course":"King Valley Golf Club","tee":"Maroon","hcp":"25","playHcp":"30","conditions":"calm","holes":"all 18","text":"OPTIMISED BAG \u2014 King Valley (Maroon tees, all 18)\nHandicap: 25 | Playing HCP: 30 | Conditions: Calm\n\n1.  Driver SIM 2 Max \u2014 220-260 yds \u2014 Essential off every par 4 and 5\n2.  5 Wood SIM2 Max \u2014 190-220 yds \u2014 Par 5 lay-ups, long second shots\n3.  3 Hybrid LAZ2-H \u2014 170-190 yds \u2014 H9/H13 approaches, bridges 5W down\n4.  4 Hybrid Wizard \u2014 160-178 yds \u2014 H7 (174) and H12 (171) par 3s\n5.  5 Hybrid Wizard \u2014 148-166 yds \u2014 H2 (156) par 3, mid approaches\n6.  6 Hybrid Wizard \u2014 138-155 yds \u2014 H1/H3/H6/H15/H17 approaches\n7.  7 Hybrid Wizard \u2014 128-145 yds \u2014 H10 approach, scoring holes\n8.  8 Hybrid Wizard \u2014 118-135 yds \u2014 Short par 4 approaches\n9.  9 Hybrid Wizard \u2014 108-125 yds \u2014 H11 approach, lay-up targets\n10. PW Wizard 45 \u2014 98-115 yds \u2014 H16 par 3, scoring\n11. GW Kirkland 52 \u2014 85-100 yds \u2014 Par 5 finishers, short approaches\n12. SW Kirkland 56 \u2014 55-70 yds \u2014 Bunkers, short pitches\n13. LW Kirkland 60 \u2014 45-60 yds \u2014 Tight chips, par 5 close pitches\n+   Putter Cleveland HB Soft 2 \u2014 Always carried\nTotal: 14 clubs\nLEFT OUT: 7 Wood LAZ2 \u2014 overlapped by 3 Hybrid; hybrid more versatile from rough\nYARDAGE GAPS: 70-85 yds minor \u2014 cover with partial GW\n\nCOURSE STRATEGY\n1. Playing HCP 30 \u2014 HCP 1-12 holes get 2 strokes (bogey = net par). Never feel pressure on them.\n2. Par 3s: H2=5H, H7=4H, H12=4H, H16=6H. Centre of green every time.\n3. Par 5s: always 3 shots. Driver, lay-up to 80-100 yds, wedge on.\n\nHOLE-BY-HOLE\nH1  | Par 4 | 374 yds | HCP 11 | 2 strokes | Tee: Driver | Approach: 6H or 7H | Bogey = net par\nH2  | Par 3 | 156 yds | HCP 17 | 1 stroke  | Club: 5 Hybrid | Centre of green\nH3  | Par 4 | 378 yds | HCP 3  | 2 strokes | Tee: Driver | Approach: 7H or 6H | Bogey = net par\nH4  | Par 4 | 385 yds | HCP 5  | 2 strokes | Tee: Driver | Approach: 5H or 6H | Bogey = net par\nH5  | Par 5 | 475 yds | HCP 15 | 1 stroke  | Tee: Driver | 2nd: 5W lay-up | Approach: GW\nH6  | Par 4 | 378 yds | HCP 9  | 2 strokes | Tee: Driver | Approach: 7H or 6H | Bogey = net par\nH7  | Par 3 | 174 yds | HCP 13 | 1 stroke  | Club: 4 Hybrid | Centre of green\nH8  | Par 5 | 485 yds | HCP 1  | 2 strokes | Tee: Driver | 2nd: 3H/4H lay-up | Approach: GW | Best birdie chance\nH9  | Par 4 | 400 yds | HCP 7  | 2 strokes | Tee: Driver | Approach: 4H or 3H | Centre green\nH10 | Par 4 | 351 yds | HCP 10 | 2 strokes | Tee: Driver | Approach: 9H or PW | Net birdie chance\nH11 | Par 4 | 338 yds | HCP 14 | 1 stroke  | Tee: 5 Wood | Approach: 9H | Club down for control\nH12 | Par 3 | 171 yds | HCP 8  | 2 strokes | Club: 4 Hybrid | 2 strokes \u2014 no pressure\nH13 | Par 4 | 399 yds | HCP 2  | 2 strokes | Tee: Driver | Approach: 4H or 3H | Safe centre line\nH14 | Par 5 | 482 yds | HCP 18 | 1 stroke  | Tee: Driver | 2nd: 3H/5W lay-up | Approach: GW\nH15 | Par 4 | 384 yds | HCP 4  | 2 strokes | Tee: Driver | Approach: 5H or 6H | Bogey = net par\nH16 | Par 3 | 149 yds | HCP 16 | 1 stroke  | Club: 6 Hybrid | Smoothest par 3 for your bag\nH17 | Par 4 | 380 yds | HCP 6  | 2 strokes | Tee: Driver | Approach: 6H or 5H | Bogey = net par\nH18 | Par 5 | 490 yds | HCP 12 | 2 strokes | Tee: Driver | 2nd: 5W lay-up | Approach: GW | Finish clean"}]};
 function load() {
-  try { const b=JSON.parse(localStorage.getItem('vc:bag')); bag=Array.isArray(b)?b.filter(x=>x&&x.id):[]; } catch { bag=[]; }
-  try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)?c.filter(x=>x&&x.id):[]; } catch { courses=[]; }
+  try { const b=JSON.parse(localStorage.getItem('vc:bag')); bag=Array.isArray(b)&&b.length?b.filter(x=>x&&x.id):_SEED.bag; } catch { bag=_SEED.bag; }
+  try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)&&c.length?c.filter(x=>x&&x.id):_SEED.courses; } catch { courses=_SEED.courses; }
   try { const r=JSON.parse(localStorage.getItem('vc:rounds')); rounds=Array.isArray(r)?r:[]; } catch { rounds=[]; }
-  try { const h=JSON.parse(localStorage.getItem('vc:history')); history=Array.isArray(h)?h.filter(x=>x&&x.id):[]; } catch { history=[]; }
+  try { const h=JSON.parse(localStorage.getItem('vc:history')); history=Array.isArray(h)&&h.length?h.filter(x=>x&&x.id):_SEED.history; } catch { history=_SEED.history; }
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
   courses=courses.filter(x=>x&&x.id);
@@ -946,8 +1345,8 @@ function serialise() {
   bag.forEach(c => {
     const opt = c.type==='Putter'?'PUTTER':c.tested?'YES':'NO';
     lines.push('');
-    lines.push('CLUB | '+[c.brand||'',c.type,c.identifier||'',c.stiffness,c.shaftLength||'',opt,c.confidence??4,c.bias||'Straight',c.yardType||''].join(' | '));
-    (c.sessions||[]).forEach(s=>lines.push('  SESSION | '+s.date+' | '+s.min+' | '+s.max));
+    lines.push('CLUB | '+[c.brand||'',c.type,c.identifier||'',c.stiffness,c.shaftLength||'',opt,c.confidence??4,c.bias||'Straight',c.yardType||'',c.loft||'',c.model||''].join(' | '));
+    (c.sessions||[]).forEach(s=>lines.push('  SESSION | '+s.date+' | '+s.min+' | '+s.max+(s.notes?(' | '+s.notes):'')));
   });
   // Courses section
   lines.push(''); lines.push('=== COURSES ===');
@@ -963,7 +1362,7 @@ function serialise() {
     });
   });
   lines.push(''); lines.push('=== ROUNDS ===');
-  rounds.forEach(r=>lines.push('ROUND | '+[r.date,r.courseName||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:''].join(' | ')));
+  rounds.forEach(r=>lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||''].join(' | ')));
   lines.push('');
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
   const manualVal = localStorage.getItem('vc:manualHcp')||'';
@@ -989,6 +1388,11 @@ function serialise() {
       h.holes||''
     ].join(' | '));
     (h.text||'').split('\n').forEach(l => lines.push('  TEXT | '+l));
+    if(h.holeMap&&Object.keys(h.holeMap).length){
+      const hm=Object.entries(h.holeMap).map(([n,v])=>`H${n}:${v.tee||''}:${v.app||''}`).join(',');
+      lines.push('  HOLEMAP | '+hm);
+    }
+    if(h.bagMap?.length) lines.push('  BAGMAP | '+h.bagMap.join(','));
   });
   lines.push('');
   // Flight reference metadata — documents which engine version generated this file
@@ -1002,7 +1406,8 @@ function serialise() {
   lines.push('');
   return lines.join('\n');
 }
-function exportData() {
+function saveData() {
+  // Primary save action: download TXT always + sync to Gist if connected
   const txt = serialise();
   const blob = new Blob([txt], {type:'text/plain'});
   const a = document.createElement('a');
@@ -1010,7 +1415,19 @@ function exportData() {
   a.download = 'virtual-caddie-data-'+today()+'.txt';
   a.click();
   URL.revokeObjectURL(a.href);
+  // Gist sync if connected — syncSave reads serialise() internally
+  if(gistMode()) {
+    syncSave().then(()=>{
+      const st = document.getElementById('saveStatus');
+      if(st) { st.textContent='✓ Saved locally + synced to Gist'; st.style.color='var(--ac)'; setTimeout(()=>{st.textContent='';},4000); }
+    });
+  } else {
+    const st = document.getElementById('saveStatus');
+    if(st) { st.textContent='✓ Saved locally'; st.style.color='var(--tx2)'; setTimeout(()=>{st.textContent='';},3000); }
+  }
 }
+// Keep exportData as internal alias used by exportForAI status check
+function exportData() { saveData(); }
 function importData(e) {
   const file = e.target.files[0]; if(!file) return;
   const reader = new FileReader();
@@ -1038,15 +1455,18 @@ function importData(e) {
         else if(p[0]==='HANDED')   newProfile.handed   =p[1]||'';
         else if(p[0]==='HOMECLUB')   newProfile.homeClub    =p[1]||'';
         else if(p[0]==='HOMECOURSE') newProfile.homeCourseId=p[1]||'';
+        else if(p[0]==='YARDPREF')   newProfile.yardType    =p[1]||'';
         else if(p[0]==='NOTE')     newNoteLines.push(p.slice(1).join('|'));
       }
       if(section==='clubs'&&line.startsWith('CLUB |')) {
         const p=line.split('|').map(s=>s.trim());
-        cur={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',confidence:p[7]?parseInt(p[7]):4,bias:p[8]||'Straight',yardType:p[9]||'',sessions:[]};
+        cur={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',confidence:p[7]?parseInt(p[7]):4,bias:p[8]||'Straight',yardType:p[9]||'',loft:p[10]||'',model:p[11]||'',sessions:[]};
         newBag.push(cur);
+      } else if(section==='clubs'&&line.startsWith('COMPUTED |')) {
+        // pre-computed export values — skip, app recomputes from raw sessions
       } else if(section==='clubs'&&line.startsWith('SESSION |')&&cur) {
         const p=line.split('|').map(s=>s.trim());
-        cur.sessions.push({id:uid(),date:p[1]||today(),min:p[2]||'',max:p[3]||''});
+        cur.sessions.push({id:uid(),date:p[1]||today(),min:p[2]||'',max:p[3]||'',notes:p[4]||''});
       }
       if(section==='courses') {
         if(line.startsWith('COURSE |')) {
@@ -1070,7 +1490,7 @@ function importData(e) {
       }
       if(section==='rounds'&&line.startsWith('ROUND |')) {
         const p=line.split('|').map(s=>s.trim());
-        newRounds.push({id:uid(),date:p[1]||today(),courseName:p[2]||'',rating:p[3]||'',slope:p[4]||'',par:p[5]||'',score:p[6]||'',diff:p[7]?parseFloat(p[7]):calcDiff(p[6],p[3],p[4])});
+        newRounds.push({id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||''});
       }
       if(section==='history') {
         if(raw.trimStart().startsWith('ENTRY |')) {
@@ -1080,6 +1500,12 @@ function importData(e) {
         } else if(raw.trimStart().startsWith('TEXT |')&&currentEntry) {
           const txt=raw.replace(/^\s*TEXT \| /,'');
           currentEntry.text = currentEntry.text ? currentEntry.text+'\n'+txt : txt;
+        } else if(raw.trimStart().startsWith('HOLEMAP |')&&currentEntry) {
+          const hm=raw.replace(/^\s*HOLEMAP \| /,'').trim();
+          currentEntry.holeMap={};
+          hm.split(',').forEach(tok=>{const[hn,tee,app]=tok.split(':');if(hn)currentEntry.holeMap[parseInt(hn.replace('H',''))]={tee:tee||'',app:app||''};});
+        } else if(raw.trimStart().startsWith('BAGMAP |')&&currentEntry) {
+          currentEntry.bagMap=raw.replace(/^\s*BAGMAP \| /,'').trim().split(',').filter(Boolean);
         }
       }
     }
@@ -1109,6 +1535,7 @@ function importData(e) {
       const existingIds = new Set(history.map(h=>h.id));
       newHistory.forEach(h=>{ if(!existingIds.has(h.id)) history.unshift(h); });
     }
+    document.getElementById('uploadBanner').style.display='none';
     save(); renderAll();
     alert('Data imported successfully.');
   };
@@ -1126,6 +1553,7 @@ function showTab(id) {
   if(id==='courses') renderCourseList();
   if(id==='handicap') renderHandicap();
   if(id==='sessions') renderSessions();
+  if(id==='viz') initViz();
 }
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
@@ -1164,25 +1592,23 @@ function renderProfile() {
   if(el('pfAge'))      el('pfAge').value      = profile.age||'';
   if(el('pfGender'))   el('pfGender').value   = profile.gender||'';
   if(el('pfHanded'))   el('pfHanded').value   = profile.handed||'';
-  if(el('pfHomeClub')) {
-    el('pfHomeClub').value = profile.homeClub||'';
-    const dl = document.getElementById('homeClubList');
-    if(dl) dl.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
+  const sel = el('pfHomeClubSelect');
+  if(sel) {
+    sel.innerHTML = '<option value="">— Select from your courses —</option>'
+      + courses.map(c=>`<option value="${c.id}">${c.name}${c.city?' · '+c.city:''}</option>`).join('');
+    sel.value = profile.homeCourseId && courses.find(c=>c.id===profile.homeCourseId) ? profile.homeCourseId : '';
   }
   if(el('pfNotes'))    el('pfNotes').value    = profile.notes||'';
   if(el('pfYardType')) el('pfYardType').value = profile.yardType||'Total';
   renderProfileHero();
   // Stats
   const active = bag.filter(c=>c.type!=='Putter'&&c.tested);
-  const opts   = history.filter(h=>h.type==='optimisation'||h.type==='caddie');
-  const optOnly= history.filter(h=>h.type==='optimisation');
   const totalClubSessions = bag.reduce((n,c)=>(n+(c.sessions||[]).length),0);
-  if(el('statActiveClubs'))    el('statActiveClubs').textContent    = active.length;
-  if(el('statRounds'))         el('statRounds').textContent         = rounds.length;
-  if(el('statCourses'))        el('statCourses').textContent        = courses.length;
-  if(el('statSessions'))       el('statSessions').textContent       = history.length;
-  if(el('statOptimisations'))  el('statOptimisations').textContent  = opts.length;
-  if(el('statClubSessions'))   el('statClubSessions').textContent   = totalClubSessions;
+  if(el('statActiveClubs'))   el('statActiveClubs').textContent   = active.length;
+  if(el('statRounds'))        el('statRounds').textContent        = rounds.length;
+  if(el('statCourses'))       el('statCourses').textContent       = courses.length;
+  if(el('statSessions'))      el('statSessions').textContent      = history.length;
+  if(el('statClubSessions'))  el('statClubSessions').textContent  = totalClubSessions;
   // Club type breakdown
   const breakdown = el('clubTypeBreakdown');
   if(breakdown) {
@@ -1204,6 +1630,67 @@ function renderProfile() {
         </div>`).join('');
     }
   }
+  renderGistSettings();
+}
+
+// ── Club entry mode (Simple / Detailed) ──────────────────────────────────────
+function clubDetailMode() { return localStorage.getItem('vc:clubMode')!=='simple'; }
+function toggleClubMode() {
+  const next = !clubDetailMode();
+  localStorage.setItem('vc:clubMode', next?'detailed':'simple');
+  const btn = document.getElementById('clubModeBtn');
+  if(btn) btn.textContent = next ? 'Detailed' : 'Simple';
+  renderClubs();
+}
+function variantOptions(type, selected) {
+  const variants = CLUB_VARIANTS[type]||[];
+  if(!variants.length) return '<option value="">—</option>';
+  return variants.map(v=>`<option value="${v.id}" ${v.id===selected?'selected':''}>${v.id}</option>`).join('');
+}
+function onTypeChange(id, val) {
+  const c = bag.find(x=>x.id===id); if(!c) return;
+  c.type = val;
+  // Auto-select first variant for this type and apply defaults
+  const variants = CLUB_VARIANTS[val]||[];
+  if(variants.length) {
+    c.identifier = variants[0].id;
+    if(!c.shaftLength) c.shaftLength = String(variants[0].shaft);
+    if(!c.stiffness || c.stiffness==='Regular') c.stiffness = variants[0].stiffness;
+  }
+  save(); renderClubs();
+  setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
+}
+function onVariantChange(id, val) {
+  const c = bag.find(x=>x.id===id); if(!c) return;
+  c.identifier = val;
+  const def = getVariantDefault(c.type, val);
+  if(def) {
+    c.shaftLength = String(def.shaft);
+    c.stiffness = def.stiffness;
+  }
+  save();
+  // Update type badge without full re-render
+  const {type:tl,loft} = getTypeLabel(c);
+  const dot = TYPE_COLOR[c.type]||'#555';
+  const blk = document.querySelector(`#crow-${id} .ctblk`);
+  if(blk){blk.style.background=dot+'1a';blk.style.borderRightColor=dot+'44';const ll=blk.querySelector('.cloftlbl');if(loft){if(ll)ll.textContent=loft;else{const d=document.createElement('div');d.className='cloftlbl';d.textContent=loft;blk.appendChild(d);}}else if(ll)ll.remove();}
+  // Refresh variant dropdown and loft input without closing panel
+  const vsel = document.querySelector(`#cpanel-${id} .variant-sel`);
+  if(vsel) vsel.value = val;
+  if(def) {
+    const loftInput = document.querySelector(`#cpanel-${id} input[onchange*="'loft'"]`);
+    if(loftInput) loftInput.value = def.loft + '°';
+  }
+}
+function addSessionSimple(id) {
+  const c = bag.find(x=>x.id===id); if(!c) return;
+  const mx = parseInt(document.getElementById('smaxs-'+id)?.value||'0');
+  if(!mx) return;
+  const mn = Math.max(0, mx - 20);
+  const dt = document.getElementById('sds-'+id)?.value||today();
+  c.sessions = [{id:uid(),date:dt,min:String(mn),max:String(mx)},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  save(); renderClubs();
+  setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
 }
 
 function showImplied() { return localStorage.getItem('vc:showImplied')==='1'; }
@@ -1223,10 +1710,12 @@ function renderClubs() {
   const putter  = bag.find(c=>c.type==='Putter');
   document.getElementById('clubsBadge').textContent = bag.length;
   const on = showImplied();
-  const btn = document.getElementById('impliedTogBtn');
-  const lbl = document.getElementById('impliedTogLbl');
-  if(btn) btn.classList.toggle('on', on);
-  if(lbl) lbl.textContent = on?'On':'Off';
+  const iBtn = document.getElementById('impliedTogBtn');
+  const lbl  = document.getElementById('impliedTogLbl');
+  if(iBtn) iBtn.classList.toggle('on', on);
+  if(lbl)  lbl.textContent = on?'On':'Off';
+  const mBtn = document.getElementById('clubModeBtn');
+  if(mBtn) { mBtn.textContent = clubDetailMode()?'Detailed':'Simple'; mBtn.classList.toggle('on', clubDetailMode()); }
   document.getElementById('clubList').innerHTML = playing.map(c=>clubRowHTML(c,false)).join('');
   document.getElementById('putterSlot').innerHTML = putter?clubRowHTML(putter,true):'';
 }
@@ -1238,26 +1727,84 @@ function clubRowHTML(c, isPutter) {
   const inc = isPutter?false:!!c.tested;
   const implied = (!isPutter&&stats) ? calcImplied(stats,c) : null;
   const yLbl = getYardLabel(c);
-  const rawRange  = stats ? (stats.avgMin&&stats.avgMax?stats.avgMin+'–'+stats.avgMax:stats.avgMax?'≤'+stats.avgMax:stats.avgMin+'+') : null;
-  const impRange  = implied ? implied.impMin+'–'+implied.impMax : null;
-  const impTag    = (showImplied()&&implied&&implied.adjusted)
+  const rawRange = stats ? (stats.avgMin&&stats.avgMax?stats.avgMin+'-'+stats.avgMax:stats.avgMax?'<='+stats.avgMax:stats.avgMin+'+') : null;
+  const impRange = implied ? implied.impMin+'-'+implied.impMax : null;
+  const impTag   = (showImplied()&&implied&&implied.adjusted)
     ? `<span class="imp-badge adj" title="${implied.reason}">implied ${impRange} yds</span>` : '';
   const yardBadge = `<span class="yard-badge">${yLbl}</span>`;
   const distHTML = stats
-    ? `<div class="cdist">${rawRange} yds ${yardBadge}${impTag}</div><div class="csess">${stats.count} session${stats.count!==1?'s':''} · ${fmtDate(stats.lastDate)}</div>`
-    : `<div class="cnodata">No sessions — tap ▼ to add</div>`;
+    ? `<div class="cdist">${rawRange} yds ${yardBadge}${impTag}</div><div class="csess">${stats.count} session${stats.count!==1?'s':''} / ${fmtDate(stats.lastDate)}</div>`
+    : `<div class="cnodata">No sessions -- tap expand to add</div>`;
   const sessHTML = (c.sessions||[]).map(s=>`
     <div class="sess-row">
       <input class="sess-edit" type="date" value="${s.date}" onchange="updateSession('${c.id}','${s.id}','date',this.value)">
       <input class="sess-edit" type="text" inputmode="numeric" value="${s.min}" placeholder="min" onchange="updateSession('${c.id}','${s.id}','min',this.value)" style="width:54px">
-      <span style="font-size:.65rem;color:var(--tx3)">–</span>
+      <span style="font-size:.65rem;color:var(--tx3)">-</span>
       <input class="sess-edit" type="text" inputmode="numeric" value="${s.max}" placeholder="max" onchange="updateSession('${c.id}','${s.id}','max',this.value)" style="width:54px">
       <span style="font-size:.62rem;color:var(--tx3)">yds</span>
-      <button class="sess-del" onclick="deleteSession('${c.id}','${s.id}')">✕</button>
+      <input class="sess-edit" type="text" value="${s.notes||''}" placeholder="note…" onchange="updateSession('${c.id}','${s.id}','notes',this.value)" style="flex:1;min-width:60px">
+      <button class="sess-del" onclick="deleteSession('${c.id}','${s.id}')">x</button>
     </div>`).join('');
-  const brands = BRANDS.map(b=>`<option ${b===c.brand?'selected':''}>${b}</option>`).join('');
-  const types  = CLUB_TYPES.map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
-  const stiffs = STIFFNESS.map(s=>`<option ${s===c.stiffness?'selected':''}>${s}</option>`).join('');
+
+  const simple   = !clubDetailMode() && !isPutter;
+  const brands   = BRANDS.map(b=>`<option ${b===c.brand?'selected':''}>${b}</option>`).join('');
+  const stiffs   = STIFFNESS.map(s=>`<option ${s===c.stiffness?'selected':''}>${s}</option>`).join('');
+  const variants = variantOptions(c.type, c.identifier||'');
+  const typeOptsAll      = CLUB_TYPES.map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
+  const typeOptsNoPutter = CLUB_TYPES.filter(t=>t!=='Putter').map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
+  const confOpts = [5,4,3,2,1].map(n=>`<option value="${n}" ${(c.confidence??4)==n?'selected':''}>${n} - ${{5:'Highest',4:'Baseline',3:'Moderate',2:'Low',1:'Least'}[n]}</option>`).join('');
+  const biasOpts = ['Straight','Draw','Hook','Fade','Slice','Push Right','Push Left'].map(b=>`<option ${(c.bias||'Straight')===b?'selected':''}>${b}</option>`).join('');
+  const yardOpts = `<option value="" ${!c.yardType?'selected':''}>Global (${profile.yardType||'Total'})</option><option ${c.yardType==='Total'?'selected':''}>Total</option><option ${c.yardType==='Carry'?'selected':''}>Carry</option>`;
+
+  const simplePanel = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="sf"><div class="sf-lbl">Type</div>
+        <select class="type-sel" onchange="onTypeChange('${c.id}',this.value)">${typeOptsNoPutter}</select>
+      </div>
+      <div class="sf"><div class="sf-lbl">Variant</div>
+        <select class="variant-sel" onchange="onVariantChange('${c.id}',this.value)">${variants}</select>
+      </div>
+    </div>
+    <div class="add-sess" style="margin-bottom:8px">
+      <div class="asf"><label>Date</label><input type="date" id="sds-${c.id}" value="${today()}"></div>
+      <div class="asf"><label>Max yds</label><input type="text" inputmode="numeric" id="smaxs-${c.id}" placeholder="160" style="width:84px"></div>
+      <button class="btn" onclick="addSessionSimple('${c.id}')">+ Log</button>
+    </div>
+    <div style="font-size:.6rem;color:var(--tx3);margin-bottom:6px">Min = max - 20 yds. Switch to Detailed to set independently.</div>
+    ${!c.sessions?.length?'<div style="font-size:.65rem;color:var(--tx3)">No sessions yet.</div>':''}
+    ${sessHTML}`;
+
+  const detailedPanel = `
+    <div class="specs">
+      <div class="sf"><div class="sf-lbl">Brand</div><select onchange="updateClub('${c.id}','brand',this.value)">${brands}</select></div>
+      <div class="sf"><div class="sf-lbl">Type</div>
+        <select class="type-sel" onchange="onTypeChange('${c.id}',this.value)">${typeOptsAll}</select>
+      </div>
+      <div class="sf"><div class="sf-lbl">Variant</div>
+        <select class="variant-sel" onchange="onVariantChange('${c.id}',this.value)">${variants}</select>
+      </div>
+      <div class="sf"><div class="sf-lbl">Loft</div><input value="${(()=>{const d=getVariantDefault(c.type,c.identifier||'');return d?d.loft+'°':c.loft||'';})()}" placeholder="e.g. 34°" onchange="updateClub('${c.id}','loft',this.value)"></div>
+      <div class="sf"><div class="sf-lbl">Model</div><input value="${c.model||''}" placeholder="e.g. SIM 2 Max" onchange="updateClub('${c.id}','model',this.value)"></div>
+      <div class="sf"><div class="sf-lbl">Stiffness</div><select onchange="updateClub('${c.id}','stiffness',this.value)">${stiffs}</select></div>
+      <div class="sf"><div class="sf-lbl">Length (in)</div><input value="${c.shaftLength||''}" placeholder="45.75" onchange="updateClub('${c.id}','shaftLength',this.value)"></div>
+      <div class="sf"><div class="sf-lbl">Confidence</div><select onchange="updateClub('${c.id}','confidence',this.value)">${confOpts}</select></div>
+      <div class="sf"><div class="sf-lbl">Bias</div><select onchange="updateClub('${c.id}','bias',this.value)">${biasOpts}</select></div>
+      <div class="sf"><div class="sf-lbl">Yard Type</div><select onchange="updateClub('${c.id}','yardType',this.value)">${yardOpts}</select></div>
+    </div>
+    ${!isPutter?`
+    <div class="sess-sec">
+      <div class="sess-hdr"><span>Distance Sessions (${yLbl})</span>${stats?`<span>${stats.avgMin}-${stats.avgMax} yds avg${showImplied()&&implied&&implied.adjusted?' / implied '+implied.impMin+'-'+implied.impMax:''}</span>`:''}</div>
+      ${!c.sessions?.length?'<div style="font-size:.65rem;color:var(--tx3);margin-bottom:6px">No sessions yet.</div>':''}
+      ${sessHTML}
+      <div class="add-sess">
+        <div class="asf"><label>Date</label><input type="date" id="sd-${c.id}" value="${today()}"></div>
+        <div class="asf"><label>Min yds</label><input type="text" inputmode="numeric" id="smin-${c.id}" placeholder="140" style="width:84px"></div>
+        <div class="asf"><label>Max yds</label><input type="text" inputmode="numeric" id="smax-${c.id}" placeholder="160" style="width:84px"></div>
+        <div class="asf"><label>Note</label><input type="text" id="snote-${c.id}" placeholder="optional…" style="width:120px"></div>
+        <button class="btn" onclick="addSession('${c.id}')">+ Log</button>
+      </div>
+    </div>`:''}`;
+
   return `
   <div class="crow${inc?'':' excl'}" id="crow-${c.id}">
     <div class="cmain">
@@ -1268,37 +1815,15 @@ function clubRowHTML(c, isPutter) {
       <div class="cmid" onclick="toggleClub('${c.id}')">${distHTML}</div>
       <div class="cctrl">
         ${!isPutter?`<button class="activetog" title="Toggle Active/Retired" onclick="toggleActive('${c.id}')"><div class="activeicon ${inc?'on':'off'}">${inc?'Active':'Retired'}</div></button>`:''}
-        <button class="expbtn" onclick="toggleClub('${c.id}')">▼</button>
-        ${!isPutter?`<button class="delx" onclick="deleteClub('${c.id}')">✕</button>`:''}
+        <button class="expbtn" onclick="toggleClub('${c.id}')">&#9660;</button>
+        ${!isPutter?`<button class="delx" onclick="deleteClub('${c.id}')">&#x2715;</button>`:''}
       </div>
     </div>
     <div class="cpanel" id="cpanel-${c.id}" style="display:none">
-      <div class="specs">
-        <div class="sf"><div class="sf-lbl">Brand</div><select onchange="updateClub('${c.id}','brand',this.value)">${brands}</select></div>
-        <div class="sf"><div class="sf-lbl">Type</div><select onchange="updateClub('${c.id}','type',this.value)">${types}</select></div>
-        <div class="sf"><div class="sf-lbl">Loft/No.</div><input value="${c.identifier||''}" placeholder="—" onchange="updateClub('${c.id}','identifier',this.value)"></div>
-        <div class="sf"><div class="sf-lbl">Stiffness</div><select onchange="updateClub('${c.id}','stiffness',this.value)">${stiffs}</select></div>
-        <div class="sf"><div class="sf-lbl">Length</div><input value="${c.shaftLength||''}" placeholder="in" onchange="updateClub('${c.id}','shaftLength',this.value)"></div>
-        <div class="sf"><div class="sf-lbl">Confidence</div><select onchange="updateClub('${c.id}','confidence',this.value)">${[5,4,3,2,1].map(n=>`<option value="${n}" ${(c.confidence??4)==n?'selected':''}>${n} — ${{5:'Highest',4:'Baseline',3:'Moderate',2:'Low',1:'Least'}[n]}</option>`).join('')}</select></div>
-        <div class="sf"><div class="sf-lbl">Bias</div><select onchange="updateClub('${c.id}','bias',this.value)">${['Straight','Draw','Hook','Fade','Slice'].map(b=>`<option ${(c.bias||'Straight')===b?'selected':''}>${b}</option>`).join('')}</select></div>
-        <div class="sf"><div class="sf-lbl">Yardage Type</div><select onchange="updateClub('${c.id}','yardType',this.value)"><option value="" ${!c.yardType?'selected':''}>Global (${profile.yardType||'Total'})</option><option ${c.yardType==='Total'?'selected':''}>Total</option><option ${c.yardType==='Carry'?'selected':''}>Carry</option></select></div>
-      </div>
-      ${!isPutter?`
-      <div class="sess-sec">
-        <div class="sess-hdr"><span>Distance Sessions (${yLbl})</span>${stats?`<span>${stats.avgMin}–${stats.avgMax} yds avg${showImplied()&&implied&&implied.adjusted?' · implied '+implied.impMin+'–'+implied.impMax:''}</span>`:''}</div>
-        ${!c.sessions?.length?'<div style="font-size:.65rem;color:var(--tx3);margin-bottom:6px">No sessions yet.</div>':''}
-        ${sessHTML}
-        <div class="add-sess">
-          <div class="asf"><label>Date</label><input type="date" id="sd-${c.id}" value="${today()}"></div>
-          <div class="asf"><label>Min yds</label><input type="text" inputmode="numeric" id="smin-${c.id}" placeholder="140" style="width:84px"></div>
-          <div class="asf"><label>Max yds</label><input type="text" inputmode="numeric" id="smax-${c.id}" placeholder="160" style="width:84px"></div>
-          <button class="btn" onclick="addSession('${c.id}')">+ Log</button>
-        </div>
-      </div>`:''}
+      ${simple ? simplePanel : detailedPanel}
     </div>
   </div>`;
 }
-
 function toggleClub(id) {
   const panel = document.getElementById('cpanel-'+id);
   const crow  = document.getElementById('crow-'+id);
@@ -1316,21 +1841,36 @@ function toggleActive(id) {
 }
 function updateClub(id, field, val) {
   const c = bag.find(x=>x.id===id); if(!c) return;
-  c[field] = val;
+  c[field] = (field==='confidence') ? (parseInt(val)||4) : val;
   save();
-  // Re-render just the label parts without closing panel
+  // Refresh type badge
   const {type:tl,loft} = getTypeLabel(c);
   const dot = TYPE_COLOR[c.type]||'#555';
   const blk = document.querySelector(`#crow-${id} .ctblk`);
   if(blk){blk.style.background=dot+'1a';blk.style.borderRightColor=dot+'44';const ll=blk.querySelector('.cloftlbl');if(loft){if(ll)ll.textContent=loft;else{const d=document.createElement('div');d.className='cloftlbl';d.textContent=loft;blk.appendChild(d);}}else if(ll)ll.remove();}
+  // Refresh distance summary if field affects implied range
+  if(['confidence','bias','yardType','loft'].includes(field)) {
+    const stats = deriveStats(c.sessions);
+    const implied = stats ? calcImplied(stats, c) : null;
+    const yLbl = getYardLabel(c);
+    const rawRange = stats ? (stats.avgMin&&stats.avgMax?stats.avgMin+'-'+stats.avgMax:stats.avgMax?'<='+stats.avgMax:stats.avgMin+'+') : null;
+    const impRange = implied ? implied.impMin+'-'+implied.impMax : null;
+    const impTag = (showImplied()&&implied&&implied.adjusted)
+      ? `<span class="imp-badge adj" title="${implied.reason}">implied ${impRange} yds</span>` : '';
+    const yardBadge = `<span class="yard-badge">${yLbl}</span>`;
+    const mid = document.querySelector(`#crow-${id} .cmid`);
+    const cdist = mid?.querySelector('.cdist');
+    if(cdist && stats) cdist.innerHTML = `${rawRange} yds ${yardBadge}${impTag}`;
+  }
 }
 function addSession(id) {
   const c = bag.find(x=>x.id===id); if(!c) return;
-  const dt  = document.getElementById('sd-'+id)?.value||today();
-  const mn  = document.getElementById('smin-'+id)?.value||'';
-  const mx  = document.getElementById('smax-'+id)?.value||'';
+  const dt    = document.getElementById('sd-'+id)?.value||today();
+  const mn    = document.getElementById('smin-'+id)?.value||'';
+  const mx    = document.getElementById('smax-'+id)?.value||'';
+  const note  = document.getElementById('snote-'+id)?.value||'';
   if(!mn&&!mx) return;
-  c.sessions = [{id:uid(),date:dt,min:mn,max:mx},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  c.sessions = [{id:uid(),date:dt,min:mn,max:mx,notes:note},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
   save(); renderClubs();
   // Re-open the panel
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
@@ -1359,7 +1899,28 @@ function deleteSession(cid, sid) {
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
 }
 function deleteClub(id) { bag=bag.filter(c=>c.id!==id); save(); renderClubs(); }
-function addClub() { bag.push({id:uid(),brand:'',type:'Iron',identifier:'',shaftLength:'',stiffness:'Regular',confidence:4,bias:'Straight',tested:true,sessions:[]}); save(); renderClubs(); }
+function addClub() {
+  const simple = !clubDetailMode();
+  const defaultType = simple ? 'Iron' : 'Iron';
+  const variants = CLUB_VARIANTS[defaultType]||[];
+  const def = variants[6]||variants[0]||null; // default to 7i in simple, first variant otherwise
+  const c = {
+    id:uid(), brand:'', type:defaultType,
+    identifier: def ? def.id : '',
+    model: '',
+    shaftLength: def ? String(def.shaft) : '',
+    stiffness: def ? def.stiffness : 'Regular',
+    confidence: simple ? 3 : 4,
+    bias:'Straight', tested:true, sessions:[]
+  };
+  bag.push(c);
+  save(); renderClubs();
+  // Auto-open the new club's panel
+  setTimeout(()=>{
+    const p=document.getElementById('cpanel-'+c.id);
+    if(p){p.style.display='block';const r=document.getElementById('crow-'+c.id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='&#9650;';}
+  },50);
+}
 
 // ── Courses tab ───────────────────────────────────────────────────────────────
 let editCourseData = null;
@@ -1424,12 +1985,33 @@ function toggleHomeCourse(id) {
   // Sync homeClub text to match
   const c = courses.find(x=>x.id===profile.homeCourseId);
   profile.homeClub = c ? c.name : profile.homeClub;
-  save();
+  const el = document.getElementById('pfHomeClubSelect');
+  if(el && profile.homeCourseId) {
+    el.value = profile.homeCourseId;
+    const hci = document.getElementById('pfHomeClub'); if(hci) hci.style.display='none';
+  } else if(el) {
+    el.value='';
+  }
   renderCourseList();
-  // Update profile form if visible
-  const el = document.getElementById('pfHomeClub');
-  if(el&&c) el.value = c.name;
   renderProfileHero();
+}
+function showTabFromProfile(id) {
+  // Navigate to a tab programmatically (no event object available)
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id)?.classList.add('active');
+  const tabBtn = [...document.querySelectorAll('.tab')].find(t=>t.getAttribute('onclick')?.includes("'"+id+"'"));
+  if(tabBtn) tabBtn.classList.add('active');
+  if(id==='clubs')    renderClubs();
+  if(id==='courses')  renderCourseList();
+  if(id==='handicap') renderHandicap();
+  if(id==='sessions') renderSessions();
+}
+function onHomeClubSelect() {
+  const val = document.getElementById('pfHomeClubSelect')?.value||'';
+  if(val==='') { profile.homeClub=''; profile.homeCourseId=''; save(); renderProfileHero(); renderCourseList(); return; }
+  const course = courses.find(c=>c.id===val);
+  if(course) { profile.homeClub=course.name; profile.homeCourseId=course.id; save(); renderProfileHero(); renderCourseList(); }
 }
 function onHomeClubInput() {
   const val = document.getElementById('pfHomeClub')?.value||'';
@@ -1587,6 +2169,7 @@ function saveCourse() {
 // ── Handicap tab ──────────────────────────────────────────────────────────────
 function renderHandicap() {
   const rDateEl=document.getElementById('rDate'); if(rDateEl) rDateEl.value=today();
+  updateCourseDropdowns(); // keep course select fresh
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
   const calcHcp = calcHandicap(rounds);
   const manualVal = localStorage.getItem('vc:manualHcp')||'';
@@ -1616,13 +2199,56 @@ function renderHandicap() {
     <div class="rnd-row" id="rnd-${r.id}">
       <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:100px">
       <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="flex:1;min-width:80px">
-      <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:42px;text-align:center">
+      <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:70px">
+      <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:48px;text-align:center">
       <input class="rnd-edit" type="text" inputmode="decimal" value="${r.rating}" placeholder="Rtg" onchange="updateRound('${r.id}','rating',this.value)" style="width:38px;text-align:center">
       <input class="rnd-edit" type="text" inputmode="numeric" value="${r.slope}" placeholder="Slp" onchange="updateRound('${r.id}','slope',this.value)" style="width:36px;text-align:center">
-      <span class="rnd-diff" id="rdiff-${r.id}">${r.diff!==null?r.diff:'—'}</span>
+      <span class="rnd-diff" id="rdiff-${r.id}" style="width:44px;text-align:right">${r.diff!==null?r.diff:'—'}</span>
+      <input class="rnd-edit" type="text" value="${escHtml(r.notes||'')}" placeholder="notes…" onchange="updateRound('${r.id}','notes',this.value)" style="flex:1;min-width:60px;color:var(--tx2)">
       <button class="rnd-del" onclick="deleteRound('${r.id}')">✕</button>
     </div>`).join('');
   // rCourse listener set once in renderAll
+}
+function onRoundCourseSelect() {
+  const sel = document.getElementById('rCourseSelect');
+  const val = sel?.value||'';
+  const manualRow = document.getElementById('rManualCourseRow');
+  const teeRow    = document.getElementById('rTeeSelectRow');
+  // Clear fields
+  document.getElementById('rRating').value='';
+  document.getElementById('rSlope').value='';
+  document.getElementById('rPar').value='';
+  document.getElementById('diffPreview').textContent='';
+  if(val===''){ manualRow.style.display='none'; teeRow.style.display='none'; return; }
+  if(val==='__manual__'){ manualRow.style.display=''; teeRow.style.display='none'; return; }
+  const course = courses.find(c=>c.id===val);
+  if(!course){ manualRow.style.display='none'; teeRow.style.display='none'; return; }
+  manualRow.style.display='none';
+  // Populate tee dropdown
+  const teeSelect = document.getElementById('rTeeSelect');
+  if(course.tees&&course.tees.length){
+    teeSelect.innerHTML = course.tees.map(t=>`<option value="${t.id}">${t.name} — ${t.yardage} yds (Rating ${t.rating} / Slope ${t.slope})</option>`).join('');
+    teeRow.style.display='';
+    onRoundTeeSelect(); // auto-fill from first tee
+  } else {
+    teeRow.style.display='none';
+    // Auto-fill from course-level data if no tees defined
+    document.getElementById('rRating').value=course.rating||'';
+    document.getElementById('rSlope').value=course.slope||'';
+    document.getElementById('rPar').value=course.par||'';
+  }
+}
+function onRoundTeeSelect() {
+  const cSel = document.getElementById('rCourseSelect')?.value||'';
+  const course = courses.find(c=>c.id===cSel);
+  if(!course) return;
+  const teeId = document.getElementById('rTeeSelect')?.value||'';
+  const tee = course.tees?.find(t=>t.id===teeId);
+  if(!tee) return;
+  document.getElementById('rRating').value=tee.rating||'';
+  document.getElementById('rSlope').value=tee.slope||'';
+  document.getElementById('rPar').value=course.par||'';
+  updateDiffPreview();
 }
 function updateDiffPreview() {
   const d=calcDiff(document.getElementById('rScore').value,document.getElementById('rRating').value,document.getElementById('rSlope').value);
@@ -1632,13 +2258,29 @@ function addRound() {
   const score=document.getElementById('rScore').value;
   const rating=document.getElementById('rRating').value;
   const slope=document.getElementById('rSlope').value;
-  if(!score||!rating||!slope){alert('Score, rating and slope are required.');return;}
+  if(!score||!rating||!slope){alert('Gross score, course rating, and slope are required.');return;}
+  const sel = document.getElementById('rCourseSelect')?.value||'';
+  const isManual = sel==='' || sel==='__manual__';
+  const courseName = isManual
+    ? (document.getElementById('rCourse')?.value||'')
+    : courses.find(c=>c.id===sel)?.name||'';
+  const tee = isManual
+    ? (document.getElementById('rTeeManual')?.value||'')
+    : (document.getElementById('rTeeSelect')?.options[document.getElementById('rTeeSelect').selectedIndex]?.text||'');
   const diff=calcDiff(score,rating,slope);
-  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName:document.getElementById('rCourse').value||'',rating,slope,par:document.getElementById('rPar').value||'',score,diff},...rounds].slice(0,20);
+  const notes=document.getElementById('rNotes')?.value||'';
+  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes},...rounds].slice(0,20);
   save(); renderHandicap();
-  document.getElementById('rScore').value='';document.getElementById('rCourse').value='';
+  // Clear form
+  document.getElementById('rScore').value='';
   document.getElementById('rRating').value='';document.getElementById('rSlope').value='';
   document.getElementById('rPar').value='';document.getElementById('diffPreview').textContent='';
+  document.getElementById('rCourseSelect').value='';
+  if(document.getElementById('rNotes')) document.getElementById('rNotes').value='';
+  if(document.getElementById('rCourse')) document.getElementById('rCourse').value='';
+  if(document.getElementById('rTeeManual')) document.getElementById('rTeeManual').value='';
+  document.getElementById('rManualCourseRow').style.display='none';
+  document.getElementById('rTeeSelectRow').style.display='none';
 }
 function deleteRound(id){rounds=rounds.filter(r=>r.id!==id);save();renderHandicap();}
 function updateRound(id, field, val) {
@@ -1664,13 +2306,40 @@ function updateRound(id, field, val) {
 // ── Sessions ──────────────────────────────────────────────────────────────────
 function updateCourseSelects() { updateCourseDropdowns(); }
 
+function updateCadTees() {
+  const courseId = document.getElementById('cadCourse')?.value;
+  const sel = document.getElementById('cadTee');
+  if(!sel) return;
+  const course = courses.find(c => c.id === courseId);
+  if(!course || !course.tees || !course.tees.length) { sel.innerHTML = '<option value="">— no tees —</option>'; return; }
+  sel.innerHTML = course.tees.map(t =>
+    `<option value="${t.id}">${t.name} — ${t.yardage ? (+t.yardage).toLocaleString() : '?'} yds (${t.rating}/${t.slope})</option>`
+  ).join('');
+  if(course.selectedTee) sel.value = course.selectedTee;
+}
+
 function renderSessions() {
+  // Populate caddie course select
+  const cs = document.getElementById('cadCourse');
+  if(cs) {
+    const prev = cs.value;
+    cs.innerHTML = courses.length
+      ? courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')
+      : '<option value="">— no courses saved —</option>';
+    if(prev && courses.find(c=>c.id===prev)) cs.value = prev;
+    else if(profile.homeCourseId && courses.find(c=>c.id===profile.homeCourseId)) cs.value = profile.homeCourseId;
+    updateCadTees();
+  }
+  // Restore saved opt tier
+  const ot = document.getElementById('cadOptTier');
+  if(ot) { const saved = localStorage.getItem('vc:optTier'); if(saved) ot.value = saved; }
+
   const badge = document.getElementById('sessionsBadge');
   if(badge) badge.textContent = history.length;
   const el = document.getElementById('sessionsList');
   if(!el) return;
   if(!history.length) {
-    el.innerHTML = '<div class="hist-empty">No sessions yet.<br><br>Upload your data file and this skill to Claude,<br>run a caddie session, then import the updated TXT.</div>';
+    el.innerHTML = '<div class="hist-empty">No sessions yet.<br><br>Set your session parameters above, export for AI,<br>then import the session result to log it here.</div>';
     return;
   }
   el.innerHTML = history.map(h => {
@@ -1689,14 +2358,15 @@ function renderSessions() {
           <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">${typeLabel}</div>
           <div class="hist-course">${h.course||'Unnamed'}${h.tee ? ' — ' + h.tee + ' tees' : ''}</div>
           <div style="font-size:.62rem;color:var(--tx3);margin-top:2px;">${meta}</div>
-          <div class="hist-preview" style="margin-top:4px;">${h.text}</div>
+          <div class="hist-preview" style="margin-top:4px;">${escHtml(h.text)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
+          <button class="btn sec" style="font-size:.55rem;padding:2px 7px" onclick="event.stopPropagation();exportSessionPdf('${h.id}')">📄 Scorecard</button>
           <button class="sess-del" onclick="event.stopPropagation();deleteSession('${h.id}')">✕</button>
         </div>
       </div>
-      <div class="hist-body">${h.text}</div>
+      <div class="hist-body">${escHtml(h.text)}</div>
     </div>`;
   }).join('');
 }
@@ -1708,13 +2378,817 @@ function deleteSession(id) {
 // Keep renderHistory as alias so import logic still works
 function renderHistory() { renderSessions(); }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-function updateCourseDropdowns() {
-  // Course dropdowns removed from UI — kept as no-op for import compat
-}
-function syncCadTees() {}
-function updateCadHcpHint() {}
+// ── Export for AI ─────────────────────────────────────────────────────────────
+function exportForAI() {
+  const st = document.getElementById('cadStatus');
+  const eligibleClubs = bag.filter(c=>c.tested===true&&(c.sessions||[]).length>0);
+  const courseId = document.getElementById('cadCourse')?.value;
 
+  // Gate 1 — clubs
+  if(!eligibleClubs.length) {
+    if(st) st.innerHTML = '⚠ No active clubs with sessions. <a href="#" style="color:var(--ac)" onclick="showTab(\'clubs\');return false">Add clubs</a> or use 🤖 Get AI Help on the Clubs tab.';
+    return;
+  }
+  // Gate 2 — course
+  if(!courseId) {
+    if(st) st.innerHTML = '⚠ No course selected. <a href="#" style="color:var(--ac)" onclick="showTab(\'courses\');return false">Add a course</a> or use 🤖 Get AI Help on the Courses tab.';
+    return;
+  }
+
+  const teeId   = document.getElementById('cadTee')?.value;
+  const type    = document.getElementById('cadType')?.value || 'both';
+  const holes   = document.getElementById('cadHoles')?.value || 'all 18';
+  const conds   = document.getElementById('cadConditions')?.value || 'calm';
+  const optTier = document.getElementById('cadOptTier')?.value || localStorage.getItem('vc:optTier') || '4';
+
+  const course = courses.find(c=>c.id===courseId);
+  const tee    = course?.tees?.find(t=>t.id===teeId);
+
+  // Gate 3 — hole yardage completeness (warn, don't block)
+  const wantsHoleByHole = (type==='caddie'||type==='both');
+  if(wantsHoleByHole && tee) {
+    const holeYards = (tee.holes||[]).filter(h=>h.yards&&+h.yards>0).length;
+    const total = (tee.holes||[]).length;
+    if(total===0 || holeYards===0) {
+      if(st) st.innerHTML = '⚠ No hole yardages for this tee — hole-by-hole advice unavailable. Switching to bag optimisation only, or <a href="#" style="color:var(--ac)" onclick="showTab(\'courses\');return false">add hole data</a>.';
+      // Override type to optimisation only — don't block, just downgrade
+      document.getElementById('cadType').value = 'optimisation';
+    } else if(holeYards < total) {
+      if(st) st.textContent = `⚠ ${total-holeYards} hole(s) missing yardage — those holes will show CANNOT ADVISE in the caddie output.`;
+      // Proceed — partial data is allowed
+    }
+  }
+
+  const hcpIdx  = getHandicap();
+  const playHcp = (course && tee && hcpIdx !== null)
+    ? calcPlayHcp(hcpIdx, +tee.slope, +tee.rating, +course.par)
+    : null;
+
+  const skillText = getSkillText();
+  const refText   = getRefText();
+  const skillVer  = (skillText.match(/SkillVersion:\s*(\d+)/)||[])[1] || '?';
+  const refVer    = (refText.match(/ReferenceVersion:\s*(\d+)/)||[])[1] || '?';
+
+  const L = [
+    '=== VIRTUAL CADDIE EXPORT ===',
+    'ExportVersion: 1',
+    `SkillVersion: ${skillVer}`,
+    `ReferenceVersion: ${refVer}`,
+    `ExportDate: ${today()}`,
+    '',
+    '=== INSTRUCTIONS ===',
+    skillText,
+    '',
+    '=== REFERENCE ===',
+    refText,
+    '',
+    '=== DATA ===',
+    '',
+    '--- PROFILE ---',
+  ];
+
+  const p = profile;
+  if(p.name)     L.push(`NAME | ${p.name}`);
+  if(p.age)      L.push(`AGE | ${p.age}`);
+  if(p.gender)   L.push(`GENDER | ${p.gender}`);
+  if(p.handed)   L.push(`HANDED | ${p.handed}`);
+  if(p.homeClub) L.push(`HOMECLUB | ${p.homeClub}`);
+  if(p.yardType) L.push(`YARDPREF | ${p.yardType}`);
+
+  L.push('', '--- CLUBS ---');
+  let activeCnt = 0;
+  const ti = tierIndex(hcpIdx);
+  bag.forEach(c => {
+    const st = c.tested === 'PUTTER' ? 'PUTTER' : (c.tested ? 'YES' : 'NO');
+    L.push(`CLUB | ${c.brand} | ${c.type} | ${c.identifier} | ${c.stiffness||''} | ${c.shaftLength||''} | ${st} | ${c.confidence||4} | ${c.bias||'Straight'} | ${c.yardType||''} | ${c.loft||''} | ${c.model||''}`);
+    (c.sessions||[]).forEach(s => L.push(`  SESSION | ${s.date} | ${s.min} | ${s.max}`));
+    if(c.tested === true && c.sessions?.length) {
+      activeCnt++;
+      const stats = deriveStats(c.sessions);
+      const imp   = stats ? calcImplied(stats, c) : null;
+      const disp  = getDispersion(c);
+      if(stats) {
+        const impMin = imp ? imp.impMin : stats.avgMin;
+        const impMax = imp ? imp.impMax : stats.avgMax;
+        const midpoint = Math.round((impMin + impMax) / 2);
+        if(+optTier === 1) {
+          L.push(`  COMPUTED | Midpoint=${midpoint} | YardType=${getYardLabel(c)}`);
+        } else {
+          L.push(`  COMPUTED | AvgMin=${stats.avgMin} | AvgMax=${stats.avgMax} | ImpMin=${impMin} | ImpMax=${impMax} | Midpoint=${midpoint} | DispRadius=${disp?disp.latHalf:'?'} | LongShort=${disp?disp.depShort:'?'}/${disp?disp.depLong:'?'} | YardType=${getYardLabel(c)}`);
+        }
+      }
+    }
+  });
+
+  L.push('', '--- COURSES ---');
+  if(course) {
+    L.push(`COURSE | ${course.id} | ${course.name} | ${course.city||''} | ${course.par||''} | ${course.rating||''} | ${course.slope||''} | ${course.yardage||''} | ${course.selectedTee||''} | ${course.updatedAt||''}`);
+    (course.tees||[]).forEach(t => {
+      L.push(`  TEE | ${t.id} | ${t.name} | ${t.rating||''} | ${t.slope||''} | ${t.yardage||''}`);
+      (t.holes||[]).forEach(h => L.push(`    HOLE | ${h.number} | ${h.par} | ${h.yards||''} | ${h.handicap||''} | ${h.note||''}`));
+    });
+  } else {
+    L.push('# No course selected');
+  }
+
+  L.push('', '--- HANDICAP ---');
+  const hcpMode   = localStorage.getItem('vc:hcpMode')||'calculated';
+  const manualHcp = localStorage.getItem('vc:manualHcp')||'';
+  L.push(`MODE | ${hcpMode}`);
+  if(manualHcp) L.push(`MANUAL | ${manualHcp}`);
+  L.push(`ACTIVE | ${hcpIdx !== null ? hcpIdx : 'not set'}`);
+
+  L.push('', '--- SESSION PARAMETERS ---');
+  L.push(`TYPE | ${type}`);
+  L.push(`COURSE | ${course ? course.name : 'not selected'}`);
+  L.push(`TEE | ${tee ? tee.name : 'not selected'}`);
+  L.push(`HOLES | ${holes}`);
+  L.push(`CONDITIONS | ${conds}`);
+  L.push(`OPT_TIER | ${optTier}`);
+
+  L.push('', '--- COMPUTED SUMMARY ---');
+  L.push(`HCP_INDEX | ${hcpIdx !== null ? hcpIdx : 'not set'}`);
+  L.push(`PLAYING_HCP | ${playHcp !== null ? playHcp : 'not computed — select course and tee'}`);
+  L.push(`ACTIVE_CLUBS | ${activeCnt}`);
+
+  const blob = new Blob([L.join('\n')], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `virtual-caddie-export-${today()}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  if(st) {
+    const tierName = {1:'Basic',2:'Standard',3:'Advanced',4:'Full'}[+optTier]||'Full';
+    const cached = localStorage.getItem('vc:skill') ? '✓ skill cached' : '⚠ skill not cached — upload skill.md to AI manually';
+    st.innerHTML = `Exported · Tier ${optTier} (${tierName}) · ${cached}`
+      + `<br><span style="color:var(--tx2)">Upload the export file to your AI chat. When done, save the AI's session result as a .txt file and import it below.</span>`;
+  }
+}
+
+// ── Import Session Result ─────────────────────────────────────────────────────
+function processSessionResult(text) {
+  // Returns {ok, summary} — mutates bag/rounds/history and calls save()+renderAll()
+  const lines = text.split('\n');
+  if(!lines[0]?.trim().startsWith('=== VIRTUAL CADDIE SESSION ==='))
+    return {ok:false, summary:'Not a valid session result.\nExpected first line: "=== VIRTUAL CADDIE SESSION ==="'};
+
+  const sessionType = (text.match(/^Type:\s*(.+)/m)||[])[1]?.trim() || 'result';
+  const sessionDate = (text.match(/^Date:\s*(.+)/m)||[])[1]?.trim() || today();
+
+  let section=null, meta={}, caddieLines=[], dataLines=[];
+  for(const raw of lines) {
+    const line=raw.trim();
+    if(line==='--- SESSION META ---')  { section='meta';   continue; }
+    if(line==='--- CADDIE OUTPUT ---') { section='caddie'; continue; }
+    if(line==='--- DATA CHANGES ---')  { section='data';   continue; }
+    if(!line||line.startsWith('=')||line.startsWith('SessionVersion')||line.startsWith('Date:')||line.startsWith('Type:')) continue;
+    if(section==='meta')   { const p=line.split('|').map(s=>s.trim()); if(p[0]) meta[p[0]]=p[1]||''; }
+    else if(section==='caddie') caddieLines.push(raw);
+    else if(section==='data')   dataLines.push(line);
+  }
+  while(caddieLines.length && !caddieLines[caddieLines.length-1].trim()) caddieLines.pop();
+
+  // Extract HOLE-MAP block from caddie output before storing text
+  let holeMap={};
+  const hmStart=caddieLines.findIndex(l=>l.trim()==='HOLE-MAP');
+  if(hmStart!==-1){
+    const hmEnd=caddieLines.findIndex((l,i)=>i>hmStart&&l.trim()==='END-HOLE-MAP');
+    const hmLines=caddieLines.slice(hmStart+1, hmEnd!==-1?hmEnd:undefined);
+    hmLines.forEach(l=>{
+      const m=l.trim().match(/^H(\d+)\|([^|]*)\|?(.*)$/);
+      if(m) holeMap[parseInt(m[1])]={tee:m[2].trim(),app:(m[3]||'').trim()};
+    });
+    // Remove HOLE-MAP block from displayed text
+    caddieLines.splice(hmStart, hmEnd!==-1?hmEnd-hmStart+1:caddieLines.length-hmStart);
+    while(caddieLines.length && !caddieLines[caddieLines.length-1].trim()) caddieLines.pop();
+  }
+
+  // Extract BAG-MAP block
+  let bagMap=[];
+  const bmStart=caddieLines.findIndex(l=>l.trim()==='BAG-MAP');
+  if(bmStart!==-1){
+    const bmEnd=caddieLines.findIndex((l,i)=>i>bmStart&&l.trim()==='END-BAG-MAP');
+    const bmLines=caddieLines.slice(bmStart+1, bmEnd!==-1?bmEnd:undefined);
+    bagMap=bmLines.map(l=>l.trim()).filter(Boolean);
+    caddieLines.splice(bmStart, bmEnd!==-1?bmEnd-bmStart+1:caddieLines.length-bmStart);
+    while(caddieLines.length && !caddieLines[caddieLines.length-1].trim()) caddieLines.pop();
+  }
+
+  history.unshift({
+    id:uid(), date:sessionDate, type:sessionType,
+    course:meta['COURSE']||'', tee:meta['TEE']||'',
+    hcp:meta['HCP']||'', playHcp:meta['PLAYING_HCP']||'',
+    conditions:meta['CONDITIONS']||'', holes:meta['HOLES']||'',
+    optTier:meta['OPT_TIER']||'4',
+    text:caddieLines.join('\n'),
+    holeMap:Object.keys(holeMap).length?holeMap:undefined,
+    bagMap:bagMap.length?bagMap:undefined
+  });
+
+  const changes=[];
+  if(dataLines.length) {
+    let curClub=null, curCourse=null, curTee=null;
+    for(const line of dataLines) {
+      // Profile fields from setup skill
+      if(line.startsWith('PROFILE_NAME |'))    { const v=line.split('|')[1]?.trim(); if(v){profile.name=v;    changes.push('Updated name: '+v);} }
+      else if(line.startsWith('PROFILE_HANDED |')) { const v=line.split('|')[1]?.trim(); if(v){profile.handed=v;  changes.push('Updated handed: '+v);} }
+      else if(line.startsWith('PROFILE_YARDPREF |')){ const v=line.split('|')[1]?.trim(); if(v){profile.yardType=v;changes.push('Updated yardage preference: '+v);} }
+      // Clubs
+      else if(line.startsWith('CLUB |')) {
+        const p=line.split('|').map(s=>s.trim());
+        const existing=bag.find(c=>c.identifier===p[3]&&c.type===p[2]);
+        if(!existing) {
+          curClub={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',confidence:p[7]?parseInt(p[7]):4,bias:p[8]||'Straight',yardType:p[9]||'',loft:p[10]||'',model:p[11]||'',sessions:[]};
+          bag.push(curClub);
+          changes.push(`Added club: ${curClub.identifier}`);
+        } else { curClub=existing; }
+        curCourse=null; curTee=null;
+      } else if(line.startsWith('SESSION |')&&curClub) {
+        const p=line.split('|').map(s=>s.trim());
+        curClub.sessions=curClub.sessions||[];
+        curClub.sessions.push({id:uid(),date:p[1]||today(),min:p[2]||'',max:p[3]||'',notes:p[4]||''});
+        changes.push(`Added session for ${curClub.identifier}`);
+      }
+      // Courses
+      else if(line.startsWith('COURSE |')) {
+        const p=line.split('|').map(s=>s.trim());
+        const existing=courses.find(c=>c.name===p[2]);
+        if(!existing) {
+          curCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||today(),tees:[]};
+          courses.push(curCourse);
+          changes.push(`Added course: ${curCourse.name}`);
+        } else { curCourse=existing; }
+        curClub=null; curTee=null;
+      } else if(line.startsWith('TEE |')&&curCourse) {
+        const p=line.split('|').map(s=>s.trim());
+        curTee={id:p[1]||uid(),name:p[2]||'',rating:p[3]||'',slope:p[4]||'',yardage:p[5]||'',holes:[]};
+        curCourse.tees=curCourse.tees||[];
+        const existingTee=curCourse.tees.find(t=>t.name===curTee.name);
+        if(!existingTee) { curCourse.tees.push(curTee); changes.push(`Added tee: ${curTee.name} at ${curCourse.name}`); }
+        else { curTee=existingTee; }
+        if(!curCourse.selectedTee) curCourse.selectedTee=curTee.id;
+      } else if(line.startsWith('HOLE |')&&curTee) {
+        const p=line.split('|').map(s=>s.trim());
+        curTee.holes=curTee.holes||[];
+        curTee.holes.push({number:parseInt(p[1])||0,par:p[2]||'',yards:p[3]||'',handicap:p[4]||'',note:p[5]||''});
+      }
+      // Rounds
+      else if(line.startsWith('ROUND |')) {
+        const p=line.split('|').map(s=>s.trim());
+        rounds.push({id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||''});
+        changes.push(`Logged round: ${p[2]} (${p[1]})`);
+        curClub=null; curCourse=null; curTee=null;
+      }
+    }
+  }
+
+  save(); renderAll();
+
+  const summary = changes.length
+    ? `Session imported.\n\nData changes:\n• ${changes.join('\n• ')}\n\nUse Save Data to back up your updated file.`
+    : 'Session imported. Use Save Data to back up your updated file.';
+  return {ok:true, summary};
+}
+function importSessionResult(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{ const r=processSessionResult(ev.target.result); alert(r.summary); };
+  reader.readAsText(file);
+  e.target.value='';
+}
+function importPastedResult() {
+  const ta=document.getElementById('pasteResult');
+  const text=(ta?.value||'').trim();
+  if(!text) { alert('Paste your session result text first.'); return; }
+  const r=processSessionResult(text);
+  alert(r.summary);
+  if(r.ok && ta) ta.value='';
+}
+
+// ── Phase 5.1 — Player Profile PDF ───────────────────────────────────────────
+function exportProfilePdf() {
+  const hcp     = getHandicap();
+  const name    = profile.name || 'Golfer';
+  const handed  = profile.handed || '';
+  const gender  = profile.gender || '';
+  const homeCourse = profile.homeCourseId
+    ? (courses.find(c=>c.id===profile.homeCourseId)?.name || profile.homeClub || '')
+    : (profile.homeClub || '');
+
+  // Handicap trend — compare best 4 diffs (recent 8) vs best 4 diffs (prior 8)
+  function hcpTrend() {
+    if(rounds.length < 5) return {label:'Not enough rounds', arrow:'', color:'#8a9e82'};
+    const sorted = [...rounds].sort((a,b)=>b.date.localeCompare(a.date));
+    const calc = arr => {
+      const diffs = arr.map(r=>r.diff).filter(d=>d!==null&&d!==undefined).sort((a,b)=>a-b);
+      if(!diffs.length) return null;
+      const take = Math.min(4, diffs.length);
+      return Math.round(diffs.slice(0,take).reduce((a,b)=>a+b,0)/take*0.96*10)/10;
+    };
+    const recent = calc(sorted.slice(0,8));
+    const prior  = calc(sorted.slice(8,16));
+    if(recent===null||prior===null) return {label:'Improving', arrow:'↓', color:'#3d6b35'};
+    const diff = recent - prior;
+    if(diff < -0.5) return {label:'Improving',  arrow:'↓', color:'#3d6b35'};
+    if(diff >  0.5) return {label:'Rising',     arrow:'↑', color:'#a03030'};
+    return              {label:'Stable',      arrow:'→', color:'#9a7a2a'};
+  }
+  const trend = hcpTrend();
+
+  // Active bag
+  const activeBag = bag
+    .filter(c=>c.type!=='Putter'&&c.tested&&(c.sessions||[]).length>0)
+    .sort((a,b)=>{
+      const order=['Driver','Fairway Wood','Hybrid','Iron','Wedge','Chipper'];
+      return (order.indexOf(a.type)||99)-(order.indexOf(b.type)||99);
+    });
+  const bagRows = activeBag.map(c=>{
+    const stats = deriveStats(c.sessions);
+    const imp   = stats ? calcImplied(stats,c) : null;
+    const rng   = imp ? `${imp.impMin}–${imp.impMax}` : (stats ? `${stats.avgMin}–${stats.avgMax}` : '—');
+    const {type:tl} = getTypeLabel(c);
+    return `<tr><td>${tl}</td><td>${c.model||c.brand||''}</td><td style="text-align:right">${rng} yds</td></tr>`;
+  }).join('');
+
+  // Courses
+  const courseRows = [...courses]
+    .sort((a,b)=>{
+      if(a.id===profile.homeCourseId) return -1;
+      if(b.id===profile.homeCourseId) return 1;
+      return (a.name||'').localeCompare(b.name||'');
+    })
+    .map(c=>{
+      const isHome = c.id===profile.homeCourseId;
+      return `<tr><td>${isHome?'🏠 ':''}<strong>${c.name||'—'}</strong></td><td>${c.city||''}</td><td style="text-align:right">Par ${c.par} · ${c.yardage||'?'} yds</td></tr>`;
+    }).join('');
+
+  // Round history — last 5 + best diff
+  const recentRounds = [...rounds].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const bestDiff = rounds.length ? Math.min(...rounds.map(r=>r.diff).filter(d=>d!==null)) : null;
+  const roundRows = recentRounds.map(r=>
+    `<tr><td>${r.date}</td><td>${r.courseName||'—'}</td><td style="text-align:right">${r.score||'—'}</td><td style="text-align:right;color:#9a7a2a">${r.diff!==null?r.diff:'—'}</td></tr>`
+  ).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Virtual Caddie — ${escHtml(name)}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Mono',monospace,sans-serif;background:#f4efe6;color:#2c3a28;padding:32px;max-width:720px;margin:0 auto;}
+  @media print{body{background:#fff;padding:16px;}}
+  .card{background:#fff;border:1px solid #ddd5c4;border-radius:8px;padding:18px;margin-bottom:14px;}
+  .hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:10px;padding:24px;margin-bottom:16px;display:flex;align-items:center;gap:20px;}
+  .avatar{width:60px;height:60px;border-radius:50%;background:#3d6b35;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:700;flex-shrink:0;}
+  .hero-name{font-size:1.5rem;font-weight:700;color:#2d5127;letter-spacing:-.01em;}
+  .hero-sub{font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:#8a9e82;margin-top:3px;}
+  .hero-hcp{text-align:right;flex-shrink:0;}
+  .hcp-num{font-size:3rem;font-weight:700;color:#2d5127;line-height:1;}
+  .hcp-lbl{font-size:.55rem;letter-spacing:.14em;text-transform:uppercase;color:#8a9e82;}
+  .trend{font-size:.72rem;margin-top:4px;}
+  h3{font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #ddd5c4;}
+  table{width:100%;border-collapse:collapse;font-size:.72rem;}
+  td{padding:4px 6px;border-bottom:1px solid #f0ebe0;}
+  tr:last-child td{border-bottom:none;}
+  .footer{text-align:center;font-size:.56rem;color:#8a9e82;margin-top:20px;letter-spacing:.1em;text-transform:uppercase;}
+  .meta{font-size:.65rem;color:#5a6e52;margin-bottom:12px;}
+</style>
+</head><body>
+<div class="hero">
+  <div class="avatar">${escHtml(name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase()||'⛳')}</div>
+  <div style="flex:1">
+    <div class="hero-name">${escHtml(name)}</div>
+    <div class="hero-sub">${[handed,gender,homeCourse?'Home: '+homeCourse:''].filter(Boolean).join(' · ')}</div>
+  </div>
+  <div class="hero-hcp">
+    <div class="hcp-num">${hcp!==null?hcp:'—'}</div>
+    <div class="hcp-lbl">Handicap Index</div>
+    <div class="trend" style="color:${trend.color}">${trend.arrow} ${trend.label}</div>
+  </div>
+</div>
+
+${activeBag.length ? `
+<div class="card">
+  <h3>Active Bag — ${activeBag.length} clubs</h3>
+  <table><tbody>${bagRows}</tbody></table>
+</div>` : ''}
+
+${courses.length ? `
+<div class="card">
+  <h3>Courses — ${courses.length} saved</h3>
+  <table><tbody>${courseRows}</tbody></table>
+</div>` : ''}
+
+${rounds.length ? `
+<div class="card">
+  <h3>Round History</h3>
+  <div class="meta">Best differential: <strong>${bestDiff!==null?bestDiff:'—'}</strong> · ${rounds.length} round${rounds.length!==1?'s':''} logged</div>
+  <table>
+    <thead><tr style="font-size:.6rem;color:#8a9e82;text-transform:uppercase;letter-spacing:.08em">
+      <td>Date</td><td>Course</td><td style="text-align:right">Score</td><td style="text-align:right">Diff</td>
+    </tr></thead>
+    <tbody>${roundRows}</tbody>
+  </table>
+</div>` : ''}
+
+<div class="footer">Virtual Caddie · Generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+  const blob = new Blob([html], {type:'text/html'});
+  const url  = URL.createObjectURL(blob);
+  const w    = window.open(url, '_blank');
+  if(w) w.onunload = () => URL.revokeObjectURL(url);
+  else  URL.revokeObjectURL(url);
+}
+
+// ── Phase 5.1 — Session Scorecard PDF ────────────────────────────────────────
+function exportSessionPdf(id) {
+  const h = history.find(x=>x.id===id);
+  if(!h) return;
+  const lines = (h.text||'').split('\n');
+
+  // Parse session text into sections
+  let bagLines=[], putterLine='', leftOut='', gaps='', stratLines=[], fittingLine='', holeLines=[];
+  for(const raw of lines) {
+    const l=raw.trim();
+    if(!l||l.startsWith('OPTIMISED BAG')||l.startsWith('Total:')) continue;
+    if(l==='COURSE STRATEGY'||l==='HOLE-BY-HOLE') continue;
+    if(l.startsWith('FITTING INSIGHT')) { fittingLine=l; continue; }
+    if(l.startsWith('LEFT OUT:'))       { leftOut=l.replace('LEFT OUT:','').trim(); continue; }
+    if(l.startsWith('YARDAGE GAPS:'))   { gaps=l.replace('YARDAGE GAPS:','').trim(); continue; }
+    if(/^H\d+\s*\|/.test(l))           { holeLines.push(l); continue; }
+    if(/^\d+\.\s+/.test(l))            { bagLines.push(l); continue; }
+    if(l.startsWith('+'))              { putterLine=l.replace(/^\+\s*/,''); continue; }
+    if(/^\d+\.\s/.test(l) && holeLines.length===0 && bagLines.length>0) { stratLines.push(l); continue; }
+    // Strategy lines appear after bag list and before holes
+    if(bagLines.length>0 && holeLines.length===0 && /^\d+\./.test(l)) stratLines.push(l);
+  }
+
+  // Bag table
+  const bagRows = bagLines.map(l=>{
+    const m=l.match(/^(\d+)\.\s+(.+?)\s+—\s+([0-9–\-]+ yds)\s+—\s+(.+)/);
+    if(!m) return `<tr><td colspan="4" style="color:#5a6e52;font-size:.68rem">${escHtml(l)}</td></tr>`;
+    return `<tr><td style="color:#2d5127;font-weight:600;width:24px">${m[1]}.</td><td>${escHtml(m[2])}</td><td style="text-align:center;white-space:nowrap;color:#3d6b35">${escHtml(m[3])}</td><td style="color:#5a6e52;font-size:.63rem">${escHtml(m[4])}</td></tr>`;
+  }).join('');
+
+  // Scorecard rows — insert OUT/IN/TOTAL subtotals at holes 9, 18
+  const scRows = holeLines.map((l,i)=>{
+    const p=l.split('|').map(s=>s.trim());
+    const num  =(p[0]||'').replace(/^H/,'').trim();
+    const par  =(p[1]||'').replace('Par ','').trim();
+    const yds  =(p[2]||'').replace(' yds','').trim();
+    const strks=(p[4]||'').trim();
+    const advice=p.slice(5).filter(Boolean).join(' · ');
+    const parN =parseInt(par)||0;
+    const bg   =parN===3?'#edf3f7':parN===5?'#fff8ee':'#fff';
+    const row=`<tr style="background:${bg}">
+      <td style="text-align:center;font-weight:700;color:#2d5127">${escHtml(num)}</td>
+      <td style="text-align:center">${escHtml(par)}</td>
+      <td style="text-align:center">${escHtml(yds)}</td>
+      <td style="font-size:.62rem;color:#3d6b35">${escHtml(strks)}</td>
+      <td style="font-size:.62rem">${escHtml(advice)}</td>
+      <td style="border-left:2px solid #3d6b35;background:#fffdf8" contenteditable="true"></td>
+      <td style="border-left:1px solid #ddd5c4;background:#fffdf8" contenteditable="true"></td>
+    </tr>`;
+    const sub = (i===8||i===17) ? `<tr style="background:#e8f0e5">
+      <td colspan="5" style="text-align:right;font-size:.58rem;font-weight:700;color:#2d5127;padding:3px 7px">${i===8?'OUT':'IN'}</td>
+      <td style="border-left:2px solid #3d6b35;border-top:2px solid #3d6b35;background:#e8f0e5"></td>
+      <td style="border-left:1px solid #ddd5c4;border-top:1px solid #ddd5c4;background:#e8f0e5"></td>
+    </tr>` : '';
+    const total = i===17 ? `<tr style="background:#2d5127;color:#fff">
+      <td colspan="5" style="text-align:right;font-size:.6rem;font-weight:700;padding:4px 7px">TOTAL</td>
+      <td style="border-left:2px solid #3d6b35;background:#1e3a1a"></td>
+      <td style="border-left:1px solid rgba(255,255,255,.3);background:#1e3a1a"></td>
+    </tr>` : '';
+    return row+sub+total;
+  }).join('');
+
+  const meta=[
+    h.tee?h.tee+' tees':'',
+    h.hcp&&h.hcp!=='not set'?'HCP '+h.hcp:'',
+    h.playHcp&&h.playHcp!=='not computed'?'Playing HCP '+h.playHcp:'',
+    h.conditions&&h.conditions!=='calm'?h.conditions:'',
+    h.holes&&h.holes!=='all 18'?h.holes:'',
+  ].filter(Boolean).join(' · ');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Virtual Caddie Scorecard — ${escHtml(h.course||'Session')}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Mono',monospace,sans-serif;background:#f4efe6;color:#2c3a28;padding:24px;max-width:940px;margin:0 auto;font-size:.78rem;line-height:1.4;}
+@media print{body{background:#fff;padding:10px;font-size:.72rem;} .no-print{display:none;} [contenteditable]{outline:none;border-bottom:1px solid #ccc;min-height:1em;}}
+.hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:8px;padding:14px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.hero-title{font-size:1.1rem;font-weight:700;color:#2d5127;}
+.hero-meta{font-size:.6rem;color:#8a9e82;margin-top:2px;}
+.hero-date{font-size:.6rem;color:#8a9e82;white-space:nowrap;}
+.card{background:#fff;border:1px solid #ddd5c4;border-radius:6px;padding:12px 14px;margin-bottom:10px;}
+h3{font-size:.56rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd5c4;}
+table{width:100%;border-collapse:collapse;}
+td,th{padding:3px 6px;border-bottom:1px solid #f0ebe0;vertical-align:middle;}
+th{font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:#8a9e82;font-weight:400;border-bottom:2px solid #ddd5c4;padding-bottom:4px;}
+.detail{font-size:.62rem;color:#5a6e52;margin-top:7px;line-height:1.6;}
+.strat{font-size:.68rem;color:#2c3a28;line-height:1.65;margin-bottom:3px;}
+.print-btn{display:inline-block;margin-bottom:12px;padding:5px 14px;background:#3d6b35;color:#fff;border:none;border-radius:4px;font-family:monospace;font-size:.68rem;cursor:pointer;letter-spacing:.04em;}
+.footer{text-align:center;font-size:.52rem;color:#8a9e82;margin-top:16px;letter-spacing:.1em;text-transform:uppercase;}
+</style></head><body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+<div class="hero">
+  <div><div class="hero-title">⛳ ${escHtml(h.course||'Session')}</div><div class="hero-meta">${escHtml(meta)}</div></div>
+  <div class="hero-date">${escHtml(h.date||'')}</div>
+</div>
+
+${bagLines.length?`<div class="card">
+  <h3>Optimised Bag</h3>
+  <table><thead><tr><th>#</th><th>Club</th><th>Range</th><th>Role</th></tr></thead><tbody>${bagRows}</tbody></table>
+  ${putterLine?`<div class="detail">+ ${escHtml(putterLine)}</div>`:''}
+  ${leftOut?`<div class="detail"><strong>Left out:</strong> ${escHtml(leftOut)}</div>`:''}
+  ${gaps?`<div class="detail"><strong>Gaps:</strong> ${escHtml(gaps)}</div>`:''}
+</div>`:''}
+
+${stratLines.length?`<div class="card">
+  <h3>Course Strategy</h3>
+  ${stratLines.map(s=>`<div class="strat">${escHtml(s)}</div>`).join('')}
+  ${fittingLine?`<div class="detail">${escHtml(fittingLine)}</div>`:''}
+</div>`:''}
+
+${holeLines.length?`<div class="card">
+  <h3>Hole-by-Hole · Score &amp; Notes</h3>
+  <table>
+    <thead><tr>
+      <th style="width:32px;text-align:center">Hole</th>
+      <th style="width:28px;text-align:center">Par</th>
+      <th style="width:40px;text-align:center">Yds</th>
+      <th style="width:80px">Strokes</th>
+      <th>Caddie Advice</th>
+      <th style="width:50px;text-align:center;border-left:2px solid #3d6b35">Score</th>
+      <th style="width:130px;border-left:1px solid #ddd5c4">Notes</th>
+    </tr></thead>
+    <tbody>${scRows}</tbody>
+  </table>
+</div>`:''}
+
+<div class="footer">Virtual Caddie · ${escHtml(h.course||'')} · Generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
+</body></html>`;
+
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  if(w) w.onunload=()=>URL.revokeObjectURL(url);
+  else  URL.revokeObjectURL(url);
+}
+
+
+// ── Phase 4.1 — Starter TXT ──────────────────────────────────────────────────
+function exportStarterTxt() {
+  const setupText = getSetupSkillText();
+  const ver = (setupText.match(/SetupSkillVersion:\s*(\d+)/)||[])[1]||'?';
+  const lines = [
+    '=== VIRTUAL CADDIE SETUP ===',
+    'SetupVersion: 1',
+    `SetupSkillVersion: ${ver}`,
+    `ExportDate: ${today()}`,
+    `AppVersion: ${APP_VERSION}`,
+    '',
+    '=== SETUP INSTRUCTIONS ===',
+    setupText,
+    '',
+    '=== DATA ===',
+    '',
+    '--- PROFILE ---',
+    'NAME | '    +(profile.name||''),
+    'AGE | '     +(profile.age||''),
+    'GENDER | '  +(profile.gender||''),
+    'HANDED | '  +(profile.handed||''),
+    'YARDPREF | '+(profile.yardType||'Total'),
+    '',
+    '--- CLUBS ---',
+    '',
+    '--- COURSES ---',
+    '',
+    '--- HANDICAP ---',
+    'MODE | calculated',
+    'ACTIVE | not set',
+  ];
+  const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'virtual-caddie-setup-'+today()+'.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById('uploadBanner').style.display = 'none';
+}
+
+// ── Phase 4.5 — Task Exports ──────────────────────────────────────────────────
+function downloadTask(filename, content) {
+  const blob = new Blob([content], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportClubTask() {
+  // Build dynamic user-data sections
+  const clubLines = ['=== CURRENT CLUBS ==='];
+  bag.forEach(c => {
+    const opt = c.type==='Putter'?'PUTTER':c.tested?'YES':'NO';
+    clubLines.push('CLUB | '+[c.brand||'',c.type,c.identifier||'',c.stiffness,c.shaftLength||'',opt,c.confidence??4,c.bias||'Straight',c.yardType||'',c.loft||'',c.model||''].join(' | '));
+    (c.sessions||[]).forEach(s=>clubLines.push('  SESSION | '+s.date+' | '+s.min+' | '+s.max));
+  });
+  if(bag.length===0) clubLines.push('# No clubs saved yet.');
+
+  const taskText = getClubTaskText();
+  const ver = (taskText.match(/ClubTaskVersion:\s*(\d+)/)||[])[1]||'?';
+
+  const content = `=== VIRTUAL CADDIE TASK ===
+TaskType: add-clubs
+Date: ${today()}
+AppVersion: ${APP_VERSION}
+ClubTaskVersion: ${ver}
+
+--- TASK INSTRUCTIONS ---
+${taskText}
+
+--- USER DATA ---
+${clubLines.join('\n')}`;
+
+  downloadTask(`vc-club-task-${today()}.txt`, content);
+}
+
+function exportCourseTask() {
+  const existingNames = courses.map(c=>c.name).filter(Boolean);
+  const existingLine = existingNames.length
+    ? '# Already saved: '+existingNames.join(', ')
+    : '# No courses saved yet.';
+
+  const taskText = getCourseTaskText();
+  const ver = (taskText.match(/CourseTaskVersion:\s*(\d+)/)||[])[1]||'?';
+
+  const content = `=== VIRTUAL CADDIE TASK ===
+TaskType: add-course
+Date: ${today()}
+AppVersion: ${APP_VERSION}
+CourseTaskVersion: ${ver}
+
+--- TASK INSTRUCTIONS ---
+${taskText}
+
+--- USER DATA ---
+=== CURRENT COURSES ===
+${existingLine}`;
+
+  downloadTask(`vc-course-task-${today()}.txt`, content);
+}
+
+
+const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
+const APP_LATEST_FILE = 'golf-caddie-latest.html';
+
+function gistPat()    { return localStorage.getItem('vc:gistPat')||''; }
+function gistId()     { return localStorage.getItem('vc:gistId')||''; }
+function gistMode()   { return gistPat()&&gistId(); }
+
+async function gistPatch(filename, content) {
+  // PATCH a file in the user's gist; returns true on success
+  const r = await fetch(`https://api.github.com/gists/${gistId()}`, {
+    method: 'PATCH',
+    headers: {'Authorization':'token '+gistPat(),'Content-Type':'application/json','Accept':'application/vnd.github+json'},
+    body: JSON.stringify({files:{[filename]:{content}}})
+  });
+  return r.ok;
+}
+async function gistGet(filename) {
+  // GET a single file from user's gist; returns text or null
+  try {
+    const r = await fetch(`https://api.github.com/gists/${gistId()}`, {
+      headers: {'Authorization':'token '+gistPat(),'Accept':'application/vnd.github+json'}
+    });
+    if(!r.ok) return null;
+    const j = await r.json();
+    return j.files?.[filename]?.content || null;
+  } catch { return null; }
+}
+async function gistDelete(filename) {
+  // Delete a file from gist by setting content to null
+  await fetch(`https://api.github.com/gists/${gistId()}`, {
+    method:'PATCH',
+    headers:{'Authorization':'token '+gistPat(),'Content-Type':'application/json','Accept':'application/vnd.github+json'},
+    body:JSON.stringify({files:{[filename]:{content:null}}})
+  }).catch(()=>{});
+}
+
+// Called after every save() when in Gist mode — fire-and-forget
+async function syncSave() {
+  if(!gistMode()) return;
+  const ok = await gistPatch('virtual-caddie-data.txt', serialise());
+  const ts = ok ? new Date().toLocaleTimeString() : null;
+  if(ts) localStorage.setItem('vc:gistLastSync', ts);
+  const el = document.getElementById('gistSyncStatus');
+  if(el) el.textContent = ok ? `Last synced: ${ts}` : 'Sync failed — check PAT / Gist ID';
+}
+
+// On load in Gist mode: check for a pending session-result from AI
+async function checkSessionResult() {
+  if(!gistMode()) return;
+  const text = await gistGet('session-result.txt');
+  if(!text || !text.includes('=== VIRTUAL CADDIE SESSION ===')) return;
+  const r = processSessionResult(text);
+  await gistDelete('session-result.txt');
+  alert('AI session result auto-imported from Gist.\n\n'+r.summary);
+}
+
+// On load: check master Gist for a newer app version and prompt user
+async function checkAppUpdate() {
+  try {
+    const r = await fetch(MASTER_GIST_RAW + APP_LATEST_FILE, {cache:'no-store'});
+    if(!r.ok) return;
+    const html = await r.text();
+    const m = html.match(/const APP_VERSION\s*=\s*'(\d+)'/);
+    if(!m) return;
+    const remote = parseInt(m[1]);
+    const local  = parseInt(APP_VERSION);
+    if(remote <= local) return;
+    const go = confirm(`A new version of Virtual Caddie is available (v${remote}).\n\nUpdate now? Your data will not be affected.`);
+    if(!go) return;
+    // Replace current page with downloaded HTML
+    const blob = new Blob([html], {type:'text/html'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `golf-caddie-v${remote}.html`; a.click();
+    URL.revokeObjectURL(url);
+  } catch {}
+}
+
+// Connect / test / disconnect
+async function connectGist() {
+  const pat = document.getElementById('gistPatInput')?.value.trim();
+  const id  = document.getElementById('gistIdInput')?.value.trim();
+  const st  = document.getElementById('gistConnectStatus');
+  if(!pat||!id) { if(st) st.textContent='Enter both PAT and Gist ID.'; return; }
+  if(st) st.textContent = 'Testing…';
+  const r = await fetch(`https://api.github.com/gists/${id}`, {
+    headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github+json'}
+  }).catch(()=>null);
+  if(!r||!r.ok) { if(st) st.textContent='❌ Connection failed — check PAT and Gist ID.'; return; }
+  localStorage.setItem('vc:gistPat', pat);
+  localStorage.setItem('vc:gistId',  id);
+  if(st) st.textContent='✓ Connected';
+  renderGistSettings();
+  syncSave();
+}
+function disconnectGist() {
+  if(!confirm('Disconnect Gist sync? PAT and Gist ID will be cleared.')) return;
+  localStorage.removeItem('vc:gistPat');
+  localStorage.removeItem('vc:gistId');
+  localStorage.removeItem('vc:gistLastSync');
+  renderGistSettings();
+}
+
+function renderGistSettings() {
+  const connected = gistMode();
+  const card = document.getElementById('gistSettingsCard');
+  if(!card) return;
+  const ts = localStorage.getItem('vc:gistLastSync');
+  card.innerHTML = `
+    <div class="card-title">Gist Sync</div>
+    <div style="font-size:.68rem;color:var(--tx2);margin-bottom:10px;line-height:1.7">
+      Optionally sync your data to a private GitHub Gist. Requires a GitHub Personal Access Token (gist scope only).
+      <br><strong style="color:var(--danger)">Keep your PAT private — it is stored only in this browser's localStorage.</strong>
+    </div>
+    ${connected ? `
+      <div style="font-size:.72rem;color:var(--ac);margin-bottom:8px">✓ Connected to Gist <code style="font-size:.65rem">${gistId().slice(0,8)}…</code></div>
+      <div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px" id="gistSyncStatus">${ts?'Last synced: '+ts:'Not synced yet this session'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="syncSave()">↑ Sync Now</button>
+        <button class="btn danger" onclick="disconnectGist()">Disconnect</button>
+      </div>
+    ` : `
+      <div id="gistConnectStatus" style="font-size:.65rem;color:var(--tx3);margin-bottom:8px;min-height:1em"></div>
+      <div class="field">
+        <div class="flbl">Personal Access Token (gist scope)</div>
+        <input id="gistPatInput" type="password" placeholder="ghp_…" autocomplete="off">
+      </div>
+      <div class="field">
+        <div class="flbl">Gist ID</div>
+        <input id="gistIdInput" type="text" placeholder="32-character hex ID from your Gist URL" autocomplete="off">
+      </div>
+      <button class="btn" onclick="connectGist()">Connect</button>
+    `}`;
+}
+
+
+function updateCourseDropdowns() {
+  const sel = document.getElementById('rCourseSelect');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Select saved course —</option>'
+    + courses.map(c=>`<option value="${c.id}">${c.name}${c.city?' · '+c.city:''}</option>`).join('')
+    + '<option value="__manual__">Enter manually…</option>';
+  // Restore previous selection if still valid
+  if(cur && (cur==='__manual__' || courses.find(c=>c.id===cur))) sel.value=cur;
+}
 function renderAll(){
   renderProfile(); renderClubs(); renderCourseList(); renderHandicap(); updateCourseSelects(); renderSessions();
   // Set rCourse autofill once
@@ -1725,9 +3199,584 @@ function renderAll(){
   });}
 }
 
+// ── Viz Tab ───────────────────────────────────────────────────────────────────
+const VIZ_COLORS=['#d94030','#3070c0','#28a050','#c07820','#8050c0','#c03080','#20a0a0',
+  '#608030','#504090','#a05820','#38b880','#b03050','#6088c0','#a08030','#7a6030'];
+const VIZ_LP=[{s:.55,l:.45},{s:.58,l:.42},{s:.62,l:.38},{s:.65,l:.35},{s:.68,l:.32},{s:.72,l:.28}];
+const VIZ_ASYM={Straight:{td:8,rf:.10,lf:.05},Draw:{td:4,rf:.06,lf:.02},Hook:{td:2,rf:.03,lf:.01},
+  Fade:{td:10,rf:.12,lf:.04},Slice:{td:14,rf:.15,lf:.08},'Push Right':{td:3,rf:.04,lf:.01},'Push Left':{td:-3,rf:.01,lf:.04}};
+const VIZ_LPROB={Straight:{pl:.45,pr:.55},Draw:{pl:.55,pr:.45},Hook:{pl:.65,pr:.35},
+  Fade:{pl:.35,pr:.65},Slice:{pl:.25,pr:.75},'Push Right':{pl:.25,pr:.75},'Push Left':{pl:.75,pr:.25}};
+
+// Roll % of carry by flight key and tier [T0..T5]
+const VIZ_ROLL={'Driver':[.22,.20,.18,.16,.14,.12],'Fairway Wood':[.13,.12,.10,.09,.08,.07],
+  'Hybrid':[.09,.08,.07,.06,.05,.05],'Iron-Long':[.07,.06,.06,.05,.05,.04],
+  'Iron-Mid':[.05,.05,.04,.04,.03,.03],'Iron-Short':[.03,.03,.03,.02,.02,.02],
+  'Wedge':[.02,.02,.01,.01,.01,.00],'Chipper':[.30,.28,.26,.24,.22,.20]};
+
+let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
+let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=false, vizClubSrc='optimised';
+let vizYardMode='total'; // 'carry' | 'total'
+
+function vizTierIdx(hcp){const h=+hcp||15;if(h<5)return 0;if(h<10)return 1;if(h<15)return 2;if(h<20)return 3;if(h<25)return 4;return 5;}
+function vizNormCdf(x){return .5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-2*x*x/Math.PI)));}
+
+function vizFlightKey(c){
+  const t=c.type,id=(c.identifier||'').toLowerCase(),loft=+c.loft||0;
+  if(t==='Driver')       return 'Driver';
+  if(t==='Fairway Wood') return 'Fairway Wood';
+  if(t==='Wedge'||t==='Chipper') return 'Wedge';
+  if(t==='Putter')       return null;
+  if(t==='Hybrid'){const n=id.match(/(\d+)h/);return(!n||+n[1]<=6)&&loft<=30?'Hybrid':'Iron-Short';}
+  if(t==='Iron'){if(loft<=27)return 'Iron-Long';if(loft<=38)return 'Iron-Mid';return 'Iron-Short';}
+  return 'Iron-Mid';
+}
+
+function vizGetDisp(c,hcp,handed){
+  const fk=vizFlightKey(c); if(!fk||!FLIGHT_DATA.clubs[fk]) return null;
+  const fd=FLIGHT_DATA.clubs[fk],ti=vizTierIdx(hcp);
+  const bk=c.bias||'Straight';
+  const b=BIAS_DATA[bk]||BIAS_DATA['Straight'];
+  const isL=handed==='Left-handed';
+  const asym=VIZ_ASYM[bk]||VIZ_ASYM.Straight, lp=VIZ_LPROB[bk]||VIZ_LPROB.Straight;
+  const latH=Math.round(fd.latDisp[ti]/2*b.mult);
+  const mins=(c.sessions||[]).map(s=>+s.min).filter(v=>v>0);
+  const maxs=(c.sessions||[]).map(s=>+s.max).filter(v=>v>0);
+  const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):0;
+  // Carry→total conversion: if logged as Carry and we want total, scale up by roll %
+  const loggedAsCarry=(c.yardType||profile.yardType||'Total')==='Carry';
+  const roll=VIZ_ROLL[fk]?.[ti]||0;
+  const toDisp=(v)=>{
+    if(!v) return 0;
+    if(loggedAsCarry && vizYardMode==='total') return Math.round(v*(1+roll));
+    if(!loggedAsCarry && vizYardMode==='carry') return Math.round(v/(1+roll));
+    return v;
+  };
+  const minD=toDisp(avg(mins)), maxD=toDisp(avg(maxs));
+  return{id:c.id,label:c.identifier||c.id,
+    carry:Math.round((minD+maxD)/2),min:minD,max:maxD,latH,
+    rxR:latH*(1-(isL?asym.lf:asym.rf)),rxL:latH*(1+(isL?asym.rf:asym.lf)),
+    tilt:asym.td*(isL?-1:1),off:b.offset*(isL?-1:1),
+    ds:fd.depShort[ti],dl:fd.depLong[ti],
+    pR:isL?lp.pl:lp.pr,pL:isL?lp.pr:lp.pl,pS:VIZ_LP[ti].s,pLn:VIZ_LP[ti].l};
+}
+
+function vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt){
+  const kr=rxR*.552,kl=rxL*.552,ku=ryU*.552,kd=ryD*.552;
+  const r=tilt*Math.PI/180,co=Math.cos(r),si=Math.sin(r);
+  const rt=(x,y)=>{const dx=x-cx,dy=y-cy;return[cx+dx*co-dy*si,cy+dx*si+dy*co];};
+  const p=(x,y)=>{const[a,b]=rt(x,y);return`${a.toFixed(1)} ${b.toFixed(1)}`;};
+  return`M ${p(cx,cy-ryU)} C ${p(cx+kr,cy-ryU)},${p(cx+rxR,cy-ku)},${p(cx+rxR,cy)} C ${p(cx+rxR,cy+kd)},${p(cx+kr,cy+ryD)},${p(cx,cy+ryD)} C ${p(cx-kl,cy+ryD)},${p(cx-rxL,cy+kd)},${p(cx-rxL,cy)} C ${p(cx-rxL,cy-ku)},${p(cx-kl,cy-ryU)},${p(cx,cy-ryU)} Z`;
+}
+
+function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
+  const ep=vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt);
+  const r=tilt*Math.PI/180,co=Math.cos(r),si=Math.sin(r);
+  const rt=(x,y)=>{const dx=x-cx,dy=y-cy;return[cx+dx*co-dy*si,cy+dx*si+dy*co];};
+  const[atX,atY]=rt(cx,cy-ryU-14),[abX,abY]=rt(cx,cy+ryD+14);
+  const[mrX,mrY]=rt(cx+rxR+14,cy),[mlX,mlY]=rt(cx-rxL-14,cy);
+  const rH=`M ${atX.toFixed(1)} ${atY.toFixed(1)} L ${atX+260} ${atY+260} L ${abX+260} ${abY+260} L ${abX.toFixed(1)} ${abY.toFixed(1)} Z`;
+  const lH=`M ${atX.toFixed(1)} ${atY.toFixed(1)} L ${atX-260} ${atY-260} L ${abX-260} ${abY-260} L ${abX.toFixed(1)} ${abY.toFixed(1)} Z`;
+  const sH=`M ${mlX.toFixed(1)} ${mlY.toFixed(1)} L ${mlX+220} ${mlY+220} L ${mrX+220} ${mrY+220} L ${mrX.toFixed(1)} ${mrY.toFixed(1)} Z`;
+  const lnH=`M ${mlX.toFixed(1)} ${mlY.toFixed(1)} L ${mlX-220} ${mlY-220} L ${mrX-220} ${mrY-220} L ${mrX.toFixed(1)} ${mrY.toFixed(1)} Z`;
+  const rv=parseInt(hex.slice(1,3),16),gv=parseInt(hex.slice(3,5),16),bv=parseInt(hex.slice(5,7),16);
+  const oR=(0.12+pR*.38).toFixed(2),oL=(0.12+pL*.38).toFixed(2),oS=(0.10+pS*.22).toFixed(2),oLn=(0.08+pLn*.15).toFixed(2);
+  let h=`<clipPath id="vcp${uid}"><path d="${ep}"/></clipPath>`;
+  if(mode!=='prob') h+=`<path d="${ep}" fill="rgba(${rv},${gv},${bv},0.10)" stroke="${hex}" stroke-width="2"/>`;
+  if(mode!=='shape') h+=`<g clip-path="url(#vcp${uid})"><path d="${rH}" fill="rgba(200,80,40,${oR})"/><path d="${lH}" fill="rgba(50,110,200,${oL})"/><path d="${sH}" fill="rgba(170,140,30,${oS})"/><path d="${lnH}" fill="rgba(50,110,200,${oLn})"/></g>`;
+  return h;
+}
+
+// ── Core stacked canvas renderer ──────────────────────────────────────────────
+function vizDrawCanvas(dispList,fwYds,mode,title,subtitle){
+  const svg=document.getElementById('vizSvg');
+  const filtered=dispList.filter(d=>d&&d.carry>0).sort((a,b)=>b.carry-a.carry);
+  if(!filtered.length){svg.innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No session data for selected clubs</text>';return;}
+  const W=440,PAD_T=48,PAD_B=72;
+  const H=Math.min(Math.max(PAD_T+PAD_B+(filtered[0].carry+25)*2.6,300),720);
+  const scale=(H-PAD_T-PAD_B)/(filtered[0].carry+20);
+  const cx=W/2,teeY=H-PAD_B,fwH=fwYds/2*scale,fwL=cx-fwH,fwR=cx+fwH;
+  let defs='',shapes='',annots='';const legs=[],chips=[];
+  filtered.forEach((d,i)=>{
+    const carryY=teeY-d.carry*scale,aimX=cx+d.off*scale;
+    const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=carryY+ryD*.1;
+    const col=VIZ_COLORS[i%VIZ_COLORS.length];
+    const es=vizRenderEllipse(i,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
+    defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
+    shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+    if(i>0){const prev=filtered[i-1],gap=prev.carry-prev.ds-(d.carry+d.dl);
+      if(gap>12){const gy=teeY-((prev.carry-prev.ds+d.carry+d.dl)/2)*scale;
+        annots+=`<line x1="${cx-20}" y1="${gy}" x2="${cx+20}" y2="${gy}" stroke="rgba(160,48,48,.4)" stroke-width="1" stroke-dasharray="3 2"/><text x="${cx}" y="${gy+4}" font-family="monospace" font-size="8" fill="rgba(160,48,48,.7)" text-anchor="middle">gap ~${Math.round(gap)}y</text>`;}}
+    const lx=Math.min(W-2,aimX+rxR+5);
+    annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml(d.label)}</text><text x="${lx}" y="${eCy+9}" font-family="monospace" font-size="8" fill="rgba(44,58,40,.6)">${d.min}–${d.max}y</text>`;
+    annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${d.carry}y</text>`;
+    const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
+    chips.push({label:d.label,col,p:Math.round(pFw*100)});
+    legs.push({label:`${d.label} · ${d.carry}y · ±${d.latH}y`,col});
+  });
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML=`<defs>${defs}</defs>
+  <rect width="${W}" height="${H}" fill="#6a9a50"/>
+  <rect x="${fwL}" y="0" width="${fwR-fwL}" height="${H}" fill="#9ec880"/>
+  <line x1="${fwL}" y1="0" x2="${fwL}" y2="${H}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
+  <line x1="${fwR}" y1="0" x2="${fwR}" y2="${H}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
+  <text x="${cx}" y="18" font-family="monospace" font-size="10" fill="rgba(255,255,255,.8)" text-anchor="middle">${escHtml(title)}</text>
+  ${subtitle?`<text x="${cx}" y="30" font-family="monospace" font-size="8" fill="rgba(255,255,255,.5)" text-anchor="middle">${escHtml(subtitle)}</text>`:''}
+  ${shapes}${annots}
+  <circle cx="${cx}" cy="${teeY}" r="7" fill="#fff" stroke="#3d6b35" stroke-width="2.5"/>
+  <line x1="${cx-5}" y1="${teeY+7}" x2="${cx+5}" y2="${teeY+7}" stroke="#3d6b35" stroke-width="2"/>
+  <text x="${cx}" y="${teeY+20}" font-family="monospace" font-size="9" fill="rgba(255,255,255,.8)" text-anchor="middle">TEE</text>
+  <text x="${cx}" y="${H-8}" font-family="monospace" font-size="9" fill="rgba(50,90,30,.9)" text-anchor="middle">← fairway ${fwYds}y →</text>`;
+  vizSetLegendChips(legs,chips);
+}
+
+// ── Same-distance overlay renderer ───────────────────────────────────────────
+function vizDrawDistance(dispList,targetYds,fwYds,mode,title){
+  const svg=document.getElementById('vizSvg');
+  // All ellipses drawn at the same carry distance — overlapping comparison
+  const clubs=dispList.filter(d=>d&&d.min>0&&d.max>=targetYds&&d.min<=targetYds);
+  if(!clubs.length){svg.innerHTML=`<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No clubs reach ${targetYds}y</text>`;return;}
+  const W=440,H=420,PAD_T=48,PAD_B=80,cx=W/2;
+  const teeY=H-PAD_B, landY=PAD_T+60;
+  const scale=(teeY-landY)/targetYds;
+  const fwH=fwYds/2*scale,fwL=cx-fwH,fwR=cx+fwH;
+  let defs='',shapes='',annots='';const legs=[],chips=[];
+  clubs.forEach((d,i)=>{
+    const aimX=cx+d.off*scale;
+    const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=landY+ryD*.1;
+    const col=VIZ_COLORS[i%VIZ_COLORS.length];
+    // Render at lower opacity when multiple overlap
+    const opacity=Math.max(0.55, 0.85-i*0.06);
+    const ep=vizEllipsePath(aimX,eCy,rxR,rxL,ryU,ryD,d.tilt);
+    const rv=parseInt(col.slice(1,3),16),gv=parseInt(col.slice(3,5),16),bv=parseInt(col.slice(5,7),16);
+    defs+=`<clipPath id="vcp${i}"><path d="${ep}"/></clipPath>`;
+    if(mode!=='prob') shapes+=`<path d="${ep}" fill="rgba(${rv},${gv},${bv},0.08)" stroke="${col}" stroke-width="2" opacity="${opacity}"/>`;
+    if(mode!=='shape') shapes+=`<g clip-path="url(#vcp${i})" opacity="${opacity}">
+      <path d="M ${aimX} ${eCy-ryU-14} L ${aimX+260} ${eCy-ryU+246} L ${aimX+260} ${eCy+ryD+274} L ${aimX} ${eCy+ryD+14} Z" fill="rgba(200,80,40,${(0.10+d.pR*.30).toFixed(2)})"/>
+      <path d="M ${aimX} ${eCy-ryU-14} L ${aimX-260} ${eCy-ryU+246} L ${aimX-260} ${eCy+ryD+274} L ${aimX} ${eCy+ryD+14} Z" fill="rgba(50,110,200,${(0.10+d.pL*.30).toFixed(2)})"/>
+    </g>`;
+    // Label near top of each ellipse, staggered vertically
+    annots+=`<text x="${aimX}" y="${eCy-ryU-14-i*10}" font-family="monospace" font-size="9" fill="${col}" font-weight="600" text-anchor="middle">${escHtml(d.label)}</text>`;
+    const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
+    chips.push({label:d.label,col,p:Math.round(pFw*100)});
+    legs.push({label:`${d.label} · ±${d.latH}y`,col});
+  });
+  // Distance markers
+  for(let y=Math.round(targetYds/4)*1;y<targetYds;y+=Math.round(targetYds/4)){
+    const my=teeY-y*scale;
+    annots+=`<text x="${fwL-4}" y="${my+3}" font-family="monospace" font-size="7" fill="rgba(255,255,255,.4)" text-anchor="end">${y}y</text>`;
+  }
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML=`<defs>${defs}</defs>
+  <rect width="${W}" height="${H}" fill="#6a9a50"/>
+  <rect x="${fwL}" y="0" width="${fwR-fwL}" height="${H}" fill="#9ec880"/>
+  <line x1="${fwL}" y1="0" x2="${fwL}" y2="${H}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
+  <line x1="${fwR}" y1="0" x2="${fwR}" y2="${H}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
+  <text x="${cx}" y="18" font-family="monospace" font-size="10" fill="rgba(255,255,255,.8)" text-anchor="middle">${escHtml(title)} · ${targetYds}y target</text>
+  <text x="${cx}" y="30" font-family="monospace" font-size="8" fill="rgba(255,255,255,.5)" text-anchor="middle">${clubs.length} club${clubs.length!==1?'s':''} reach this distance — overlapping ellipses</text>
+  ${shapes}${annots}
+  <circle cx="${cx}" cy="${teeY}" r="7" fill="#fff" stroke="#3d6b35" stroke-width="2.5"/>
+  <line x1="${cx-5}" y1="${teeY+7}" x2="${cx+5}" y2="${teeY+7}" stroke="#3d6b35" stroke-width="2"/>
+  <text x="${cx}" y="${teeY+20}" font-family="monospace" font-size="9" fill="rgba(255,255,255,.8)" text-anchor="middle">TEE</text>
+  <text x="${cx}" y="${H-8}" font-family="monospace" font-size="9" fill="rgba(50,90,30,.9)" text-anchor="middle">← fairway ${fwYds}y →</text>`;
+  vizSetLegendChips(legs,chips);
+}
+
+// ── Hole view renderer ────────────────────────────────────────────────────────
+function vizDrawHole(hcp,handed,fwYds,mode,holeOptEntry){
+  if(!vizActiveCourse){document.getElementById('vizSvg').innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No course selected</text>';return;}
+  const tee=vizActiveTee||vizActiveCourse.tees?.[0]; if(!tee?.holes?.length) return;
+  const hole=tee.holes.find(h=>h.number===vizSelectedHole)||tee.holes[0];
+  if(!hole?.yards){document.getElementById('vizSvg').innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No yardage for this hole</text>';return;}
+
+  // Club inference — prefer loaded optimisation, fall back to last session at course, then auto
+  let teeClub=null,appClub=null;
+  const session=holeOptEntry||history.find(h=>h.course&&vizActiveCourse.name&&h.course.toLowerCase().includes(vizActiveCourse.name.toLowerCase().split(' ')[0]));
+  if(session){
+    const hl=session.text.split('\n').find(l=>new RegExp(`H${hole.number}\\s*\\|`).test(l));
+    if(hl){
+      const tm=hl.match(/Tee:\s*(\S+)/i)||hl.match(/Club:\s*(\S+)/i);
+      const am=hl.match(/Approach:\s*(\S+)/i);
+      if(tm) teeClub=bag.find(c=>c.identifier===tm[1]||(c.type==='Driver'&&tm[1]==='Driver'));
+      if(am) appClub=bag.find(c=>c.identifier===am[1]);
+    }
+  }
+  if(!teeClub) teeClub=hole.par===3
+    ? bag.filter(c=>c.tested&&c.sessions?.length).sort((a,b)=>{
+        const am=Math.round(((a.sessions[0]?.min||0)+(a.sessions[0]?.max||0))/2);
+        const bm=Math.round(((b.sessions[0]?.min||0)+(b.sessions[0]?.max||0))/2);
+        return Math.abs(am-hole.yards)-Math.abs(bm-hole.yards);})[0]
+    : bag.find(c=>c.type==='Driver');
+
+  const W=440,PAD_T=50,PAD_B=72,H=600;
+  const scale=(H-PAD_T-PAD_B)/hole.yards;
+  const cx=W/2,teeY=H-PAD_B,fwH=fwYds/2*scale,fwL=cx-fwH,fwR=cx+fwH;
+  const svg=document.getElementById('vizSvg');
+  let defs='',shapes='',annots='';const legs=[],chips=[];
+
+  [teeClub,appClub].filter(Boolean).filter((c,i,a)=>a.indexOf(c)===i).forEach((club,i)=>{
+    const d=vizGetDisp(club,hcp,handed); if(!d?.carry) return;
+    const col=VIZ_COLORS[i];
+    let yft=d.carry;
+    if(i>0&&teeClub){const td=vizGetDisp(teeClub,hcp,handed);yft=td?Math.min(td.carry+d.carry,hole.yards-5):d.carry;}
+    const carryY=teeY-yft*scale,aimX=cx+d.off*scale;
+    const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=carryY+ryD*.1;
+    const role=i===0?(hole.par===3?'Club':'Tee'):'Approach';
+    const es=vizRenderEllipse(i,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
+    defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
+    shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+    const lx=Math.min(W-2,aimX+rxR+5);
+    annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml(d.label)}</text><text x="${lx}" y="${eCy+9}" font-family="monospace" font-size="8" fill="rgba(44,58,40,.6)">${role}</text>`;
+    annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${Math.round(yft)}y</text>`;
+    const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
+    chips.push({label:d.label,col,p:Math.round(pFw*100)});
+    legs.push({label:`${d.label} · ${role} · ±${d.latH}y`,col});
+  });
+  for(let y=50;y<hole.yards;y+=50){const my=teeY-y*scale;
+    annots+=`<line x1="${fwL-2}" y1="${my}" x2="${fwL+2}" y2="${my}" stroke="rgba(255,255,255,.3)" stroke-width="1"/><text x="${fwL-4}" y="${my+3}" font-family="monospace" font-size="7" fill="rgba(255,255,255,.35)" text-anchor="end">${y}y</text>`;}
+  const gy=PAD_T+8;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML=`<defs>${defs}</defs>
+  <rect width="${W}" height="${H}" fill="#6a9a50"/>
+  <rect x="${fwL}" y="${gy+14}" width="${fwR-fwL}" height="${teeY-gy-14}" fill="#9ec880"/>
+  <line x1="${fwL}" y1="${gy+14}" x2="${fwL}" y2="${teeY}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
+  <line x1="${fwR}" y1="${gy+14}" x2="${fwR}" y2="${teeY}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
+  <ellipse cx="${cx}" cy="${gy+10}" rx="${fwH*1.5}" ry="10" fill="rgba(30,130,60,.8)" stroke="#28a050" stroke-width="1.5"/>
+  <text x="${cx}" y="${gy+14}" font-family="monospace" font-size="8" fill="#fff" text-anchor="middle">GREEN</text>
+  <text x="${cx}" y="18" font-family="monospace" font-size="10" fill="rgba(255,255,255,.85)" text-anchor="middle">${escHtml(vizActiveCourse.name)} · H${hole.number} · Par ${hole.par} · ${hole.yards}y</text>
+  <text x="${cx}" y="30" font-family="monospace" font-size="8" fill="rgba(255,255,255,.5)" text-anchor="middle">HCP ${hole.handicap||'?'}${session?' · '+escHtml(session.date?.slice(0,10)||'')+(session===holeOptEntry?' · loaded opt':''):''}</text>
+  ${shapes}${annots}
+  <circle cx="${cx}" cy="${teeY}" r="7" fill="#fff" stroke="#3d6b35" stroke-width="2.5"/>
+  <line x1="${cx-5}" y1="${teeY+7}" x2="${cx+5}" y2="${teeY+7}" stroke="#3d6b35" stroke-width="2"/>
+  <text x="${cx}" y="${teeY+20}" font-family="monospace" font-size="9" fill="rgba(255,255,255,.8)" text-anchor="middle">TEE</text>
+  <text x="${cx}" y="${H-8}" font-family="monospace" font-size="9" fill="rgba(50,90,30,.9)" text-anchor="middle">← fairway ${fwYds}y →</text>`;
+  vizSetLegendChips(legs,chips);
+}
+
+function vizSetLegendChips(legs,chips){
+  document.getElementById('vizLegend').innerHTML=legs.map(l=>`<div style="display:flex;align-items:center;gap:5px;font-size:.62rem;color:var(--tx2)"><div style="width:14px;height:3px;border-radius:2px;background:${l.col}"></div>${escHtml(l.label)}</div>`).join('');
+  document.getElementById('vizChips').innerHTML=chips.map(c=>{
+    const cls=c.p>=60?'background:var(--gr3);border-color:var(--gr2);color:var(--ac)':c.p>=35?'background:var(--sand2);border-color:var(--sand);color:var(--gold)':'background:#fdf0f0;border-color:#e0b0b0;color:var(--danger)';
+    return`<span style="padding:3px 8px;border-radius:4px;font-size:.6rem;border:1px solid var(--br);${cls}">${escHtml(c.label)} ${c.p}% fw</span>`;}).join('');
+}
+
+// ── Main render dispatch ──────────────────────────────────────────────────────
+function renderViz(){
+  const hcp=getHandicap()||25, handed=profile.handed||'Right-handed';
+  const fwYds=+document.getElementById('vizFwWidth')?.value||35;
+  const mode=vizDisplayMode;
+
+  if(vizMode==='coverage'){
+    const noteEl=document.getElementById('vizHoleNote');
+    if(noteEl) noteEl.style.display='none';
+    const distTarget=+document.getElementById('vizDistTarget')?.value||0;
+    let clubs=[];
+    if(vizClubSrc==='custom'){
+      clubs=bag.filter(c=>c.tested&&c.sessions?.length&&vizSelectedClubs.has(c.id));
+    } else {
+      // optimised — prefer bagMap, fall back to text parsing
+      const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
+      if(entry) clubs=vizClubsFromEntry(entry);
+    }
+    const disps=clubs.map(c=>vizGetDisp(c,hcp,handed)).filter(Boolean);
+    const title=vizClubSrc==='optimised'?'Optimised bag \xb7 HCP '+hcp:'Custom \xb7 HCP '+hcp;
+    if(distTarget){vizDrawDistance(disps,distTarget,fwYds,mode,title);return;}
+    vizDrawCanvas(disps,fwYds,mode,title,'');
+  } else {
+    // hole planning — update note strip
+    const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
+    const noteEl=document.getElementById('vizHoleNote');
+    if(entry&&noteEl){
+      // Find the matching H[n] line from session text for context
+      const holeLine=(entry.text||'').split('\n').find(l=>new RegExp(`^H${vizSelectedHole}\\s*\\|`).test(l.trim()));
+      if(holeLine){noteEl.textContent=holeLine.trim();noteEl.style.display='block';}
+      else{noteEl.style.display='none';}
+    } else if(noteEl){noteEl.style.display='none';}
+    const hcp2=hcp, handed2=handed;
+    const teeSel=document.getElementById('vizHoleTee');
+    const teeClub=teeSel?.value?bag.find(c=>c.id===teeSel.value):null;
+    const shotIds=Array.from(document.querySelectorAll('.viz-shot-sel')).map(s=>s.value).filter(Boolean);
+    const shotClubs=shotIds.map(id=>bag.find(c=>c.id===id)).filter(Boolean);
+    // Build synthetic optEntry so vizDrawHole can be reused
+    const hole=vizActiveTee?.holes?.find(h=>h.number===vizSelectedHole)||vizActiveTee?.holes?.[0];
+    let optEntry=null;
+    if(hole&&teeClub){
+      const appId=shotClubs[0]?.identifier||'';
+      optEntry={id:'__manual__',course:vizActiveCourse?.name||'',tee:'',date:'',
+        text:`H${hole.number} | Tee: ${teeClub.identifier||teeClub.type||''} | Approach: ${appId}`};
+    }
+    vizDrawHole(hcp,handed,fwYds,mode,optEntry);
+  }
+}
+
+// ── UI helpers ─────────────────────────────────────────────────────────────────
+function onVizModeChange(m){
+  vizMode=m;
+  ['coverage','hole'].forEach(x=>document.getElementById('vmode-'+x).classList.toggle('on',x===m));
+  document.getElementById('vizCoverageControls').style.display=m==='coverage'?'block':'none';
+  document.getElementById('vizHoleControls').style.display=m==='hole'?'block':'none';
+  renderViz();
+}
+function onVizClubSrcChange(){
+  vizClubSrc=document.getElementById('vizClubSrcSel').value;
+  document.getElementById('vizOptSessionField').style.display=vizClubSrc==='optimised'?'flex':'none';
+  document.getElementById('vizClubShelf').style.display='flex';
+  if(vizClubSrc==='optimised') syncOptimisedSelection();
+  buildVizDistanceDropdown();
+  renderViz();
+}
+function onVizOptSessionChange(){
+  syncOptimisedSelection();
+  buildVizDistanceDropdown();
+  renderViz();
+}
+function vizClubsFromEntry(entry){
+  // Prefer structured bagMap; fall back to text parsing for legacy entries
+  if(entry.bagMap?.length){
+    return entry.bagMap.map(id=>bag.find(c=>c.tested&&c.sessions?.length&&(c.identifier===id||(c.type==='Driver'&&id==='Driver')))).filter(Boolean);
+  }
+  // Legacy: parse "1. Driver ...", "2. 5 Wood ...", etc.
+  const usedIds=[];
+  (entry.text||'').split('\n').forEach(l=>{const m=l.match(/^\d+\.\s+(\S+)/);if(m)usedIds.push(m[1]);});
+  return bag.filter(c=>c.tested&&c.sessions?.length&&usedIds.some(u=>c.identifier?.startsWith(u)||(c.type==='Driver'&&u==='Driver')));
+}
+function syncOptimisedSelection(){
+  const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
+  if(!entry) return;
+  vizSelectedClubs.clear();
+  vizClubsFromEntry(entry).forEach(c=>vizSelectedClubs.add(c.id));
+  // Update shelf visuals
+  document.querySelectorAll('[id^=vclbl]').forEach(lbl=>{
+    const id=lbl.id.replace('vclbl','');
+    const on=vizSelectedClubs.has(id);
+    lbl.style.background=on?'var(--gr3)':'var(--bg)';
+    lbl.style.borderColor=on?'var(--gr2)':'var(--br)';
+    const cb=lbl.querySelector('input[type=checkbox]');
+    if(cb) cb.checked=on;
+  });
+}
+function onVizCourseChange(){
+  const id=document.getElementById('vizCourseSelect').value;
+  vizActiveCourse=courses.find(c=>c.id===id)||null;
+  // Rebuild tee dropdown, default to course's selectedTee
+  const tsel=document.getElementById('vizTeeSelect');
+  if(vizActiveCourse?.tees?.length){
+    tsel.innerHTML=vizActiveCourse.tees.map(t=>`<option value="${t.id}">${escHtml(t.name)} (${t.yardage}y)</option>`).join('');
+    tsel.value=vizActiveCourse.selectedTee||vizActiveCourse.tees[0].id;
+  } else {
+    tsel.innerHTML='<option>—</option>';
+  }
+  vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===tsel.value)||vizActiveCourse?.tees?.[0]||null;
+  buildVizHoleShelf(); vizSelectedHole=1;
+  syncHoleClubsFromSession();
+  renderViz();
+}
+function onVizTeeChange(){
+  const id=document.getElementById('vizTeeSelect').value;
+  vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===id)||null;
+  buildVizHoleShelf(); vizSelectedHole=1;
+  // Try to find a session matching the newly selected tee; if found, update session picker
+  if(vizActiveTee&&vizActiveCourse){
+    const teeName=vizActiveTee.name.toLowerCase();
+    const matchSess=history.find(h=>
+      h.tee&&h.tee.toLowerCase()===teeName&&
+      h.course&&vizActiveCourse.name&&h.course.toLowerCase().includes(vizActiveCourse.name.toLowerCase().split(' ')[0])
+    );
+    if(matchSess){
+      const sel=document.getElementById('vizHoleSessionSelect');
+      if(sel) sel.value=matchSess.id;
+    }
+  }
+  syncHoleClubsFromSession();
+  renderViz();
+}
+function onVizHoleSessionChange(){
+  // Session change snaps the tee to match
+  const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
+  if(entry?.tee&&vizActiveCourse){
+    const matchTee=vizActiveCourse.tees?.find(t=>t.name.toLowerCase()===entry.tee.toLowerCase());
+    if(matchTee){
+      vizActiveTee=matchTee;
+      const tsel=document.getElementById('vizTeeSelect');
+      if(tsel) tsel.value=matchTee.id;
+      buildVizHoleShelf();
+    }
+  }
+  syncHoleClubsFromSession();
+  renderViz();
+}
+function syncHoleClubsFromSession(){
+  const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
+  if(!entry) return;
+  // Prefer structured holeMap; fall back to text parsing
+  const hm=entry.holeMap?.[vizSelectedHole];
+  if(hm){
+    const teeClub=hm.tee?bag.find(c=>c.identifier===hm.tee||(c.type==='Driver'&&hm.tee==='Driver')):null;
+    const appClub=hm.app?bag.find(c=>c.identifier===hm.app):null;
+    if(teeClub) document.getElementById('vizHoleTee').value=teeClub.id;
+    if(appClub){const slot=document.querySelector('.viz-shot-sel');if(slot)slot.value=appClub.id;}
+    return;
+  }
+  // Legacy text parsing fallback
+  const hole=vizActiveTee?.holes?.find(h=>h.number===vizSelectedHole)||vizActiveTee?.holes?.[0];
+  if(!hole) return;
+  const hl=(entry.text||'').split('\n').find(l=>new RegExp(`H${hole.number}\\s*\\|`).test(l));
+  if(!hl) return;
+  const rawTee=(hl.match(/(?:Tee|Club):\s*([^|]+)/i)||[])[1]?.trim()||'';
+  const rawApp=(hl.match(/Approach:\s*([^|]+)/i)||[])[1]?.trim()||'';
+  const findClub=raw=>{
+    if(!raw) return null;
+    let c=bag.find(b=>b.identifier===raw.split(' ')[0]||b.identifier===raw);
+    if(c) return c;
+    if(/^driver/i.test(raw)) return bag.find(b=>b.type==='Driver');
+    const numMatch=raw.match(/^(\d+)\s*(wood|iron|hybrid)/i);
+    if(numMatch){const num=numMatch[1],typeKw=numMatch[2].toLowerCase();const typeMap={wood:'Fairway Wood',iron:'Iron',hybrid:'Hybrid'};c=bag.find(b=>b.type===(typeMap[typeKw]||'')&&b.identifier.startsWith(num));if(c)return c;}
+    return bag.find(b=>b.identifier===raw.split(' or ')[0].trim())||null;
+  };
+  const teeClub=findClub(rawTee), appClub=findClub(rawApp.split(' or ')[0].trim());
+  if(teeClub) document.getElementById('vizHoleTee').value=teeClub.id;
+  if(appClub){const slot=document.querySelector('.viz-shot-sel');if(slot)slot.value=appClub.id;}
+}
+let vizShotCount=1;
+function vizAddShot(){
+  if(vizShotCount>=4) return;
+  vizShotCount++;
+  _rebuildShotSlots();
+  renderViz();
+}
+function vizRemoveShot(){
+  if(vizShotCount<=1) return;
+  vizShotCount--;
+  _rebuildShotSlots();
+  renderViz();
+}
+function _rebuildShotSlots(){
+  const allClubs=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
+  const opts='<option value="">\u2014 none \u2014</option>'+allClubs.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
+  // Preserve existing values
+  const existing=Array.from(document.querySelectorAll('.viz-shot-sel')).map(s=>s.value);
+  const container=document.getElementById('vizHoleShotSlots');
+  container.innerHTML='';
+  for(let i=0;i<vizShotCount;i++){
+    const lbl=i===0?'Shot 1 / Approach':(`Shot ${i+1}`);
+    const div=document.createElement('div');
+    div.className='field';
+    div.innerHTML=`<div class="flbl">${lbl}</div><select class="viz-shot-sel" onchange="renderViz()" style="min-width:120px">${opts}</select>`;
+    container.appendChild(div);
+    if(existing[i]) div.querySelector('select').value=existing[i];
+  }
+}
+function setVizYard(m){
+  vizYardMode=m;
+  ['carry','total'].forEach(x=>document.getElementById('vytgl-'+x).classList.toggle('on',x===m));
+  renderViz();
+}
+function setVizDisplay(m){
+  vizDisplayMode=m;
+  ['both','shape','prob'].forEach(x=>document.getElementById('vptgl-'+x).classList.toggle('on',x===m));
+  renderViz();
+}
+function buildVizHoleShelf(){
+  if(!vizActiveTee?.holes?.length) return;
+  document.getElementById('vizHoleShelf').innerHTML=vizActiveTee.holes.map(h=>
+    `<button onclick="vizSelectHole(${h.number})" style="padding:5px 7px;background:${h.number===vizSelectedHole?'var(--gr3)':'var(--sf)'};border:1px solid ${h.number===vizSelectedHole?'var(--gr2)':'var(--br)'};border-radius:4px;font-family:inherit;font-size:.6rem;color:${h.number===vizSelectedHole?'var(--ac2)':'var(--tx2)'};cursor:pointer;text-align:center;min-width:40px" id="vhbtn${h.number}">H${h.number}<br><span style="font-size:.52rem;color:var(--tx3)">P${h.par}\xb7${h.yards||'?'}y</span></button>`).join('');
+}
+function vizSelectHole(n){
+  vizSelectedHole=n;
+  document.querySelectorAll('[id^=vhbtn]').forEach(b=>{
+    const hn=+b.id.replace('vhbtn','');
+    b.style.background=hn===n?'var(--gr3)':'var(--sf)';
+    b.style.borderColor=hn===n?'var(--gr2)':'var(--br)';
+    b.style.color=hn===n?'var(--ac2)':'var(--tx2)';
+  });
+  syncHoleClubsFromSession();
+  renderViz();
+}
+function buildVizDistanceDropdown(){
+  let clubs=[];
+  if(vizClubSrc==='custom') clubs=bag.filter(c=>c.tested&&c.sessions?.length&&vizSelectedClubs.has(c.id));
+  else{
+    const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
+    if(entry) clubs=vizClubsFromEntry(entry);
+    else clubs=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
+  }
+  const allMax=clubs.flatMap(c=>c.sessions.map(s=>+s.max)).filter(v=>v>0);
+  const allMin=clubs.flatMap(c=>c.sessions.map(s=>+s.min)).filter(v=>v>0);
+  const sel=document.getElementById('vizDistTarget');
+  if(!allMax.length){sel.innerHTML='<option value="">All distances</option>';return;}
+  let opts='<option value="">All distances</option>';
+  for(let y=Math.ceil(Math.min(...allMin)/10)*10;y<=Math.floor(Math.max(...allMax)/10)*10;y+=10){
+    const ct=clubs.filter(c=>c.sessions.some(s=>+s.min<=y&&+s.max>=y)).length;
+    if(ct>0) opts+=`<option value="${y}">${y}y (${ct} club${ct!==1?'s':''})</option>`;
+  }
+  sel.innerHTML=opts;
+}
+function initViz(){
+  if(vizInitDone){renderViz();return;}
+  vizInitDone=true;
+  const sess=history.filter(h=>h.type==='optimisation'||h.type==='caddie'||h.type==='both');
+  const sessOpts=sess.length
+    ? sess.map(h=>`<option value="${h.id}">${h.date?.slice(0,10)||''} \xb7 ${escHtml(h.course)} (${escHtml(h.tee||'')})</option>`).join('')
+    : '<option value="">No sessions yet</option>';
+  document.getElementById('vizOptSessionSelect').innerHTML=sessOpts;
+  document.getElementById('vizHoleSessionSelect').innerHTML='<option value="">\u2014 none \u2014</option>'+sessOpts;
+  // Default hole session to most recent matching course
+  if(sess.length) document.getElementById('vizHoleSessionSelect').value=sess[0].id;
+  // Course dropdown
+  const csel=document.getElementById('vizCourseSelect');
+  csel.innerHTML=courses.map(c=>`<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  vizActiveCourse=courses[0]||null;
+  // Tee dropdown — default to course's selectedTee
+  const tsel=document.getElementById('vizTeeSelect');
+  if(vizActiveCourse?.tees?.length){
+    tsel.innerHTML=vizActiveCourse.tees.map(t=>`<option value="${t.id}">${escHtml(t.name)} (${t.yardage}y)</option>`).join('');
+    tsel.value=vizActiveCourse.selectedTee||vizActiveCourse.tees[0].id;
+  }
+  vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===tsel.value)||vizActiveCourse?.tees?.[0]||null;
+  // Tee dropdown: all tested non-putter clubs
+  const allTested=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
+  const teeOpts='<option value="">\u2014 auto \u2014</option>'+allTested.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
+  document.getElementById('vizHoleTee').innerHTML=teeOpts;
+  // Initial shot slot
+  vizShotCount=1; _rebuildShotSlots();
+  // Custom club shelf
+  const shelfClubs=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
+  if(!vizSelectedClubs.size) shelfClubs.slice(0,4).forEach(c=>vizSelectedClubs.add(c.id));
+  document.getElementById('vizClubShelf').innerHTML=shelfClubs.map((c,i)=>
+    `<label style="display:flex;align-items:center;gap:5px;padding:4px 9px;background:${vizSelectedClubs.has(c.id)?'var(--gr3)':'var(--bg)'};border:1px solid ${vizSelectedClubs.has(c.id)?'var(--gr2)':'var(--br)'};border-radius:4px;cursor:pointer;font-size:.66rem;transition:all .15s" id="vclbl${c.id}">
+      <input type="checkbox" style="display:none" ${vizSelectedClubs.has(c.id)?'checked':''} onchange="vizToggleClub('${c.id}',this)">
+      <div style="width:8px;height:8px;border-radius:2px;background:${VIZ_COLORS[i%VIZ_COLORS.length]};flex-shrink:0"></div>
+      ${escHtml(c.identifier||c.id)} <span style="color:var(--tx3);font-size:.58rem">${Math.round(((c.sessions[0]?.min||0)+(c.sessions[0]?.max||0))/2)}y</span>
+    </label>`).join('');
+  buildVizHoleShelf();
+  buildVizDistanceDropdown();
+  syncOptimisedSelection();
+  syncHoleClubsFromSession();
+  onVizModeChange('coverage');
+}
+function vizToggleClub(id,el){
+  if(el.checked){if(vizSelectedClubs.size>=13){el.checked=false;return;}vizSelectedClubs.add(id);}
+  else vizSelectedClubs.delete(id);
+  const lbl=document.getElementById('vclbl'+id);
+  if(lbl){lbl.style.background=el.checked?'var(--gr3)':'var(--bg)';lbl.style.borderColor=el.checked?'var(--gr2)':'var(--br)';}
+  buildVizDistanceDropdown();
+  renderViz();
+}
+
+
 load();
-// Restore API key
+applyRefDataCache(); // use cached ref data if available — before renderAll
 renderAll();
+// 2.4 — show upload prompt if no data present
+(function(){
+  const hasData = bag.length || courses.length || rounds.length;
+  if(!hasData) {
+    const b = document.getElementById('uploadBanner');
+    if(b) b.style.display = 'flex';
+  }
+})();
+// 2.5 — on load: check for pending session result in Gist + check for app update
+Promise.allSettled([checkSessionResult(), checkAppUpdate()]);
 
 // ── Disclaimer ────────────────────────────────────────────────────────────────
 function showDisclaimer() {
