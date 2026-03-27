@@ -683,18 +683,18 @@ body{
             <select id="vizHoleSessionSelect" onchange="onVizHoleSessionChange()" style="min-width:190px"></select>
           </div>
         </div>
-        <div id="vizHoleClubRow" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:8px">
-          <div class="field">
-            <div class="flbl">Tee</div>
-            <select id="vizHoleTee" onchange="renderViz()" style="min-width:120px"></select>
+        <!-- Hole shelf -->
+        <div id="vizHoleShelf" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
+        <!-- Path planner (collapsible) -->
+        <div style="border:1px solid var(--br);border-radius:6px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;cursor:pointer;user-select:none" onclick="vizTogglePlanner()">
+            <div style="display:flex;gap:6px;align-items:center" id="vizPathBadges"></div>
+            <span id="vizPlannerChevron" style="font-size:.65rem;color:var(--tx3)">▼ Edit paths</span>
           </div>
-          <div id="vizHoleShotSlots" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end"></div>
-          <div style="display:flex;gap:4px;align-items:flex-end;padding-bottom:2px">
-            <button class="implied-tog" onclick="vizAddShot()" title="Add shot" style="padding:4px 8px;font-size:.75rem">+</button>
-            <button class="implied-tog" onclick="vizRemoveShot()" title="Remove shot" style="padding:4px 8px;font-size:.75rem">−</button>
+          <div id="vizPlannerBody" style="display:none;padding:8px 10px;border-top:1px solid var(--br)">
+            <div id="vizPathRows"></div>
           </div>
         </div>
-        <div id="vizHoleShelf" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
       </div>
 
       <!-- Shared: yardage mode + fairway + display -->
@@ -706,19 +706,6 @@ body{
             <button class="implied-tog on" id="vytgl-total" onclick="setVizYard('total')">Total</button>
           </div>
         </div>
-        <div class="field">
-          <div class="flbl">Fairway (yds)</div>
-          <input type="number" id="vizFwWidth" min="15" max="80" value="35" step="5" oninput="renderViz()" style="width:72px">
-        </div>
-        <div class="field">
-          <div class="flbl">Display</div>
-          <div style="display:flex;gap:3px">
-            <button class="implied-tog on" id="vptgl-both"  onclick="setVizDisplay('both')">Both</button>
-            <button class="implied-tog"    id="vptgl-shape" onclick="setVizDisplay('shape')">Shape</button>
-            <button class="implied-tog"    id="vptgl-prob"  onclick="setVizDisplay('prob')">Prob</button>
-          </div>
-        </div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
         <div class="field">
           <div class="flbl">Fairway (yds)</div>
           <input type="number" id="vizFwWidth" min="15" max="80" value="35" step="5" oninput="renderViz()" style="width:72px">
@@ -751,14 +738,14 @@ body{
         Thought Experiment. Vibe coded using Claude AI (almost) fully. Started with a simple query - optimize by golf bag for a course, and here we are. Philosophically 100% free. I hope this helps my game...
       </div>
     </div>
-    
+
     <div class="card">
       <div class="card-title">About This App</div>
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
         Virtual Caddie is a personal bag management and course strategy tool. All Optimizations are done by Claude AI or some other AI and can vary based on model and model provider. Use at your own risk. All in browser calculations are deterministic — the same inputs always produce the same outputs. This tab documents some of the key assumptions baked into those calculations.
       </div>
     </div>
-    
+
     <div class="card">
       <div class="card-title">Handicap &amp; Scoring</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
@@ -1495,7 +1482,10 @@ function serialise() {
     ].join(' | '));
     (h.text||'').split('\n').forEach(l => lines.push('  TEXT | '+l));
     if(h.holeMap&&Object.keys(h.holeMap).length){
-      const hm=Object.entries(h.holeMap).map(([n,v])=>`H${n}:${v.tee||''}:${v.app||''}`).join(',');
+      const hm=Object.entries(h.holeMap).map(([n,v])=>{
+        const paths=(v.paths||[]).map(p=>p.join(',')).join('|');
+        return `H${n}|${paths}`;
+      }).join(';');
       lines.push('  HOLEMAP | '+hm);
     }
     if(h.bagMap?.length) lines.push('  BAGMAP | '+h.bagMap.join(','));
@@ -1614,7 +1604,19 @@ function importData(e) {
         } else if(raw.trimStart().startsWith('HOLEMAP |')&&currentEntry) {
           const hm=raw.replace(/^\s*HOLEMAP \| /,'').trim();
           currentEntry.holeMap={};
-          hm.split(',').forEach(tok=>{const[hn,tee,app]=tok.split(':');if(hn)currentEntry.holeMap[parseInt(hn.replace('H',''))]={tee:tee||'',app:app||''};});
+          hm.split(';').forEach(tok=>{
+            // New format: H1|Driver,6H|5W,7H  (holes separated by ;, paths by |, clubs by ,)
+            // Old format: H1:Driver::6H,H2:...  (backward-compat — colon-delimited)
+            if(tok.includes('|')){
+              const [hn,...pathParts]=tok.split('|');
+              const n=parseInt(hn.replace('H',''));
+              if(n) currentEntry.holeMap[n]={paths:pathParts.map(p=>p.split(',').filter(Boolean))};
+            } else {
+              // old 3-field colon format
+              const[hn,tee,layup,app]=tok.split(':');
+              if(hn){const n=parseInt(hn.replace('H',''));const paths=[[tee,layup,app].filter(Boolean)];if(n)currentEntry.holeMap[n]={paths};}
+            }
+          });
         } else if(raw.trimStart().startsWith('BAGMAP |')&&currentEntry) {
           currentEntry.bagMap=raw.replace(/^\s*BAGMAP \| /,'').trim().split(',').filter(Boolean);
         }
@@ -2667,8 +2669,15 @@ function processSessionResult(text) {
     const hmEnd=caddieLines.findIndex((l,i)=>i>hmStart&&l.trim()==='END-HOLE-MAP');
     const hmLines=caddieLines.slice(hmStart+1, hmEnd!==-1?hmEnd:undefined);
     hmLines.forEach(l=>{
-      const m=l.trim().match(/^H(\d+)\|([^|]*)\|?(.*)$/);
-      if(m) holeMap[parseInt(m[1])]={tee:m[2].trim(),app:(m[3]||'').trim()};
+      const line=l.trim();
+      if(!line) return;
+      // Format: H1|Driver,6H|5W,7H  — hole num, then pipe-separated paths, clubs comma-sep
+      const pipeIdx=line.indexOf('|');
+      if(pipeIdx===-1) return;
+      const n=parseInt(line.slice(0,pipeIdx).replace('H',''));
+      if(!n) return;
+      const paths=line.slice(pipeIdx+1).split('|').map(p=>p.split(',').filter(Boolean)).filter(p=>p.length);
+      if(paths.length) holeMap[n]={paths};
     });
     // Remove HOLE-MAP block from displayed text
     caddieLines.splice(hmStart, hmEnd!==-1?hmEnd-hmStart+1:caddieLines.length-hmStart);
@@ -3325,9 +3334,14 @@ const VIZ_ROLL={'Driver':[.22,.20,.18,.16,.14,.12],'Fairway Wood':[.13,.12,.10,.
   'Iron-Mid':[.05,.05,.04,.04,.03,.03],'Iron-Short':[.03,.03,.03,.02,.02,.02],
   'Wedge':[.02,.02,.01,.01,.01,.00],'Chipper':[.30,.28,.26,.24,.22,.20]};
 
+const VIZ_PATH_COLORS=['#d94030','#3070c0','#28a050'];
+function vizLightenHex(hex,f){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[r,g,b].map(v=>Math.round(v+(255-v)*f).toString(16).padStart(2,'0')).join('');}
+
 let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
 let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=false, vizClubSrc='optimised';
-let vizYardMode='total'; // 'carry' | 'total'
+let vizYardMode='total';
+let vizPaths=[[],[],[]]; // 3 paths, each = array of club IDs
+let vizPathVisible=[true,false,false];
 
 function vizTierIdx(hcp){const h=+hcp||15;if(h<5)return 0;if(h<10)return 1;if(h<15)return 2;if(h<20)return 3;if(h<25)return 4;return 5;}
 function vizNormCdf(x){return .5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-2*x*x/Math.PI)));}
@@ -3494,55 +3508,45 @@ function vizDrawDistance(dispList,targetYds,fwYds,mode,title){
 }
 
 // ── Hole view renderer ────────────────────────────────────────────────────────
-function vizDrawHole(hcp,handed,fwYds,mode,holeOptEntry){
+function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
+  // pathClubs: array of up to 3 paths, each path = array of club objects in shot order
   if(!vizActiveCourse){document.getElementById('vizSvg').innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No course selected</text>';return;}
   const tee=vizActiveTee||vizActiveCourse.tees?.[0]; if(!tee?.holes?.length) return;
   const hole=tee.holes.find(h=>h.number===vizSelectedHole)||tee.holes[0];
   if(!hole?.yards){document.getElementById('vizSvg').innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No yardage for this hole</text>';return;}
-
-  // Club inference — prefer loaded optimisation, fall back to last session at course, then auto
-  let teeClub=null,appClub=null;
-  const session=holeOptEntry||history.find(h=>h.course&&vizActiveCourse.name&&h.course.toLowerCase().includes(vizActiveCourse.name.toLowerCase().split(' ')[0]));
-  if(session){
-    const hl=session.text.split('\n').find(l=>new RegExp(`H${hole.number}\\s*\\|`).test(l));
-    if(hl){
-      const tm=hl.match(/Tee:\s*(\S+)/i)||hl.match(/Club:\s*(\S+)/i);
-      const am=hl.match(/Approach:\s*(\S+)/i);
-      if(tm) teeClub=bag.find(c=>c.identifier===tm[1]||(c.type==='Driver'&&tm[1]==='Driver'));
-      if(am) appClub=bag.find(c=>c.identifier===am[1]);
-    }
-  }
-  if(!teeClub) teeClub=hole.par===3
-    ? bag.filter(c=>c.tested&&c.sessions?.length).sort((a,b)=>{
-        const am=Math.round(((a.sessions[0]?.min||0)+(a.sessions[0]?.max||0))/2);
-        const bm=Math.round(((b.sessions[0]?.min||0)+(b.sessions[0]?.max||0))/2);
-        return Math.abs(am-hole.yards)-Math.abs(bm-hole.yards);})[0]
-    : bag.find(c=>c.type==='Driver');
 
   const W=440,PAD_T=50,PAD_B=72,H=600;
   const scale=(H-PAD_T-PAD_B)/hole.yards;
   const cx=W/2,teeY=H-PAD_B,fwH=fwYds/2*scale,fwL=cx-fwH,fwR=cx+fwH;
   const svg=document.getElementById('vizSvg');
   let defs='',shapes='',annots='';const legs=[],chips=[];
+  let uid=0;
 
-  [teeClub,appClub].filter(Boolean).filter((c,i,a)=>a.indexOf(c)===i).forEach((club,i)=>{
-    const d=vizGetDisp(club,hcp,handed); if(!d?.carry) return;
-    const col=VIZ_COLORS[i];
-    let yft=d.carry;
-    if(i>0&&teeClub){const td=vizGetDisp(teeClub,hcp,handed);yft=td?Math.min(td.carry+d.carry,hole.yards-5):d.carry;}
-    const carryY=teeY-yft*scale,aimX=cx+d.off*scale;
-    const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=carryY+ryD*.1;
-    const role=i===0?(hole.par===3?'Club':'Tee'):'Approach';
-    const es=vizRenderEllipse(i,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
-    defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
-    shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
-    const lx=Math.min(W-2,aimX+rxR+5);
-    annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml(d.label)}</text><text x="${lx}" y="${eCy+9}" font-family="monospace" font-size="8" fill="rgba(44,58,40,.6)">${role}</text>`;
-    annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${Math.round(yft)}y</text>`;
-    const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
-    chips.push({label:d.label,col,p:Math.round(pFw*100)});
-    legs.push({label:`${d.label} · ${role} · ±${d.latH}y`,col});
+  (pathClubs||[]).forEach((clubs,pi)=>{
+    if(!vizPathVisible[pi]||!clubs?.length) return;
+    const baseCol=VIZ_PATH_COLORS[pi%VIZ_PATH_COLORS.length];
+    let cumCarry=0;
+    clubs.forEach((club,si)=>{
+      const d=vizGetDisp(club,hcp,handed); if(!d?.carry) return;
+      cumCarry+=d.carry;
+      const yft=Math.min(cumCarry,hole.yards-5);
+      const col=si===0?baseCol:vizLightenHex(baseCol,Math.min(si*0.28,0.65));
+      const carryY=teeY-yft*scale, aimX=cx+d.off*scale;
+      const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=carryY+ryD*.1;
+      const es=vizRenderEllipse(uid++,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
+      defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
+      shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+      const lx=Math.min(W-2,aimX+rxR+5);
+      annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml('P'+(pi+1)+'\xb7'+d.label)}</text>`;
+      annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${Math.round(yft)}y</text>`;
+      if(si===clubs.length-1){
+        const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
+        chips.push({label:'P'+(pi+1)+' \xb7 '+clubs.map(c=>c.identifier||c.type).join('\u2192'),col:baseCol,p:Math.round(pFw*100)});
+      }
+      legs.push({label:'P'+(pi+1)+' \xb7 '+d.label+' \xb7 '+Math.round(yft)+'y',col});
+    });
   });
+
   for(let y=50;y<hole.yards;y+=50){const my=teeY-y*scale;
     annots+=`<line x1="${fwL-2}" y1="${my}" x2="${fwL+2}" y2="${my}" stroke="rgba(255,255,255,.3)" stroke-width="1"/><text x="${fwL-4}" y="${my+3}" font-family="monospace" font-size="7" fill="rgba(255,255,255,.35)" text-anchor="end">${y}y</text>`;}
   const gy=PAD_T+8;
@@ -3554,13 +3558,13 @@ function vizDrawHole(hcp,handed,fwYds,mode,holeOptEntry){
   <line x1="${fwR}" y1="${gy+14}" x2="${fwR}" y2="${teeY}" stroke="rgba(50,90,30,.4)" stroke-width="1"/>
   <ellipse cx="${cx}" cy="${gy+10}" rx="${fwH*1.5}" ry="10" fill="rgba(30,130,60,.8)" stroke="#28a050" stroke-width="1.5"/>
   <text x="${cx}" y="${gy+14}" font-family="monospace" font-size="8" fill="#fff" text-anchor="middle">GREEN</text>
-  <text x="${cx}" y="18" font-family="monospace" font-size="10" fill="rgba(255,255,255,.85)" text-anchor="middle">${escHtml(vizActiveCourse.name)} · H${hole.number} · Par ${hole.par} · ${hole.yards}y</text>
-  <text x="${cx}" y="30" font-family="monospace" font-size="8" fill="rgba(255,255,255,.5)" text-anchor="middle">HCP ${hole.handicap||'?'}${session?' · '+escHtml(session.date?.slice(0,10)||'')+(session===holeOptEntry?' · loaded opt':''):''}</text>
+  <text x="${cx}" y="18" font-family="monospace" font-size="10" fill="rgba(255,255,255,.85)" text-anchor="middle">${escHtml(vizActiveCourse.name)} \xb7 H${hole.number} \xb7 Par ${hole.par} \xb7 ${hole.yards}y</text>
+  <text x="${cx}" y="30" font-family="monospace" font-size="8" fill="rgba(255,255,255,.5)" text-anchor="middle">HCP ${hole.handicap||'?'} \xb7 ${vizActiveTee?.name||''}</text>
   ${shapes}${annots}
   <circle cx="${cx}" cy="${teeY}" r="7" fill="#fff" stroke="#3d6b35" stroke-width="2.5"/>
   <line x1="${cx-5}" y1="${teeY+7}" x2="${cx+5}" y2="${teeY+7}" stroke="#3d6b35" stroke-width="2"/>
   <text x="${cx}" y="${teeY+20}" font-family="monospace" font-size="9" fill="rgba(255,255,255,.8)" text-anchor="middle">TEE</text>
-  <text x="${cx}" y="${H-8}" font-family="monospace" font-size="9" fill="rgba(50,90,30,.9)" text-anchor="middle">← fairway ${fwYds}y →</text>`;
+  <text x="${cx}" y="${H-8}" font-family="monospace" font-size="9" fill="rgba(50,90,30,.9)" text-anchor="middle">\u2190 fairway ${fwYds}y \u2192</text>`;
   vizSetLegendChips(legs,chips);
 }
 
@@ -3598,25 +3602,13 @@ function renderViz(){
     const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
     const noteEl=document.getElementById('vizHoleNote');
     if(entry&&noteEl){
-      // Find the matching H[n] line from session text for context
       const holeLine=(entry.text||'').split('\n').find(l=>new RegExp(`^H${vizSelectedHole}\\s*\\|`).test(l.trim()));
       if(holeLine){noteEl.textContent=holeLine.trim();noteEl.style.display='block';}
       else{noteEl.style.display='none';}
     } else if(noteEl){noteEl.style.display='none';}
-    const hcp2=hcp, handed2=handed;
-    const teeSel=document.getElementById('vizHoleTee');
-    const teeClub=teeSel?.value?bag.find(c=>c.id===teeSel.value):null;
-    const shotIds=Array.from(document.querySelectorAll('.viz-shot-sel')).map(s=>s.value).filter(Boolean);
-    const shotClubs=shotIds.map(id=>bag.find(c=>c.id===id)).filter(Boolean);
-    // Build synthetic optEntry so vizDrawHole can be reused
-    const hole=vizActiveTee?.holes?.find(h=>h.number===vizSelectedHole)||vizActiveTee?.holes?.[0];
-    let optEntry=null;
-    if(hole&&teeClub){
-      const appId=shotClubs[0]?.identifier||'';
-      optEntry={id:'__manual__',course:vizActiveCourse?.name||'',tee:'',date:'',
-        text:`H${hole.number} | Tee: ${teeClub.identifier||teeClub.type||''} | Approach: ${appId}`};
-    }
-    vizDrawHole(hcp,handed,fwYds,mode,optEntry);
+    // Build pathClubs from vizPaths state
+    const pathClubs=vizPaths.map(path=>path.map(id=>bag.find(c=>c.id===id)).filter(Boolean));
+    vizDrawHole(hcp,handed,fwYds,mode,pathClubs);
   }
 }
 
@@ -3702,33 +3694,49 @@ function onVizTeeChange(){
   renderViz();
 }
 function onVizHoleSessionChange(){
-  // Session change snaps the tee to match
   const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
-  if(entry?.tee&&vizActiveCourse){
-    const matchTee=vizActiveCourse.tees?.find(t=>t.name.toLowerCase()===entry.tee.toLowerCase());
-    if(matchTee){
-      vizActiveTee=matchTee;
+  if(!entry) return renderViz();
+  // Snap course first
+  if(entry.course){
+    const matchCourse=courses.find(c=>c.name&&entry.course.toLowerCase().includes(c.name.toLowerCase().split(' ')[0])||c.name&&c.name.toLowerCase().includes(entry.course.toLowerCase().split(' ')[0]));
+    if(matchCourse&&matchCourse.id!==vizActiveCourse?.id){
+      vizActiveCourse=matchCourse;
+      const csel=document.getElementById('vizCourseSelect');
+      if(csel) csel.value=matchCourse.id;
       const tsel=document.getElementById('vizTeeSelect');
-      if(tsel) tsel.value=matchTee.id;
-      buildVizHoleShelf();
+      if(tsel&&matchCourse.tees?.length){
+        tsel.innerHTML=matchCourse.tees.map(t=>`<option value="${t.id}">${escHtml(t.name)} (${t.yardage}y)</option>`).join('');
+        tsel.value=matchCourse.selectedTee||matchCourse.tees[0].id;
+      }
+      vizActiveTee=matchCourse.tees?.find(t=>t.id===document.getElementById('vizTeeSelect')?.value)||matchCourse.tees?.[0]||null;
     }
   }
+  // Then snap tee to session tee name
+  if(entry.tee&&vizActiveCourse){
+    const matchTee=vizActiveCourse.tees?.find(t=>t.name.toLowerCase()===entry.tee.toLowerCase());
+    if(matchTee){vizActiveTee=matchTee;const tsel=document.getElementById('vizTeeSelect');if(tsel)tsel.value=matchTee.id;}
+  }
+  buildVizHoleShelf();
+  vizSelectedHole=1;
   syncHoleClubsFromSession();
   renderViz();
 }
 function syncHoleClubsFromSession(){
   const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
   if(!entry) return;
-  // Prefer structured holeMap; fall back to text parsing
   const hm=entry.holeMap?.[vizSelectedHole];
   if(hm){
-    const teeClub=hm.tee?bag.find(c=>c.identifier===hm.tee||(c.type==='Driver'&&hm.tee==='Driver')):null;
-    const appClub=hm.app?bag.find(c=>c.identifier===hm.app):null;
-    if(teeClub) document.getElementById('vizHoleTee').value=teeClub.id;
-    if(appClub){const slot=document.querySelector('.viz-shot-sel');if(slot)slot.value=appClub.id;}
+    const findId=id=>id?bag.find(c=>c.identifier===id||(c.type==='Driver'&&id==='Driver'))?.id||'':null;
+    (hm.paths||[]).slice(0,3).forEach((path,pi)=>{
+      vizPaths[pi]=path.map(findId).filter(Boolean);
+    });
+    // Auto-show path 2 if it has data
+    vizPathVisible[1]=vizPaths[1].length>0;
+    vizPathVisible[2]=vizPaths[2].length>0;
+    _rebuildPathPlanner();
     return;
   }
-  // Legacy text parsing fallback
+  // Legacy text fallback
   const hole=vizActiveTee?.holes?.find(h=>h.number===vizSelectedHole)||vizActiveTee?.holes?.[0];
   if(!hole) return;
   const hl=(entry.text||'').split('\n').find(l=>new RegExp(`H${hole.number}\\s*\\|`).test(l));
@@ -3744,39 +3752,79 @@ function syncHoleClubsFromSession(){
     if(numMatch){const num=numMatch[1],typeKw=numMatch[2].toLowerCase();const typeMap={wood:'Fairway Wood',iron:'Iron',hybrid:'Hybrid'};c=bag.find(b=>b.type===(typeMap[typeKw]||'')&&b.identifier.startsWith(num));if(c)return c;}
     return bag.find(b=>b.identifier===raw.split(' or ')[0].trim())||null;
   };
-  const teeClub=findClub(rawTee), appClub=findClub(rawApp.split(' or ')[0].trim());
-  if(teeClub) document.getElementById('vizHoleTee').value=teeClub.id;
-  if(appClub){const slot=document.querySelector('.viz-shot-sel');if(slot)slot.value=appClub.id;}
+  const teeClub=findClub(rawTee),appClub=findClub(rawApp.split(' or ')[0].trim());
+  vizPaths[0]=[teeClub?.id,appClub?.id].filter(Boolean);
+  _rebuildPathPlanner();
 }
-let vizShotCount=1;
-function vizAddShot(){
-  if(vizShotCount>=4) return;
-  vizShotCount++;
-  _rebuildShotSlots();
+let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
+let vizPlannerOpen=false;
+function vizTogglePlanner(){
+  vizPlannerOpen=!vizPlannerOpen;
+  document.getElementById('vizPlannerBody').style.display=vizPlannerOpen?'block':'none';
+  document.getElementById('vizPlannerChevron').textContent=vizPlannerOpen?'\u25b2 Edit paths':'\u25bc Edit paths';
+}
+function vizTogglePath(pi){
+  // Can't hide all paths — at least one must stay visible
+  const willHide=vizPathVisible[pi];
+  if(willHide&&vizPathVisible.filter(Boolean).length<=1) return;
+  vizPathVisible[pi]=!vizPathVisible[pi];
+  _rebuildPathPlanner();
   renderViz();
 }
-function vizRemoveShot(){
-  if(vizShotCount<=1) return;
-  vizShotCount--;
-  _rebuildShotSlots();
+function vizUpdatePath(pi,si,id){
+  vizPaths[pi][si]=id;
   renderViz();
 }
-function _rebuildShotSlots(){
+function vizAddShotToPath(pi){
+  if(vizPaths[pi].length>=6) return;
+  vizPaths[pi].push('');
+  _rebuildPathPlanner();
+  renderViz();
+}
+function vizRemoveShotFromPath(pi){
+  if(vizPaths[pi].length<=1) return;
+  vizPaths[pi].pop();
+  _rebuildPathPlanner();
+  renderViz();
+}
+function _rebuildPathPlanner(){
   const allClubs=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
   const opts='<option value="">\u2014 none \u2014</option>'+allClubs.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
-  // Preserve existing values
-  const existing=Array.from(document.querySelectorAll('.viz-shot-sel')).map(s=>s.value);
-  const container=document.getElementById('vizHoleShotSlots');
-  container.innerHTML='';
-  for(let i=0;i<vizShotCount;i++){
-    const lbl=i===0?'Shot 1 / Approach':(`Shot ${i+1}`);
-    const div=document.createElement('div');
-    div.className='field';
-    div.innerHTML=`<div class="flbl">${lbl}</div><select class="viz-shot-sel" onchange="renderViz()" style="min-width:120px">${opts}</select>`;
-    container.appendChild(div);
-    if(existing[i]) div.querySelector('select').value=existing[i];
-  }
+  const PATH_NAMES=['Path 1','Path 2','Path 3'];
+
+  // Badges row (always visible)
+  document.getElementById('vizPathBadges').innerHTML=vizPaths.map((p,pi)=>{
+    const col=VIZ_PATH_COLORS[pi];
+    const vis=vizPathVisible[pi];
+    const hasClubs=p.filter(Boolean).length>0;
+    const label=PATH_NAMES[pi]+(hasClubs?' · '+p.map(id=>bag.find(c=>c.id===id)?.identifier||'?').filter(Boolean).join('\u2192'):'');
+    return `<button onclick="vizTogglePath(${pi})" style="padding:3px 8px;border-radius:12px;border:2px solid ${col};background:${vis?col:'transparent'};color:${vis?'#fff':col};font-family:inherit;font-size:.6rem;cursor:pointer;transition:all .15s">${escHtml(label)}</button>`;
+  }).join('');
+
+  // Path rows (inside collapsible)
+  document.getElementById('vizPathRows').innerHTML=vizPaths.map((path,pi)=>{
+    const col=VIZ_PATH_COLORS[pi];
+    const shotSelects=path.map((id,si)=>`<select onchange="vizUpdatePath(${pi},${si},this.value)" style="min-width:100px;font-size:.65rem">${opts}</select>`).join('');
+    return `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--br)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0;margin-bottom:6px"></div>
+      <div style="font-size:.6rem;color:var(--tx3);margin-bottom:6px;padding-bottom:1px">${PATH_NAMES[pi]}</div>
+      <div id="vizPathSels${pi}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end">${shotSelects}</div>
+      <div style="display:flex;gap:3px;align-items:flex-end;padding-bottom:2px">
+        <button class="implied-tog" onclick="vizAddShotToPath(${pi})" style="padding:3px 7px;font-size:.7rem">+</button>
+        <button class="implied-tog" onclick="vizRemoveShotFromPath(${pi})" style="padding:3px 7px;font-size:.7rem">\u2212</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Set select values after building DOM
+  vizPaths.forEach((path,pi)=>{
+    const sels=document.querySelectorAll(`#vizPathSels${pi} select`);
+    path.forEach((id,si)=>{if(sels[si]&&id)sels[si].value=id;});
+  });
 }
+function vizAddShot(){ vizAddShotToPath(0); }
+function vizRemoveShot(){ vizRemoveShotFromPath(0); }
+function _rebuildShotSlots(){ _rebuildPathPlanner(); } // alias for compat
 function setVizYard(m){
   vizYardMode=m;
   ['carry','total'].forEach(x=>document.getElementById('vytgl-'+x).classList.toggle('on',x===m));
@@ -3844,12 +3892,9 @@ function initViz(){
     tsel.value=vizActiveCourse.selectedTee||vizActiveCourse.tees[0].id;
   }
   vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===tsel.value)||vizActiveCourse?.tees?.[0]||null;
-  // Tee dropdown: all tested non-putter clubs
-  const allTested=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
-  const teeOpts='<option value="">\u2014 auto \u2014</option>'+allTested.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
-  document.getElementById('vizHoleTee').innerHTML=teeOpts;
-  // Initial shot slot
-  vizShotCount=1; _rebuildShotSlots();
+  // Init path planner with one empty path
+  vizPaths=[[],[],[]]; vizPathVisible=[true,false,false];
+  _rebuildPathPlanner();
   // Custom club shelf
   const shelfClubs=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
   if(!vizSelectedClubs.size) shelfClubs.slice(0,4).forEach(c=>vizSelectedClubs.add(c.id));
