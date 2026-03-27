@@ -3879,12 +3879,11 @@ function initViz(){
     : '<option value="">No sessions yet</option>';
   document.getElementById('vizOptSessionSelect').innerHTML=sessOpts;
   document.getElementById('vizHoleSessionSelect').innerHTML='<option value="">\u2014 none \u2014</option>'+sessOpts;
-  // Default hole session to most recent matching course
-  if(sess.length) document.getElementById('vizHoleSessionSelect').value=sess[0].id;
-  // Course dropdown
+  // Course dropdown — default to home course or first course
   const csel=document.getElementById('vizCourseSelect');
   csel.innerHTML=courses.map(c=>`<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
-  vizActiveCourse=courses[0]||null;
+  vizActiveCourse=courses.find(c=>c.id===profile.homeCourseId)||courses[0]||null;
+  if(vizActiveCourse) csel.value=vizActiveCourse.id;
   // Tee dropdown — default to course's selectedTee
   const tsel=document.getElementById('vizTeeSelect');
   if(vizActiveCourse?.tees?.length){
