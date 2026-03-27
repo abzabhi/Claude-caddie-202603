@@ -3317,6 +3317,7 @@ function updateCourseDropdowns() {
   if(cur && (cur==='__manual__' || courses.find(c=>c.id===cur))) sel.value=cur;
 }
 function renderAll(){
+  vizInitDone=false; // force viz shelf to rebuild with fresh bag IDs
   renderProfile(); renderClubs(); renderCourseList(); renderHandicap(); updateCourseSelects(); renderSessions();
   // Set rCourse autofill once
   const rc=document.getElementById('rCourse');
@@ -3606,7 +3607,7 @@ function renderViz(){
       clubs=bag.filter(c=>c.tested&&c.type!=='Putter'&&vizSelectedClubs.has(c.id));
     } else {
       const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
-      if(entry) clubs=vizClubsFromEntry(entry);
+      clubs=entry?vizClubsFromEntry(entry):bag.filter(c=>c.tested&&c.type!=='Putter');
     }
     const disps=clubs.map(c=>vizGetDisp(c,hcp,handed)).filter(Boolean);
     const title=vizClubSrc==='optimised'?'Optimised bag · HCP '+hcp:'Custom · HCP '+hcp;
@@ -3672,8 +3673,6 @@ function syncOptimisedSelection(){
     const on=vizSelectedClubs.has(id);
     lbl.style.background=on?'var(--gr3)':'var(--bg)';
     lbl.style.borderColor=on?'var(--gr2)':'var(--br)';
-    const cb=lbl.querySelector('input[type=checkbox]');
-    if(cb) cb.checked=on;
   });
 }
 function onVizCourseChange(){
@@ -3850,11 +3849,12 @@ function calcVizMaxRange(){
 }
 function resetVizMaxRange(){
   const el=document.getElementById('vizMaxRange');
-  if(el){el.value=calcVizMaxRange();renderViz();}
+  if(el) el.value=calcVizMaxRange();
 }
 function setVizYard(m){
   vizYardMode=m;
   ['carry','total'].forEach(x=>document.getElementById('vytgl-'+x).classList.toggle('on',x===m));
+  resetVizMaxRange();
   renderViz();
 }
 function setVizDisplay(m){
@@ -3891,6 +3891,7 @@ function buildVizDistanceDropdown(){
   const allMax=clubs.flatMap(c=>c.sessions.map(s=>+s.max)).filter(v=>v>0);
   const allMin=clubs.flatMap(c=>c.sessions.map(s=>+s.min)).filter(v=>v>0);
   const sel=document.getElementById('vizDistTarget');
+  if(!sel) return;
   if(!allMax.length){sel.innerHTML='<option value="">All distances</option>';return;}
   let opts='<option value="">All distances</option>';
   for(let y=Math.ceil(Math.min(...allMin)/10)*10;y<=Math.floor(Math.max(...allMax)/10)*10;y+=10){
@@ -3923,12 +3924,12 @@ function initViz(){
   // Init path planner with one empty path
   vizPaths=[[],[],[]]; vizPathVisible=[true,false,false];
   _rebuildPathPlanner();
-  // Custom club shelf
+  // Reset club selection — ensures IDs match current bag after any import
+  vizSelectedClubs=new Set();
   const shelfClubs=bag.filter(c=>c.tested&&c.type!=='Putter');
-  if(!vizSelectedClubs.size) shelfClubs.slice(0,4).forEach(c=>vizSelectedClubs.add(c.id));
+  shelfClubs.slice(0,4).forEach(c=>vizSelectedClubs.add(c.id));
   document.getElementById('vizClubShelf').innerHTML=shelfClubs.map((c,i)=>
-    `<label style="display:flex;align-items:center;gap:5px;padding:4px 9px;background:${vizSelectedClubs.has(c.id)?'var(--gr3)':'var(--bg)'};border:1px solid ${vizSelectedClubs.has(c.id)?'var(--gr2)':'var(--br)'};border-radius:4px;cursor:pointer;font-size:.66rem;transition:all .15s" id="vclbl${c.id}">
-      <input type="checkbox" style="display:none" ${vizSelectedClubs.has(c.id)?'checked':''} onchange="vizToggleClub('${c.id}',this)">
+    `<label onclick="vizToggleClub('${c.id}')" style="display:flex;align-items:center;gap:5px;padding:4px 9px;background:${vizSelectedClubs.has(c.id)?'var(--gr3)':'var(--bg)'};border:1px solid ${vizSelectedClubs.has(c.id)?'var(--gr2)':'var(--br)'};border-radius:4px;cursor:pointer;font-size:.66rem;transition:all .15s" id="vclbl${c.id}">
       <div style="width:8px;height:8px;border-radius:2px;background:${VIZ_COLORS[i%VIZ_COLORS.length]};flex-shrink:0"></div>
       ${escHtml(c.identifier||c.id)} <span style="color:var(--tx3);font-size:.58rem">${(()=>{const st=deriveStats(c.sessions);return st?Math.round((st.avgMin+st.avgMax)/2):'?'})()}y</span>
     </label>`).join('');
@@ -3938,11 +3939,12 @@ function initViz(){
   syncHoleClubsFromSession();
   onVizModeChange('coverage');
 }
-function vizToggleClub(id,el){
-  if(el.checked){vizSelectedClubs.add(id);}
-  else vizSelectedClubs.delete(id);
+function vizToggleClub(id){
+  if(vizSelectedClubs.has(id)) vizSelectedClubs.delete(id);
+  else vizSelectedClubs.add(id);
+  const on=vizSelectedClubs.has(id);
   const lbl=document.getElementById('vclbl'+id);
-  if(lbl){lbl.style.background=el.checked?'var(--gr3)':'var(--bg)';lbl.style.borderColor=el.checked?'var(--gr2)':'var(--br)';}
+  if(lbl){lbl.style.background=on?'var(--gr3)':'var(--bg)';lbl.style.borderColor=on?'var(--gr2)':'var(--br)';}
   buildVizDistanceDropdown();
   renderViz();
 }
