@@ -685,11 +685,14 @@ body{
         </div>
         <!-- Hole shelf -->
         <div id="vizHoleShelf" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
-        <!-- Path planner (collapsible) -->
+        <!-- Path planner -->
         <div style="border:1px solid var(--br);border-radius:6px;margin-bottom:8px">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;cursor:pointer;user-select:none" onclick="vizTogglePlanner()">
-            <div style="display:flex;gap:6px;align-items:center" id="vizPathBadges"></div>
-            <span id="vizPlannerChevron" style="font-size:.65rem;color:var(--tx3)">▼ Edit paths</span>
+            <span style="font-size:.65rem;font-weight:600;color:var(--tx2)">Shot Paths</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button onclick="event.stopPropagation();syncHoleClubsFromSession();renderViz()" class="implied-tog" style="padding:2px 8px;font-size:.6rem">↺ Reset</button>
+              <span id="vizPlannerChevron" style="font-size:.65rem;color:var(--tx3)">▼</span>
+            </div>
           </div>
           <div id="vizPlannerBody" style="display:none;padding:8px 10px;border-top:1px solid var(--br)">
             <div id="vizPathRows"></div>
@@ -3727,25 +3730,24 @@ function onVizHoleSessionChange(){
   renderViz();
 }
 function syncHoleClubsFromSession(){
-  // Always reset first — prevents stale paths bleeding across holes
+  // Reset to empty first — no stale bleed across holes
   vizPaths=[[],[],[]];
   vizPathVisible=[true,false,false];
   const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
   if(!entry){_rebuildPathPlanner();return;}
   const hm=entry.holeMap?.[vizSelectedHole];
-  if(hm){
-    const findId=id=>id?bag.find(c=>c.identifier===id||(c.type==='Driver'&&id==='Driver'))?.id||null:null;
-    (hm.paths||[]).slice(0,3).forEach((path,pi)=>{
-      const ids=path.map(findId).filter(Boolean);
-      if(ids.length){vizPaths[pi]=ids;vizPathVisible[pi]=pi===0;}
+  if(hm&&hm.paths?.length){
+    const findId=id=>id?bag.find(c=>c.identifier===id||(c.type==='Driver'&&id==='Driver'))?.id||'':null;
+    hm.paths.slice(0,3).forEach((path,pi)=>{
+      vizPaths[pi]=path.map(findId).filter(id=>id);
+      vizPathVisible[pi]=vizPaths[pi].length>0;
     });
-    // Show path 2 only if it has clubs
-    if(vizPaths[1].length) vizPathVisible[1]=true;
+    vizPathVisible[0]=true; // path 1 always visible if it has clubs
     _rebuildPathPlanner();
     return;
   }
   // Legacy text fallback
-  const hole=vizActiveTee?.holes?.find(h=>h.number===vizSelectedHole)||vizActiveTee?.holes?.[0];
+  const hole=vizActiveTee?.holes?.find(h=>h.number===vizSelectedHole);
   if(!hole){_rebuildPathPlanner();return;}
   const hl=(entry.text||'').split('\n').find(l=>new RegExp(`H${hole.number}\\s*\\|`).test(l));
   if(!hl){_rebuildPathPlanner();return;}
@@ -3760,8 +3762,8 @@ function syncHoleClubsFromSession(){
     if(numMatch){const num=numMatch[1],typeKw=numMatch[2].toLowerCase();const typeMap={wood:'Fairway Wood',iron:'Iron',hybrid:'Hybrid'};c=bag.find(b=>b.type===(typeMap[typeKw]||'')&&b.identifier.startsWith(num));if(c)return c;}
     return bag.find(b=>b.identifier===raw.split(' or ')[0].trim())||null;
   };
-  const teeClub=findClub(rawTee),appClub=findClub(rawApp.split(' or ')[0].trim());
-  vizPaths[0]=[teeClub?.id,appClub?.id].filter(Boolean);
+  const tc=findClub(rawTee),ac=findClub(rawApp.split(' or ')[0].trim());
+  vizPaths[0]=[tc?.id,ac?.id].filter(Boolean);
   _rebuildPathPlanner();
 }
 let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
@@ -3772,9 +3774,6 @@ function vizTogglePlanner(){
   document.getElementById('vizPlannerChevron').textContent=vizPlannerOpen?'\u25b2 Edit paths':'\u25bc Edit paths';
 }
 function vizTogglePath(pi){
-  // Can't hide all paths — at least one must stay visible
-  const willHide=vizPathVisible[pi];
-  if(willHide&&vizPathVisible.filter(Boolean).length<=1) return;
   vizPathVisible[pi]=!vizPathVisible[pi];
   _rebuildPathPlanner();
   renderViz();
@@ -3797,41 +3796,30 @@ function vizRemoveShotFromPath(pi){
 }
 function _rebuildPathPlanner(){
   const allClubs=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
-  const opts='<option value="">\u2014 none \u2014</option>'+allClubs.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
+  const none='<option value="">\u2014 none \u2014</option>';
+  const clubOpts=none+allClubs.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
   const PATH_NAMES=['Path 1','Path 2','Path 3'];
+  const PATH_COLORS=VIZ_PATH_COLORS;
 
-  // Badges — only show badges for paths that have clubs; always show path 1 badge
-  const badgeHtml=vizPaths.map((p,pi)=>{
-    if(pi>0&&!p.length) return '';
-    const col=VIZ_PATH_COLORS[pi];
+  document.getElementById('vizPathRows').innerHTML=vizPaths.map((path,pi)=>{
+    const col=PATH_COLORS[pi];
     const vis=vizPathVisible[pi];
-    const label=PATH_NAMES[pi]+(p.length?' · '+p.map(id=>bag.find(c=>c.id===id)?.identifier||'?').filter(Boolean).join('→'):'');
-    // stopPropagation prevents badge click from also toggling the collapsible
-    return `<button onclick="event.stopPropagation();vizTogglePath(${pi})" style="padding:3px 8px;border-radius:12px;border:2px solid ${col};background:${vis?col:'transparent'};color:${vis?'#fff':col};font-family:inherit;font-size:.6rem;cursor:pointer;transition:all .15s">${escHtml(label)}</button>`;
-  }).join('');
-  document.getElementById('vizPathBadges').innerHTML=badgeHtml;
-
-  // Path rows — only render rows that have clubs or are path 0
-  const rowHtml=vizPaths.map((path,pi)=>{
-    if(pi>0&&!path.length) return '';
-    const col=VIZ_PATH_COLORS[pi];
-    const shotSelects=path.map((id,si)=>`<select onchange="vizUpdatePath(${pi},${si},this.value)" style="min-width:100px;font-size:.65rem">${opts}</select>`).join('');
-    return `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--br)">
-      <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0;margin-top:4px"></div>
-      <span style="font-size:.6rem;color:var(--tx3);margin-top:4px">${PATH_NAMES[pi]}</span>
-      <div id="vizPathSels${pi}" style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end">${shotSelects}</div>
-      <div style="display:flex;gap:3px;align-items:flex-end">
-        <button class="implied-tog" onclick="vizAddShotToPath(${pi})" style="padding:3px 7px;font-size:.7rem">+</button>
-        <button class="implied-tog" onclick="vizRemoveShotFromPath(${pi})" style="padding:3px 7px;font-size:.7rem">−</button>
-      </div>
+    // Always show 6 shot slots per path
+    const slots=Array.from({length:6},(_,si)=>{
+      const id=path[si]||'';
+      return `<select onchange="vizUpdatePath(${pi},${si},this.value)" style="min-width:95px;font-size:.64rem">${clubOpts}</select>`;
+    }).join('');
+    return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:6px 0;border-bottom:1px solid var(--br)">
+      <button onclick="vizTogglePath(${pi})" style="width:12px;height:12px;border-radius:50%;border:2px solid ${col};background:${vis?col:'transparent'};cursor:pointer;flex-shrink:0;padding:0" title="${vis?'Hide':'Show'} path ${pi+1}"></button>
+      <span style="font-size:.6rem;color:${col};font-weight:600;width:44px;flex-shrink:0">${PATH_NAMES[pi]}</span>
+      <div id="vizPathSels${pi}" style="display:flex;flex-wrap:wrap;gap:4px">${slots}</div>
     </div>`;
   }).join('');
-  document.getElementById('vizPathRows').innerHTML=rowHtml;
 
   // Set select values
   vizPaths.forEach((path,pi)=>{
     const sels=document.querySelectorAll(`#vizPathSels${pi} select`);
-    path.forEach((id,si)=>{if(sels[si]&&id)sels[si].value=id;});
+    sels.forEach((sel,si)=>{sel.value=path[si]||'';});
   });
 }
 function vizAddShot(){ vizAddShotToPath(0); }
