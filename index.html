@@ -746,12 +746,19 @@ body{
   <!-- NOTES -->
   <div id="tab-notes" class="panel">
     <div class="card">
+      <div class="card-title">Genesis</div>
+      <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
+        Thought Experiment. Vibe coded using Claude AI (almost) fully. Started with a simple query - optimize by golf bag for a course, and here we are. Philosophically 100% free. I hope this helps my game...
+      </div>
+    </div>
+    
+    <div class="card">
       <div class="card-title">About This App</div>
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
         Virtual Caddie is a personal bag management and course strategy tool. All Optimizations are done by Claude AI or some other AI and can vary based on model and model provider. Use at your own risk. All in browser calculations are deterministic — the same inputs always produce the same outputs. This tab documents some of the key assumptions baked into those calculations.
       </div>
     </div>
-
+    
     <div class="card">
       <div class="card-title">Handicap &amp; Scoring</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
@@ -897,7 +904,8 @@ body{
     <div class="disc-section">
       <div class="disc-body" style="line-height:1.8">
         This will permanently erase <strong>all</strong> clubs, courses, rounds, history, and profile data from this device.<br><br>
-        <strong>Have you saved your data file?</strong> Use <em>Save Data</em> first to download a backup — once cleared, this action cannot be undone.
+        <strong>Have you saved your data file?</strong> Use <em>Save Data</em> first to download a backup — once cleared, this action cannot be undone.<br><br>
+        <span style="color:var(--tx3);font-size:.63rem">Your Gist backup is not affected by clearing — but do not use Save Data until you have re-imported your data, or it will overwrite your Gist backup with an empty file. (Save Data automatically skips the Gist push when there is no data.)</span>
       </div>
     </div>
     <div class="disc-footer" style="gap:10px;display:flex;flex-direction:column">
@@ -1413,7 +1421,6 @@ function save() {
   localStorage.setItem('vc:rounds', JSON.stringify(rounds));
   localStorage.setItem('vc:history', JSON.stringify(history));
   localStorage.setItem('vc:profile', JSON.stringify(profile));
-  syncSave(); // 2.5 — async, fire-and-forget
 }
 const _SEED={bag:[],courses:[],history:[]};
 function load() {
@@ -1514,15 +1521,20 @@ function saveData() {
   a.download = 'virtual-caddie-data-'+today()+'.txt';
   a.click();
   URL.revokeObjectURL(a.href);
-  // Gist sync if connected — syncSave reads serialise() internally
-  if(gistMode()) {
+  // Gist sync — skip if data is empty to protect existing Gist backup
+  const hasData = bag.length || courses.length || history.length;
+  if(gistMode() && hasData) {
     syncSave().then(()=>{
       const st = document.getElementById('saveStatus');
       if(st) { st.textContent='✓ Saved locally + synced to Gist'; st.style.color='var(--ac)'; setTimeout(()=>{st.textContent='';},4000); }
     });
   } else {
     const st = document.getElementById('saveStatus');
-    if(st) { st.textContent='✓ Saved locally'; st.style.color='var(--tx2)'; setTimeout(()=>{st.textContent='';},3000); }
+    if(st) {
+      st.textContent = gistMode() && !hasData ? '✓ Saved locally (Gist skipped — no data)' : '✓ Saved locally';
+      st.style.color='var(--tx2)';
+      setTimeout(()=>{st.textContent='';},3000);
+    }
   }
 }
 // Keep exportData as internal alias used by exportForAI status check
