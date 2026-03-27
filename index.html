@@ -657,12 +657,7 @@ body{
             <div class="flbl">Session</div>
             <select id="vizOptSessionSelect" onchange="onVizOptSessionChange()" style="min-width:190px"></select>
           </div>
-          <div class="field">
-            <div class="flbl">Distance target</div>
-            <select id="vizDistTarget" onchange="renderViz()" style="min-width:110px">
-              <option value="">All distances</option>
-            </select>
-          </div>
+
         </div>
         <div id="vizClubShelf" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;padding:8px;background:var(--bg);border:1px solid var(--br);border-radius:4px"></div>
       </div>
@@ -700,7 +695,7 @@ body{
         </div>
       </div>
 
-      <!-- Shared: yardage mode + fairway + display -->
+      <!-- Shared: yardage mode + fairway + range + display -->
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
         <div class="field">
           <div class="flbl">Yardage</div>
@@ -712,6 +707,17 @@ body{
         <div class="field">
           <div class="flbl">Fairway (yds)</div>
           <input type="number" id="vizFwWidth" min="15" max="80" value="35" step="5" oninput="renderViz()" style="width:72px">
+        </div>
+        <div class="field" id="vizRangeField">
+          <div class="flbl">Max range (yds)</div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="number" id="vizMaxRange" min="50" max="600" step="10" oninput="renderViz()" style="width:72px">
+            <button class="implied-tog" onclick="resetVizMaxRange()" title="Reset to bag max +20%" style="padding:3px 7px;font-size:.7rem">↺</button>
+          </div>
+        </div>
+        <div class="field" id="vizIntervalField">
+          <div class="flbl">Tick every (yds)</div>
+          <input type="number" id="vizRangeInterval" min="10" max="100" value="25" step="5" oninput="renderViz()" style="width:60px">
         </div>
         <div class="field">
           <div class="flbl">Display</div>
@@ -3416,13 +3422,14 @@ function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
 }
 
 // ── Core stacked canvas renderer ──────────────────────────────────────────────
-function vizDrawCanvas(dispList,fwYds,mode,title,subtitle){
+function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interval){
   const svg=document.getElementById('vizSvg');
   const filtered=dispList.filter(d=>d&&d.carry>0).sort((a,b)=>b.carry-a.carry);
   if(!filtered.length){svg.innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No session data for selected clubs</text>';return;}
   const W=440,PAD_T=48,PAD_B=72;
-  const H=Math.min(Math.max(PAD_T+PAD_B+(filtered[0].carry+25)*2.6,300),720);
-  const scale=(H-PAD_T-PAD_B)/(filtered[0].carry+20);
+  const rangeTop=maxRange||calcVizMaxRange();
+  const H=Math.min(Math.max(PAD_T+PAD_B+rangeTop*2.2,300),900);
+  const scale=(H-PAD_T-PAD_B)/rangeTop;
   const cx=W/2,teeY=H-PAD_B,fwH=fwYds/2*scale,fwL=cx-fwH,fwR=cx+fwH;
   let defs='',shapes='',annots='';const legs=[],chips=[];
   filtered.forEach((d,i)=>{
@@ -3436,12 +3443,18 @@ function vizDrawCanvas(dispList,fwYds,mode,title,subtitle){
       if(gap>12){const gy=teeY-((prev.carry-prev.ds+d.carry+d.dl)/2)*scale;
         annots+=`<line x1="${cx-20}" y1="${gy}" x2="${cx+20}" y2="${gy}" stroke="rgba(160,48,48,.4)" stroke-width="1" stroke-dasharray="3 2"/><text x="${cx}" y="${gy+4}" font-family="monospace" font-size="8" fill="rgba(160,48,48,.7)" text-anchor="middle">gap ~${Math.round(gap)}y</text>`;}}
     const lx=Math.min(W-2,aimX+rxR+5);
-    annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml(d.label)}</text><text x="${lx}" y="${eCy+9}" font-family="monospace" font-size="8" fill="rgba(44,58,40,.6)">${d.min}–${d.max}y</text>`;
+    annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml(d.label)}</text><text x="${lx}" y="${eCy+9}" font-family="monospace" font-size="8" fill="rgba(44,58,40,.6)">${d.carry}y</text>`;
     annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${d.carry}y</text>`;
     const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
     chips.push({label:d.label,col,p:Math.round(pFw*100)});
     legs.push({label:`${d.label} · ${d.carry}y · ±${d.latH}y`,col});
   });
+  // Range tick marks at user-defined interval
+  const tickInt=interval||25;
+  for(let y=tickInt;y<rangeTop;y+=tickInt){
+    const ty=teeY-y*scale;
+    annots+=`<line x1="${fwL-2}" y1="${ty}" x2="${fwR+2}" y2="${ty}" stroke="rgba(255,255,255,.12)" stroke-width="1"/><text x="${fwL-4}" y="${ty+3}" font-family="monospace" font-size="7" fill="rgba(255,255,255,.45)" text-anchor="end">${y}y</text>`;
+  }
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.innerHTML=`<defs>${defs}</defs>
   <rect width="${W}" height="${H}" fill="#6a9a50"/>
@@ -3587,19 +3600,18 @@ function renderViz(){
   if(vizMode==='coverage'){
     const noteEl=document.getElementById('vizHoleNote');
     if(noteEl) noteEl.style.display='none';
-    const distTarget=+document.getElementById('vizDistTarget')?.value||0;
     let clubs=[];
     if(vizClubSrc==='custom'){
       clubs=bag.filter(c=>c.tested&&c.sessions?.length&&vizSelectedClubs.has(c.id));
     } else {
-      // optimised — prefer bagMap, fall back to text parsing
       const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
       if(entry) clubs=vizClubsFromEntry(entry);
     }
     const disps=clubs.map(c=>vizGetDisp(c,hcp,handed)).filter(Boolean);
-    const title=vizClubSrc==='optimised'?'Optimised bag \xb7 HCP '+hcp:'Custom \xb7 HCP '+hcp;
-    if(distTarget){vizDrawDistance(disps,distTarget,fwYds,mode,title);return;}
-    vizDrawCanvas(disps,fwYds,mode,title,'');
+    const title=vizClubSrc==='optimised'?'Optimised bag · HCP '+hcp:'Custom · HCP '+hcp;
+    const maxRange=+document.getElementById('vizMaxRange')?.value||calcVizMaxRange();
+    const interval=+document.getElementById('vizRangeInterval')?.value||25;
+    vizDrawCanvas(disps,fwYds,mode,title,'',maxRange,interval);
   } else {
     // hole planning — update note strip
     const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
@@ -3629,6 +3641,8 @@ function onVizClubSrcChange(){
   document.getElementById('vizClubShelf').style.display='flex';
   if(vizClubSrc==='optimised') syncOptimisedSelection();
   buildVizDistanceDropdown();
+  const mrEl=document.getElementById('vizMaxRange');
+  if(mrEl) mrEl.value=calcVizMaxRange();
   renderViz();
 }
 function onVizOptSessionChange(){
@@ -3825,6 +3839,16 @@ function _rebuildPathPlanner(){
 function vizAddShot(){ vizAddShotToPath(0); }
 function vizRemoveShot(){ vizRemoveShotFromPath(0); }
 function _rebuildShotSlots(){ _rebuildPathPlanner(); } // alias for compat
+function calcVizMaxRange(){
+  const actives=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
+  const maxes=actives.flatMap(c=>c.sessions.map(s=>+s.max)).filter(v=>v>0);
+  if(!maxes.length) return 300;
+  return Math.ceil(Math.max(...maxes)*1.2/10)*10;
+}
+function resetVizMaxRange(){
+  const el=document.getElementById('vizMaxRange');
+  if(el){el.value=calcVizMaxRange();renderViz();}
+}
 function setVizYard(m){
   vizYardMode=m;
   ['carry','total'].forEach(x=>document.getElementById('vytgl-'+x).classList.toggle('on',x===m));
@@ -3910,7 +3934,7 @@ function initViz(){
   onVizModeChange('coverage');
 }
 function vizToggleClub(id,el){
-  if(el.checked){if(vizSelectedClubs.size>=13){el.checked=false;return;}vizSelectedClubs.add(id);}
+  if(el.checked){vizSelectedClubs.add(id);}
   else vizSelectedClubs.delete(id);
   const lbl=document.getElementById('vclbl'+id);
   if(lbl){lbl.style.background=el.checked?'var(--gr3)':'var(--bg)';lbl.style.borderColor=el.checked?'var(--gr2)':'var(--br)';}
