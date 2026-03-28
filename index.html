@@ -302,6 +302,75 @@ body{
 #uploadBanner{background:var(--gr3);border:1px solid var(--br);border-left:4px solid var(--gr);border-radius:8px;padding:14px 16px;margin-bottom:14px;display:none;align-items:center;gap:12px;flex-wrap:wrap;}
 #uploadBanner .ub-text{flex:1;min-width:160px;font-size:.72rem;color:var(--tx2);line-height:1.6;}
 #uploadBanner .ub-text strong{color:var(--ac2);display:block;margin-bottom:2px;font-size:.78rem;}
+
+/* Live Round */
+#lrPill{display:none;background:var(--ac2);color:#fff;border-radius:8px;padding:10px 14px;margin-bottom:12px;cursor:pointer;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 2px 8px rgba(45,81,39,.25);transition:all .2s;}
+#lrPill:hover{background:var(--gr);}
+#lrPill.visible{display:flex;}
+.lr-pill-txt{font-size:.72rem;font-weight:500;letter-spacing:.03em;}
+.lr-pill-meta{font-size:.58rem;opacity:.8;margin-top:1px;}
+.lr-pill-resume{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;opacity:.7;}
+#lrOverlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:100;flex-direction:column;max-width:820px;margin:0 auto;}
+#lrOverlay.active{display:flex;}
+.lr-topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--br);background:var(--sf);flex-shrink:0;}
+.lr-topbar-title{font-family:'Playfair Display',serif;font-size:.95rem;font-weight:700;color:var(--ac2);}
+.lr-running{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;line-height:1;}
+.lr-hole-strip{padding:14px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid var(--br);}
+.lr-hole-strip.par3{background:var(--sky2);}
+.lr-hole-strip.par4{background:var(--gr3);}
+.lr-hole-strip.par5{background:var(--sand2);}
+.lr-hole-blk{width:58px;height:58px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid var(--br);background:var(--sf);flex-shrink:0;}
+.lr-hole-blk.par3{border-color:var(--sky);background:var(--sky2);}
+.lr-hole-blk.par4{border-color:var(--gr2);background:var(--gr3);}
+.lr-hole-blk.par5{border-color:var(--sand);background:var(--sand2);}
+.lr-hole-n{font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:700;color:var(--ac2);line-height:1;}
+.lr-hole-n.par3{color:var(--sky);}
+.lr-hole-n.par5{color:var(--gold);}
+.lr-scroll{flex:1;overflow-y:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px;}
+.lr-stepper{display:flex;align-items:stretch;border:1px solid var(--br);border-radius:8px;overflow:hidden;background:var(--sf);}
+.lr-step-btn{background:var(--sf2);border:none;cursor:pointer;color:var(--tx2);display:flex;align-items:center;justify-content:center;font-size:1.6rem;width:60px;transition:background .12s;user-select:none;-webkit-user-select:none;}
+.lr-step-btn:active{background:var(--gr3);color:var(--ac);}
+.lr-step-btn.sm{width:48px;font-size:1.3rem;}
+.lr-step-val{flex:1;text-align:center;padding:8px 4px;}
+.lr-step-num{font-family:'Playfair Display',serif;font-size:2.4rem;font-weight:700;color:var(--ac2);line-height:1;}
+.lr-step-num.sm{font-size:1.5rem;}
+.lr-step-rel{font-size:.54rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
+.lr-tog{flex:1;padding:10px 6px;background:none;border:1px solid var(--br2);border-radius:6px;font-family:'DM Mono',monospace;font-size:.62rem;cursor:pointer;color:var(--tx2);transition:all .13s;text-align:center;letter-spacing:.03em;}
+.lr-tog:active{background:var(--bg2);}
+.lr-tog.on-y{background:var(--gr3);border-color:var(--gr2);color:var(--ac2);}
+.lr-tog.on-n{background:#fdf2f2;border-color:#e0b0b0;color:var(--danger);}
+.lr-tally{background:var(--sf);border:1px solid var(--br);border-radius:8px;overflow:hidden;}
+.lr-tally-row{display:flex;align-items:center;padding:7px 12px;border-bottom:1px solid var(--br);font-size:.68rem;gap:8px;}
+.lr-tally-row:last-child{border-bottom:none;}
+.lr-tally-name{flex:1;color:var(--tx2);font-size:.65rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lr-tally-score{font-family:'Playfair Display',serif;font-size:.9rem;font-weight:600;color:var(--ac2);min-width:28px;text-align:right;}
+.lr-bottom{display:flex;align-items:stretch;border-top:2px solid var(--br);background:var(--sf);flex-shrink:0;}
+.lr-nav-btn{flex:1;padding:14px 6px;background:none;border:none;font-family:'DM Mono',monospace;font-size:.58rem;color:var(--tx2);cursor:pointer;letter-spacing:.05em;text-transform:uppercase;transition:all .13s;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.lr-nav-btn:active{background:var(--bg2);}
+.lr-nav-btn:disabled{opacity:.28;cursor:not-allowed;}
+.lr-nav-btn.primary{background:var(--gr);color:#fff;}
+.lr-nav-btn.primary:active{background:var(--ac2);}
+.lr-nav-btn.danger{color:var(--danger);}
+.lr-nav-sep{width:1px;background:var(--br);}
+.lr-nav-icon{font-size:1rem;}
+.lr-player-tab{flex:1;padding:7px 4px;background:none;border:none;border-bottom:2px solid transparent;font-family:'DM Mono',monospace;font-size:.58rem;color:var(--tx3);cursor:pointer;text-align:center;letter-spacing:.04em;transition:all .14s;}
+.lr-player-tab.active{color:var(--ac2);border-bottom-color:var(--gr);font-weight:500;}
+.lr-net-tog{display:flex;gap:0;border:1px solid var(--br2);border-radius:6px;overflow:hidden;}
+.lr-net-tog button{flex:1;padding:4px 10px;background:none;border:none;font-family:'DM Mono',monospace;font-size:.58rem;cursor:pointer;color:var(--tx3);transition:all .13s;}
+.lr-net-tog button.on{background:var(--gr3);color:var(--ac2);font-weight:500;}
+/* Setup */
+.lr-setup-section{border-top:1px solid var(--br);padding-top:12px;margin-top:12px;}
+.lr-player-slot{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--br);}
+.lr-player-slot:last-child{border-bottom:none;}
+.lr-me-badge{font-size:.5rem;letter-spacing:.08em;text-transform:uppercase;background:var(--gr3);color:var(--ac);border:1px solid var(--gr2);border-radius:3px;padding:1px 5px;flex-shrink:0;}
+/* Score colours */
+.sc-eagle{color:#c8860a;}.sc-birdie{color:var(--ac);}.sc-par{color:var(--tx);}.sc-bogey{color:var(--sand);}.sc-double{color:var(--danger);}
+.sbb{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:.66rem;font-weight:600;}
+.sbb-eagle{background:#fdf0d0;color:#c8860a;border:2px solid #c8860a;}
+.sbb-birdie{background:var(--gr3);color:var(--ac2);border:2px solid var(--gr2);}
+.sbb-par{background:transparent;color:var(--tx2);}
+.sbb-bogey{background:var(--sand2);color:var(--gold);border:1px solid var(--sand);}
+.sbb-double{background:#fdf2f2;color:var(--danger);border:1px solid #e0b0b0;}
 </style>
 </head>
 <body>
@@ -494,8 +563,18 @@ body{
     </div>
   </div>
 
-  <!-- HANDICAP -->
+  <!-- ROUNDS -->
   <div id="tab-rounds" class="panel">
+
+    <!-- Minimize pill — visible when round active -->
+    <div id="lrPill" onclick="lrExpand()">
+      <div>
+        <div class="lr-pill-txt" id="lrPillTxt">⛳ Live Round in progress</div>
+        <div class="lr-pill-meta" id="lrPillMeta"></div>
+      </div>
+      <div class="lr-pill-resume">Tap to resume →</div>
+    </div>
+
     <div class="hcp-display">
       <div class="hcp-num" id="hcpNum">—</div>
       <div class="hcp-lbl" id="hcpLbl">Handicap Index</div>
@@ -518,6 +597,10 @@ body{
     </div>
     <div class="card">
       <div class="card-title">Log a Round</div>
+      <!-- Start live round button -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--br)">
+        <button class="rbtn" onclick="lrStartSetup()" style="font-size:.78rem;padding:10px">⛳ Start Live Round</button>
+      </div>
       <div class="g2">
         <div class="field">
           <div class="flbl">Date</div>
@@ -593,6 +676,7 @@ body{
     </div>
     <div class="card" id="roundHistCard" style="display:none">
       <div class="card-title">Round History <span id="roundCount" style="font-size:.62rem;font-family:'IBM Plex Mono';color:var(--tx3)"></span></div>
+      <!-- Active rounds -->
       <div class="rnd-header">
         <span style="width:100px">Date</span>
         <span style="flex:1;min-width:80px">Course</span>
@@ -601,9 +685,33 @@ body{
         <span style="width:40px;text-align:right">Diff</span>
         <span style="width:70px"></span>
       </div>
-      <div id="roundList"></div>
+      <div id="roundListActive"></div>
+      <!-- Excluded -->
+      <div id="roundExcludedSection" style="display:none;margin-top:8px;border-top:1px solid var(--br)">
+        <div class="collapsible-hdr" onclick="toggleRndSection('excluded')" id="rndExcHdr" style="padding:6px 0">
+          <span style="font-size:.6rem;color:var(--tx3)">⊘ Excluded from handicap <span id="rndExcCount"></span></span>
+          <span class="chev">▼</span>
+        </div>
+        <div id="roundListExcluded" style="display:none"></div>
+      </div>
+      <!-- Multi-player -->
+      <div id="roundMultiSection" style="display:none;margin-top:8px;border-top:1px solid var(--br)">
+        <div class="collapsible-hdr" onclick="toggleRndSection('multi')" id="rndMultiHdr" style="padding:6px 0">
+          <span style="font-size:.6rem;color:var(--tx3)">👥 Multi-player rounds <span id="rndMultiCount"></span></span>
+          <span class="chev">▼</span>
+        </div>
+        <div id="roundListMulti" style="display:none"></div>
+      </div>
+      <!-- Archive -->
+      <div id="roundArchiveSection" style="display:none;margin-top:8px;border-top:1px solid var(--br)">
+        <div class="collapsible-hdr" onclick="toggleRndSection('archive')" id="rndArchHdr" style="padding:6px 0">
+          <span style="font-size:.6rem;color:var(--tx3)">🗄 Archive <span id="rndArchCount"></span></span>
+          <span class="chev">▼</span>
+        </div>
+        <div id="roundListArchive" style="display:none"></div>
+      </div>
     </div>
-    <p class="note">Up to 20 rounds stored. WHS formula used — best differentials averaged × 0.96.</p>
+    <p class="note">All rounds stored. WHS formula uses best differentials from your most recent 20 eligible rounds × 0.96.</p>
   </div>
 
   <!-- AI HELP -->
@@ -879,7 +987,7 @@ body{
         <div class="slbl">WHS Differential</div>
         Formula: <code>(Gross Score − Course Rating) × 113 ÷ Slope Rating</code>, rounded to one decimal. This matches the World Handicap System standard.
         <div class="slbl" style="margin-top:12px">Handicap Index</div>
-        Uses best differentials from round history per the WHS table: 1 round → best 1; 7–8 rounds → best 2; 9 rounds → best 3; 10–11 → best 4; 12–14 → best 5; 15–16 → best 6; 17–18 → best 7; 19–20 → best 8. Average of selected differentials × 0.96 (WHS playing conditions calculation factor). Maximum 20 rounds stored.
+        Uses best differentials from round history per the WHS table: 1 round → best 1; 7–8 rounds → best 2; 9 rounds → best 3; 10–11 → best 4; 12–14 → best 5; 15–16 → best 6; 17–18 → best 7; 19–20 → best 8. Average of selected differentials × 0.96 (WHS playing conditions calculation factor). All rounds are stored; only the most recent 20 eligible rounds are used for handicap calculation.
         <div class="slbl" style="margin-top:12px">Playing Handicap</div>
         Formula: <code>round(HCP Index × (Slope ÷ 113) + (Course Rating − Par))</code>. Applies to the selected tee and course.
         <div class="slbl" style="margin-top:12px">Stroke Allocation</div>
@@ -1071,6 +1179,167 @@ body{
     <div class="disc-footer">
       <div class="disc-agree">By continuing you confirm that you have read, understood, and accepted these terms.</div>
       <button class="btn" onclick="acceptDisclaimer()">I Understand &amp; Accept</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Live Round Overlay ─────────────────────────────────────────────── -->
+<div id="lrOverlay">
+  <!-- Setup screen -->
+  <div id="lrSetup" style="display:flex;flex-direction:column;height:100%;">
+    <div class="lr-topbar">
+      <div class="lr-topbar-title">⛳ Start Live Round</div>
+      <button class="btn sec" style="font-size:.6rem;padding:4px 10px" onclick="lrCancelSetup()">✕ Cancel</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px;">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Course</div>
+        <div class="field">
+          <div class="flbl">Select Course</div>
+          <select id="lrCourseSelect" onchange="lrOnCourseSelect()">
+            <option value="">— Impromptu / no course —</option>
+          </select>
+        </div>
+        <div id="lrTeeRow" style="display:none" class="field">
+          <div class="flbl">Tee</div>
+          <select id="lrTeeSelect"></select>
+        </div>
+        <div id="lrImprompt">
+          <div class="g2">
+            <div class="field">
+              <div class="flbl">Course Name (optional)</div>
+              <input id="lrCourseName" placeholder="e.g. King Valley">
+            </div>
+            <div class="field">
+              <div class="flbl">Holes</div>
+              <select id="lrHoleCount" onchange="lrOnHoleCountChange()">
+                <option value="18">18 holes</option>
+                <option value="9">9 holes</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" id="lrCustomHolesRow" style="display:none">
+            <div class="flbl">Number of holes</div>
+            <input id="lrCustomHoles" type="number" min="1" max="18" placeholder="e.g. 6" inputmode="numeric">
+          </div>
+        </div>
+        <div class="g2">
+          <div class="field">
+            <div class="flbl">Date</div>
+            <input type="date" id="lrDate">
+          </div>
+          <div class="field">
+            <div class="flbl">Conditions</div>
+            <select id="lrConditions">
+              <option value="calm">Calm</option>
+              <option value="light wind">Light Wind</option>
+              <option value="moderate wind">Moderate Wind</option>
+              <option value="strong wind">Strong Wind</option>
+              <option value="wet / soft">Wet / Soft</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Game Mode</div>
+        <div class="field">
+          <select id="lrMode" onchange="lrOnModeChange()">
+            <option value="stroke">Stroke Play</option>
+            <option value="stableford">Stableford</option>
+            <option value="matchplay">Match Play</option>
+            <option value="bestball">Best Ball</option>
+            <option value="scramble">Scramble</option>
+            <option value="foursomes">Foursomes (Alternate Shot)</option>
+          </select>
+        </div>
+        <div id="lrTeamNote" style="display:none;font-size:.62rem;color:var(--tx3);margin-top:-4px;line-height:1.6"></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.65rem;color:var(--tx2);cursor:pointer;margin-top:8px">
+          <input type="checkbox" id="lrCountHcp" checked> Count for handicap
+        </label>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Players</div>
+        <div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px">You are always Player 1. Tap ★ to mark yourself — required for handicap eligibility.</div>
+        <div id="lrPlayerSlots"></div>
+        <button class="add-club-btn" id="lrAddPlayerBtn" onclick="lrAddPlayer()" style="margin-top:8px">＋ Add Player (max 6)</button>
+        <div id="lrTeamSetup" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--br)">
+          <div class="flbl" style="margin-bottom:6px">Team Assignment</div>
+          <div id="lrTeamRows"></div>
+        </div>
+      </div>
+      <button class="rbtn" onclick="lrBeginRound()">⛳ Begin Round</button>
+    </div>
+  </div>
+  <!-- Active hole screen -->
+  <div id="lrHoleScreen" style="display:none;flex-direction:column;height:100%;">
+    <div class="lr-topbar">
+      <div>
+        <div class="lr-topbar-title" id="lrHdrTitle">GORDy Live Round</div>
+        <div style="font-size:.55rem;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase" id="lrHdrMeta"></div>
+      </div>
+      <div style="text-align:right">
+        <div class="lr-running" id="lrRunning">—</div>
+        <div style="font-size:.5rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase" id="lrRunningLbl">vs par</div>
+      </div>
+    </div>
+    <div class="lr-hole-strip" id="lrHoleStrip">
+      <div class="lr-hole-blk" id="lrHoleBlk">
+        <div class="lr-hole-n" id="lrHoleN">1</div>
+        <div style="font-size:.48rem;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase">Hole</div>
+      </div>
+      <div style="flex:1">
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--tx)" id="lrHoleInfo">Par · Yds</div>
+        <div style="font-size:.6rem;color:var(--tx3);margin-top:3px" id="lrHoleSi"></div>
+      </div>
+      <div class="lr-net-tog" id="lrNetTog" style="display:none">
+        <button id="lrGrossBtn" class="on" onclick="lrSetView('gross')">Gross</button>
+        <button id="lrNetBtn" onclick="lrSetView('net')">Net</button>
+      </div>
+    </div>
+    <div id="lrPlayerTabs" style="display:flex;border-bottom:1px solid var(--br);background:var(--sf);flex-shrink:0;overflow-x:auto;"></div>
+    <div class="lr-scroll" id="lrScroll"></div>
+    <div class="lr-bottom">
+      <button class="lr-nav-btn" id="lrPrevBtn" onclick="lrGoHole(-1)" disabled><span class="lr-nav-icon">←</span><span>Prev</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn" onclick="lrShowTally()"><span class="lr-nav-icon">📋</span><span>Tally</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn danger" onclick="lrEndRound()"><span class="lr-nav-icon">⏹</span><span>End</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn" onclick="lrMinimize()"><span class="lr-nav-icon">−</span><span>Pause</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn primary" id="lrNextBtn" onclick="lrGoHole(1)"><span class="lr-nav-icon" id="lrNextIcon">→</span><span id="lrNextLbl">Next</span></button>
+    </div>
+  </div>
+  <!-- Tally screen -->
+  <div id="lrTallyScreen" style="display:none;flex-direction:column;height:100%;">
+    <div class="lr-topbar">
+      <div class="lr-topbar-title">Scorecard</div>
+      <button class="btn sec" style="font-size:.6rem;padding:4px 10px" onclick="lrShowHole()">← Back</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:12px 16px 80px;"><div id="lrTallyContent"></div></div>
+  </div>
+  <!-- Summary screen -->
+  <div id="lrSummaryScreen" style="display:none;flex-direction:column;height:100%;">
+    <div style="padding:24px 18px;background:linear-gradient(135deg,var(--gr3),var(--sky2));border-bottom:1px solid var(--br);flex-shrink:0;text-align:center;">
+      <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Round Complete</div>
+      <div style="font-family:'Playfair Display',serif;font-size:3rem;font-weight:700;color:var(--ac2)" id="lrSumScore">—</div>
+      <div style="font-size:.68rem;color:var(--tx2);margin-top:4px" id="lrSumMeta"></div>
+      <div style="display:flex;gap:16px;justify-content:center;margin-top:14px" id="lrSumStats"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px;">
+      <div id="lrSumLeaderboard"></div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">Save &amp; Export</div>
+        <div style="font-size:.65rem;color:var(--tx2);line-height:1.7;margin-bottom:10px" id="lrSaveNote"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="lrSaveRound()">💾 Save Round</button>
+          <button class="btn gold" onclick="lrExportPdf()">📄 Export PDF</button>
+          <button class="btn sec" onclick="lrShowTallyFromSummary()">📋 Scorecard</button>
+        </div>
+        <div style="font-size:.58rem;color:var(--tx3);margin-top:6px" id="lrSaveStatus"></div>
+      </div>
+      <button class="btn sec" onclick="lrDiscardRound()" style="width:100%;color:var(--danger);border-color:var(--danger)">✕ Discard Round</button>
     </div>
   </div>
 </div>
@@ -1445,7 +1714,8 @@ function calcDiff(gross, rating, slope) {
   return Math.round((g-r)*113/s*10)/10;
 }
 function calcHandicap(rounds) {
-  const diffs = rounds.map(r=>r.diff).filter(d=>d!==null&&d!==undefined).sort((a,b)=>a-b);
+  const eligible = rounds.filter(r=>r.countForHandicap!==false);
+  const diffs = eligible.map(r=>r.diff).filter(d=>d!==null&&d!==undefined).sort((a,b)=>a-b);
   if(!diffs.length) return null;
   const n=diffs.length;
   const take = n>=20?8:n>=17?7:n>=15?6:n>=12?5:n>=10?4:n>=9?3:n>=7?2:1;
@@ -1603,8 +1873,9 @@ function serialise() {
   });
   lines.push(''); lines.push('=== ROUNDS ===');
   rounds.forEach(r=>{
-    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||''].join(' | '));
+    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||'',r.countForHandicap===false?'0':'1'].join(' | '));
     if(r.sessionIds?.length) lines.push('  SESSIONIDS | '+r.sessionIds.join(','));
+    if(r.players?.length) lines.push('  PLAYERS | '+r.players.map(p=>`${p.name||''}:${p.isMe?'1':'0'}:${p.handicap??''}:${p.score??''}`).join(','));
     if(r.holes?.length) r.holes.forEach(h=>lines.push('  HOLE | '+[h.n,h.par,h.score,h.putts,h.gir===true?'Y':h.gir===false?'N':'',h.notes||'',h.yards||''].join(' | ')));
   });
   lines.push('');
@@ -1743,10 +2014,12 @@ function processDataText(text) {
       }
       if(section==='rounds'&&line.startsWith('ROUND |')) {
         const p=line.split('|').map(s=>s.trim());
-        cur={id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',sessionIds:[],holes:[]};
+        cur={id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',sessionIds:[],holes:[],players:[]};
         newRounds.push(cur);
       } else if(section==='rounds'&&line.startsWith('SESSIONIDS |')&&cur) {
         cur.sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);
+      } else if(section==='rounds'&&line.startsWith('PLAYERS |')&&cur) {
+        cur.players=line.replace(/^PLAYERS \| /,'').trim().split(',').map(s=>{const[n,me,hcp,sc]=s.split(':');return{name:n||'',isMe:me==='1',handicap:hcp?+hcp:null,score:sc?+sc:null};});
       } else if(section==='rounds'&&line.startsWith('HOLE |')&&cur) {
         const p=line.split('|').map(s=>s.trim());
         cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||'',yards:p[7]||''});
@@ -2469,20 +2742,37 @@ function renderHandicap() {
   const n=rounds.length;
   const take=n>=20?8:n>=17?7:n>=15?6:n>=12?5:n>=10?4:n>=9?3:n>=7?2:1;
   document.getElementById('hcpMeta').textContent = hcp!==null?`${n} round${n!==1?'s':''} · best ${Math.min(take,n)} differentials · WHS formula`:'Log a round to calculate';
-  document.getElementById('roundCount').textContent=`(${n}/20)`;
+  document.getElementById('roundCount').textContent=`(${n})`;
   document.getElementById('roundHistCard').style.display=n?'block':'none';
-  document.getElementById('roundList').innerHTML=rounds.map(r=>{
-    const hasDetail=r.holes?.length>0;
-    const hasLinks=r.sessionIds?.length>0;
-    const gir=r.holes?.filter(h=>h.gir===true).length;
-    const girOf=r.holes?.filter(h=>h.gir!==null).length;
-    const girStr=girOf>0?`GIR: ${gir}/${girOf} · `:'';
+
+  // ── Categorise rounds ──────────────────────────────────────────────────
+  // Priority: multi-player (2+) → excluded → active (top-20 eligible) → archive
+  const eligible = rounds.filter(r=>r.countForHandicap!==false && !(r.players?.length>=2));
+  const top20Ids = new Set(eligible.slice(0,20).map(r=>r.id));
+
+  const buckets = {active:[], excluded:[], multi:[], archive:[]};
+  rounds.forEach(r=>{
+    if(r.players?.length>=2)          buckets.multi.push(r);
+    else if(r.countForHandicap===false) buckets.excluded.push(r);
+    else if(top20Ids.has(r.id))        buckets.active.push(r);
+    else                               buckets.archive.push(r);
+  });
+
+  const renderRound = r => {
+    const hasDetail = r.holes?.length>0;
+    const isMulti   = r.players?.length>=2;
+    const gir    = r.holes?.filter(h=>h.gir===true).length;
+    const girOf  = r.holes?.filter(h=>h.gir!==null).length;
+    const girStr = girOf>0?`GIR: ${gir}/${girOf} · `:'';
     const linkedBadges=(r.sessionIds||[]).map(sid=>{
       const s=history.find(h=>h.id===sid);
       if(!s) return '';
       const ico=s.type==='manual'?'✏️':'🤖';
       return `<span class="rnd-badge">${ico} ${fmtDate(s.date)}</span>`;
     }).join('');
+    const playerBadges = isMulti
+      ? r.players.map(p=>`<span class="rnd-badge">${p.isMe?'★ ':''} ${escHtml(p.name||'?')}${p.score?' · '+p.score:''}</span>`).join('')
+      : '';
     return `<div class="rnd-card" id="rnd-${r.id}">
       <div class="rnd-row">
         <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:100px">
@@ -2491,20 +2781,35 @@ function renderHandicap() {
         <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:44px;text-align:center">
         <span class="rnd-diff" id="rdiff-${r.id}">${r.diff!==null?r.diff:'—'}</span>
         <button class="rnd-del" onclick="rndToggleLink('${r.id}')" title="Link sessions" style="color:var(--tx3);font-size:.72rem">🔗</button>
+        ${isMulti?`<button class="rnd-del" onclick="rndRegenPdf('${r.id}')" title="Export scorecard PDF" style="font-size:.65rem">📄</button>`:''}
         ${hasDetail?`<button class="rnd-del" onclick="rndToggleDetail('${r.id}')" title="Hole detail">▼</button>`:''}
         <button class="rnd-del" onclick="deleteRound('${r.id}')">✕</button>
       </div>
       <div class="rnd-meta">
-        ${linkedBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${r.notes||girStr?'3px':'0'}">${linkedBadges}</div>`:''}
+        ${linkedBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${(r.notes||girStr||playerBadges)?'3px':'0'}">${linkedBadges}</div>`:''}
+        ${playerBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${(r.notes||girStr)?'3px':'0'}">${playerBadges}</div>`:''}
         ${girStr||r.notes?`<div style="font-size:.58rem;color:var(--tx3)">${girStr}${escHtml(r.notes||'')}</div>`:''}
       </div>
-      <div id="rnd-link-${r.id}" style="display:none;padding:4px 0 6px">
-        ${_rndLinkHTML(r)}
-      </div>
+      <div id="rnd-link-${r.id}" style="display:none;padding:4px 0 6px">${_rndLinkHTML(r)}</div>
       ${hasDetail?`<div id="rnd-detail-${r.id}" style="display:none;overflow-x:auto;padding-bottom:6px">${_rndDetailHTML(r)}</div>`:''}
     </div>`;
-  }).join('');
+  };
+
+  document.getElementById('roundListActive').innerHTML   = buckets.active.map(renderRound).join('')||'<div style="font-size:.65rem;color:var(--tx3);padding:8px 0">No active rounds yet.</div>';
+  document.getElementById('roundListExcluded').innerHTML = buckets.excluded.map(renderRound).join('');
+  document.getElementById('roundListMulti').innerHTML    = buckets.multi.map(renderRound).join('');
+  document.getElementById('roundListArchive').innerHTML  = buckets.archive.map(renderRound).join('');
+
+  // Show/hide sections and update counts
+  const showSection = (secId, hdrId, countId, items) => {
+    document.getElementById(secId).style.display = items.length ? '' : 'none';
+    document.getElementById(countId).textContent = items.length ? `(${items.length})` : '';
+  };
+  showSection('roundExcludedSection','rndExcHdr','rndExcCount',buckets.excluded);
+  showSection('roundMultiSection','rndMultiHdr','rndMultiCount',buckets.multi);
+  showSection('roundArchiveSection','rndArchHdr','rndArchCount',buckets.archive);
   // rCourse listener set once in renderAll
+  lrUpdatePill();
 }
 function onRoundCourseSelect() {
   const sel = document.getElementById('rCourseSelect');
@@ -2583,7 +2888,7 @@ function addRound() {
     const nt=row.querySelector('.rh-notes')?.value?.trim()||'';
     if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt,yards:row.dataset.yards||''});
   });
-  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes},...rounds].slice(0,20);
+  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes},...rounds];
   save(); renderHandicap();
   // Clear form
   document.getElementById('rScore').value='';
@@ -2603,6 +2908,45 @@ function addRound() {
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
 }
 function deleteRound(id){rounds=rounds.filter(r=>r.id!==id);save();renderHandicap();}
+function toggleRndSection(key){
+  const ids = {excluded:'roundListExcluded', multi:'roundListMulti', archive:'roundListArchive'};
+  const listEl = document.getElementById(ids[key]);
+  if(!listEl) return;
+  const open = listEl.style.display==='none';
+  listEl.style.display = open?'block':'none';
+  listEl.previousElementSibling?.querySelector('.chev')?.classList.toggle('open', open);
+}
+function rndRegenPdf(id) {
+  const r = rounds.find(x=>x.id===id);
+  if(!r||!r.players?.length) return;
+  // Reconstruct lrState-like object from stored round and call lrExportPdf
+  const savedState = lrState;
+  const totalPar = parseInt(r.par)||72;
+  const holeCount = r.holes?.length || 18;
+  lrState = {
+    courseName: r.courseName||'',
+    tee: r.tee||'',
+    date: r.date||today(),
+    conditions: r.notes||'calm',
+    mode: 'stroke',
+    rating: r.rating||'',
+    slope: r.slope||'',
+    holes: r.holes?.length
+      ? r.holes.map(h=>({n:+h.n,par:+h.par||4,yards:+h.yards||0,handicap:0}))
+      : Array.from({length:holeCount},(_,i)=>({n:i+1,par:4,yards:0,handicap:0})),
+    players: r.players.map(p=>({
+      name: p.name||'Player',
+      isMe: p.isMe||false,
+      handicap: p.handicap||null,
+      scores: r.holes?.length
+        ? r.holes.map(h=>({score:+h.score||null,putts:+h.putts||null,gir:h.gir,notes:h.notes||''}))
+        : Array.from({length:holeCount},()=>({score:null,putts:null,gir:null,notes:''})),
+    })),
+    netView: false,
+  };
+  lrExportPdf();
+  lrState = savedState;
+}
 function _rndLinkHTML(r){
   const cn=(r.courseName||'').toLowerCase();
   const matching=history.filter(h=>(h.type==='manual'||h.type==='optimisation'||h.type==='caddie'||h.type==='both')&&(h.course||'').toLowerCase().split(' ').some(w=>w&&cn.includes(w)));
@@ -3095,6 +3439,34 @@ function exportForAI() {
   L.push(`HCP_INDEX | ${hcpIdx !== null ? hcpIdx : 'not set'}`);
   L.push(`PLAYING_HCP | ${playHcp !== null ? playHcp : 'not computed — select course and tee'}`);
   L.push(`ACTIVE_CLUBS | ${activeCnt}`);
+
+  // Round context — smart 6-slot algorithm:
+  // From last 10 rounds: up to 6 most recent at this course, fill remainder with most recent other rounds
+  L.push('', '--- ROUND CONTEXT ---');
+  L.push('# Pre-filtered round history for this session. No further filtering needed.');
+  L.push(`# Course: ${course ? course.name : 'none selected'} · Up to 6 slots: course rounds prioritised, filled with recent rounds.`);
+  if(rounds.length) {
+    const last10 = [...rounds].slice(0,10); // already sorted newest first
+    const courseName = course?.name||'';
+    const courseMatches = last10.filter(r=>{
+      if(!courseName) return false;
+      const cn = (r.courseName||'').toLowerCase();
+      const sel = courseName.toLowerCase();
+      return cn === sel || cn.includes(sel.split(' ')[0]) || sel.includes(cn.split(' ')[0]);
+    });
+    const others = last10.filter(r=>!courseMatches.includes(r));
+    const slots = [...courseMatches.slice(0,6), ...others].slice(0,6);
+    if(slots.length) {
+      slots.forEach(r=>{
+        const atCourse = courseMatches.includes(r);
+        L.push(`ROUND | ${r.date} | ${r.courseName||''} | ${r.tee||''} | ${r.rating||''} | ${r.slope||''} | ${r.par||''} | ${r.score||''} | ${r.diff!==null?r.diff:''} | ${r.notes||''}${atCourse?' # this course':''}`);
+      });
+    } else {
+      L.push('# No rounds logged yet.');
+    }
+  } else {
+    L.push('# No rounds logged yet.');
+  }
 
   const blob = new Blob([L.join('\n')], {type:'text/plain'});
   const a = document.createElement('a');
@@ -4569,6 +4941,9 @@ function vizToggleClub(id){
 }
 
 
+// ── Live Round Tracker — state (declared before renderAll) ────────────────
+let lrState = null; // null = no active round
+
 load();
 applyRefDataCache(); // use cached ref data if available — before renderAll
 renderAll();
@@ -4582,6 +4957,906 @@ renderAll();
 })();
 // 2.5 — on load: check for pending session result in Gist + check for app update
 Promise.allSettled([checkSessionResult(), checkAppUpdate()]);
+
+// ── Live Round Tracker ────────────────────────────────────────────────────────
+// lrState shape:
+// { courseId, courseName, tee, date, conditions, mode, countForHandicap,
+//   holes:[{n,par,yards,handicap}], players:[{id,name,isMe,handicap,scores:[{score,putts,gir,notes}]}],
+//   mePlayerId, teams:[{name,playerIds:[]}], curHole, netView }
+
+// ── Mode metadata ──────────────────────────────────────────────────────────
+const LR_MODES = {
+  stroke:     { label:'Stroke Play',          teams:false, shared:false },
+  stableford: { label:'Stableford',           teams:false, shared:false },
+  matchplay:  { label:'Match Play',           teams:true,  shared:false },
+  bestball:   { label:'Best Ball',            teams:true,  shared:false },
+  scramble:   { label:'Scramble',             teams:true,  shared:true  },
+  foursomes:  { label:'Foursomes (Alt. Shot)',teams:true,  shared:true  },
+};
+const LR_MODE_NOTES = {
+  matchplay:  'Two players or two teams. Winner decided by holes won, not total strokes.',
+  bestball:   'Each player plays their own ball. Best score on each hole counts for the team.',
+  scramble:   'All players tee off, best shot chosen, everyone plays from there. One team score per hole.',
+  foursomes:  'Two teams, alternate shot. One ball per team, players alternate hitting.',
+};
+
+// ── Setup ──────────────────────────────────────────────────────────────────
+function lrStartSetup() {
+  if(lrState) { lrExpand(); return; }
+  // Populate course dropdown
+  const sel = document.getElementById('lrCourseSelect');
+  sel.innerHTML = '<option value="">— Impromptu / no course —</option>'
+    + courses.map(c=>`<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  // Date default
+  document.getElementById('lrDate').value = today();
+  // Init player slots with one player (you)
+  lrInitPlayerSlots();
+  lrOnModeChange();
+  document.getElementById('lrOverlay').classList.add('active');
+  lrShowScreen('lrSetup');
+}
+
+function lrInitPlayerSlots() {
+  // Single default player slot
+  const container = document.getElementById('lrPlayerSlots');
+  container.innerHTML = '';
+  lrAddPlayerSlot(1, true); // player 1, isMe=true by default
+}
+
+let _lrPlayerCount = 1;
+function lrAddPlayerSlot(n, isMe) {
+  const container = document.getElementById('lrPlayerSlots');
+  const pid = 'lrp'+n;
+  const div = document.createElement('div');
+  div.className = 'lr-player-slot';
+  div.id = 'lrSlot'+n;
+  div.dataset.n = n;
+  div.innerHTML = `
+    <button class="lr-tog ${isMe?'on-y':''}" style="width:32px;padding:6px;flex-shrink:0" onclick="lrToggleMe(${n})" title="Mark as you">★</button>
+    <input class="field" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none" placeholder="Player ${n} name" id="lrPName${n}" value="${isMe&&(profile.name||'')?profile.name:''}">
+    <input class="field" style="width:52px;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;text-align:center" placeholder="HCP" id="lrPHcp${n}" inputmode="decimal">
+    ${n>1?`<button style="background:none;border:none;color:var(--tx3);cursor:pointer;font-size:.8rem;padding:2px 6px" onclick="lrRemovePlayer(${n})">✕</button>`:''}
+  `;
+  container.appendChild(div);
+  if(isMe) {
+    // Mark all others as not-me
+    container.querySelectorAll('.lr-tog').forEach((b,i)=>{ if(i>0) b.classList.remove('on-y'); });
+  }
+}
+
+function lrToggleMe(n) {
+  // Only one player can be "me"
+  document.querySelectorAll('.lr-player-slot .lr-tog').forEach(b=>b.classList.remove('on-y'));
+  document.querySelector(`#lrSlot${n} .lr-tog`)?.classList.add('on-y');
+}
+
+function lrAddPlayer() {
+  const slots = document.querySelectorAll('.lr-player-slot');
+  if(slots.length >= 6) return;
+  _lrPlayerCount++;
+  lrAddPlayerSlot(_lrPlayerCount, false);
+  const addBtn = document.getElementById('lrAddPlayerBtn');
+  if(addBtn) addBtn.style.display = slots.length >= 5 ? 'none' : '';
+  lrRenderTeamSetup();
+}
+
+function lrRemovePlayer(n) {
+  document.getElementById('lrSlot'+n)?.remove();
+  const slots = document.querySelectorAll('.lr-player-slot');
+  const addBtn = document.getElementById('lrAddPlayerBtn');
+  if(addBtn) addBtn.style.display = slots.length < 6 ? '' : 'none';
+  lrRenderTeamSetup();
+}
+
+function lrOnCourseSelect() {
+  const val = document.getElementById('lrCourseSelect').value;
+  const imprompt = document.getElementById('lrImprompt');
+  const teeRow   = document.getElementById('lrTeeRow');
+  if(val && val !== '') {
+    const course = courses.find(c=>c.id===val);
+    teeRow.style.display = course?.tees?.length ? '' : 'none';
+    if(course?.tees?.length) {
+      document.getElementById('lrTeeSelect').innerHTML =
+        course.tees.map(t=>`<option value="${t.id}">${escHtml(t.name)} — ${t.yardage}y (${t.rating}/${t.slope})</option>`).join('');
+    }
+    imprompt.style.display = 'none';
+  } else {
+    teeRow.style.display = 'none';
+    imprompt.style.display = '';
+  }
+}
+
+function lrOnHoleCountChange() {
+  const val = document.getElementById('lrHoleCount').value;
+  document.getElementById('lrCustomHolesRow').style.display = val==='custom' ? '' : 'none';
+}
+
+function lrOnModeChange() {
+  const mode = document.getElementById('lrMode').value;
+  const note  = document.getElementById('lrTeamNote');
+  const teamSetup = document.getElementById('lrTeamSetup');
+  const hcpChk  = document.getElementById('lrCountHcp');
+  const hcpLbl  = hcpChk?.parentElement;
+  // Scramble and foursomes cannot count for handicap
+  const noHcp = mode==='scramble'||mode==='foursomes';
+  if(hcpChk) {
+    hcpChk.checked  = !noHcp;
+    hcpChk.disabled = noHcp;
+    if(hcpLbl) hcpLbl.style.opacity = noHcp ? '.4' : '1';
+    if(hcpLbl) hcpLbl.title = noHcp ? 'Scramble and foursomes cannot count for handicap' : '';
+  }
+  if(LR_MODE_NOTES[mode]) {
+    note.textContent = LR_MODE_NOTES[mode];
+    note.style.display = '';
+  } else {
+    note.style.display = 'none';
+  }
+  const needsTeams = LR_MODES[mode]?.teams;
+  teamSetup.style.display = needsTeams ? '' : 'none';
+  if(needsTeams) lrRenderTeamSetup();
+}
+
+function lrRenderTeamSetup() {
+  const mode = document.getElementById('lrMode').value;
+  if(!LR_MODES[mode]?.teams) return;
+  const slots = [...document.querySelectorAll('.lr-player-slot')];
+  const container = document.getElementById('lrTeamRows');
+  container.innerHTML = slots.map(s=>{
+    const n = s.dataset.n;
+    const name = document.getElementById('lrPName'+n)?.value || 'Player '+n;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--br);font-size:.68rem">
+      <span style="flex:1;color:var(--tx2)">${escHtml(name)}</span>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="lrTeam${n}" value="A" checked> Team A</label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="lrTeam${n}" value="B"> Team B</label>
+    </div>`;
+  }).join('');
+}
+
+function lrBeginRound() {
+  const mode = document.getElementById('lrMode').value;
+  const courseId = document.getElementById('lrCourseSelect').value;
+  const course = courseId ? courses.find(c=>c.id===courseId) : null;
+  const teeId  = course ? document.getElementById('lrTeeSelect').value : null;
+  const tee    = course?.tees?.find(t=>t.id===teeId) || course?.tees?.[0] || null;
+
+  // Build holes array
+  let holeArr = [];
+  if(tee?.holes?.length) {
+    holeArr = tee.holes.map(h=>({n:+h.number,par:+h.par||4,yards:+h.yards||0,handicap:+h.handicap||0}));
+  } else {
+    const countRaw = document.getElementById('lrHoleCount').value;
+    const count = countRaw==='custom'
+      ? (parseInt(document.getElementById('lrCustomHoles').value)||18)
+      : +countRaw;
+    holeArr = Array.from({length:count},(_,i)=>({n:i+1,par:4,yards:0,handicap:i+1}));
+  }
+
+  // Build players
+  const slots = [...document.querySelectorAll('.lr-player-slot')];
+  const players = slots.map(s=>{
+    const n = s.dataset.n;
+    const isMe = s.querySelector('.lr-tog')?.classList.contains('on-y') || false;
+    const name = document.getElementById('lrPName'+n)?.value || 'Player '+n;
+    const hcpRaw = document.getElementById('lrPHcp'+n)?.value;
+    const handicap = hcpRaw ? parseFloat(hcpRaw) : null;
+    return { id:'p'+n, name, isMe, handicap,
+      scores: holeArr.map(()=>({score:null,putts:null,gir:null,notes:''})) };
+  });
+
+  const mePlayer = players.find(p=>p.isMe);
+  const mePlayerId = mePlayer?.id || null;
+
+  // Build teams for team modes
+  let teams = [];
+  if(LR_MODES[mode]?.teams) {
+    const aPlayers=[], bPlayers=[];
+    slots.forEach(s=>{
+      const n = s.dataset.n;
+      const pid = 'p'+n;
+      const team = document.querySelector(`input[name="lrTeam${n}"]:checked`)?.value || 'A';
+      (team==='A'?aPlayers:bPlayers).push(pid);
+    });
+    teams = [{name:'Team A',playerIds:aPlayers},{name:'Team B',playerIds:bPlayers}];
+  }
+
+  lrState = {
+    courseId: courseId||null,
+    courseName: course?.name || document.getElementById('lrCourseName')?.value || 'Unnamed Course',
+    tee: tee?.name || '',
+    rating: tee?.rating || '',
+    slope: tee?.slope || '',
+    date: document.getElementById('lrDate').value || today(),
+    conditions: document.getElementById('lrConditions').value,
+    mode,
+    countForHandicap: document.getElementById('lrCountHcp').checked,
+    holes: holeArr,
+    players,
+    mePlayerId,
+    teams,
+    curHole: 0,       // 0-based index
+    curPlayer: 0,     // active player tab index
+    netView: false,
+    saved: false,
+  };
+
+  lrShowScreen('lrHoleScreen');
+  lrRenderHole();
+}
+
+function lrCancelSetup() {
+  document.getElementById('lrOverlay').classList.remove('active');
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function lrParClass(par) { return par===3?'par3':par===5?'par5':'par4'; }
+function lrRelTopar(score,par){ return score!==null?score-par:null; }
+function lrRelLabel(d){ if(d===null)return'—';if(d<=-2)return'−'+Math.abs(d);if(d===-1)return'−1';if(d===0)return'E';return'+'+d; }
+function lrRelCls(d){ if(d===null)return'';if(d<=-2)return'sc-eagle';if(d===-1)return'sc-birdie';if(d===0)return'sc-par';if(d===1)return'sc-bogey';return'sc-double'; }
+function lrSbbCls(d){ if(d===null)return'sbb-par';if(d<=-2)return'sbb-eagle';if(d===-1)return'sbb-birdie';if(d===0)return'sbb-par';if(d===1)return'sbb-bogey';return'sbb-double'; }
+
+function lrStrokesOnHole(player, hole) {
+  // WHS stroke allocation: playing HCP vs hole handicap
+  if(!player.handicap||!hole.handicap) return 0;
+  const course = lrState.courseId ? courses.find(c=>c.id===lrState.courseId) : null;
+  const par = lrState.holes.reduce((t,h)=>t+h.par,0);
+  const hcpIdx = player.handicap;
+  const slope = parseFloat(lrState.slope)||113;
+  const rating = parseFloat(lrState.rating)||par;
+  const playHcp = Math.round(hcpIdx*(slope/113)+(rating-par));
+  let strokes = 0;
+  if(playHcp >= hole.handicap) strokes++;
+  if(playHcp >= 18 + hole.handicap) strokes++;
+  return strokes;
+}
+
+function lrNetScore(player, holeIdx) {
+  const s = player.scores[holeIdx];
+  if(s.score===null) return null;
+  const strokes = lrStrokesOnHole(player, lrState.holes[holeIdx]);
+  return s.score - strokes;
+}
+
+function lrStablefordPts(player, holeIdx) {
+  const net = lrNetScore(player, holeIdx);
+  const par = lrState.holes[holeIdx].par;
+  if(net===null) return null;
+  return Math.max(0, 2-(net-par));
+}
+
+function lrRunningTotal(playerIdx) {
+  const p = lrState.players[playerIdx];
+  const mode = lrState.mode;
+  let total=0, par=0, any=false;
+  lrState.holes.forEach((h,i)=>{
+    const s = p.scores[i];
+    if(s.score!==null){
+      total+=s.score; par+=h.par; any=true;
+    }
+  });
+  if(!any) return null;
+  return mode==='stableford' ? null : total-par;
+}
+
+function lrHasAnyHandicap() {
+  return lrState.players.some(p=>p.handicap!==null);
+}
+
+// ── Render hole view ────────────────────────────────────────────────────────
+function lrRenderHole() {
+  if(!lrState) return;
+  const h   = lrState.holes[lrState.curHole];
+  const pc  = lrParClass(h.par);
+  const pi  = lrState.curPlayer;
+  const player = lrState.players[pi];
+  const s   = player.scores[lrState.curHole];
+  const mode = lrState.mode;
+  const shared = LR_MODES[mode]?.shared;
+
+  // Hole strip
+  const strip = document.getElementById('lrHoleStrip');
+  strip.className = 'lr-hole-strip '+pc;
+  const blk = document.getElementById('lrHoleBlk');
+  blk.className = 'lr-hole-blk '+pc;
+  const nEl = document.getElementById('lrHoleN');
+  nEl.className = 'lr-hole-n '+pc;
+  nEl.textContent = h.n;
+  document.getElementById('lrHoleInfo').textContent =
+    `Par ${h.par}${h.yards?' · '+h.yards+' yds':''}`;
+  document.getElementById('lrHoleSi').textContent =
+    h.handicap ? `SI ${h.handicap}` : '';
+
+  // Net toggle
+  const netTog = document.getElementById('lrNetTog');
+  const hasHcp = lrHasAnyHandicap();
+  netTog.style.display = hasHcp ? '' : 'none';
+  document.getElementById('lrGrossBtn').className = lrState.netView ? '' : 'on';
+  document.getElementById('lrNetBtn').className   = lrState.netView ? 'on' : '';
+
+  // Header
+  document.getElementById('lrHdrTitle').textContent = lrState.courseName || 'GORDy Live Round';
+  document.getElementById('lrHdrMeta').textContent  =
+    `H${lrState.curHole+1}/${lrState.holes.length} · ${LR_MODES[mode]?.label||mode}`;
+
+  // Running score (me player or current)
+  const meIdx = lrState.players.findIndex(p=>p.isMe);
+  const dispIdx = meIdx>=0 ? meIdx : 0;
+  const rt = lrRunningTotal(dispIdx);
+  const rtEl = document.getElementById('lrRunning');
+  rtEl.textContent = rt!==null ? lrRelLabel(rt) : '—';
+  rtEl.className   = 'lr-running '+(rt!==null?lrRelCls(rt):'');
+  document.getElementById('lrRunningLbl').textContent =
+    mode==='stableford' ? 'pts' : 'vs par';
+
+  // Player tabs
+  const tabsEl = document.getElementById('lrPlayerTabs');
+  if(lrState.players.length > 1 && !shared) {
+    tabsEl.style.display = 'flex';
+    tabsEl.innerHTML = lrState.players.map((p,i)=>
+      `<button class="lr-player-tab${i===pi?' active':''}" onclick="lrSetPlayer(${i})">${escHtml(p.name.split(' ')[0]||'P'+(i+1))}${p.isMe?' ★':''}</button>`
+    ).join('');
+  } else {
+    tabsEl.style.display = 'none';
+  }
+
+  // Score content
+  const scroll = document.getElementById('lrScroll');
+  if(shared) {
+    // Scramble / foursomes: one score for the team (use player 0)
+    const ts = lrState.players[0].scores[lrState.curHole];
+    scroll.innerHTML = lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
+  } else {
+    scroll.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
+  }
+
+  // Tally strip
+  scroll.innerHTML += lrTallyStrip();
+
+  // Nav
+  document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
+  const last = lrState.curHole === lrState.holes.length-1;
+  document.getElementById('lrNextIcon').textContent = last ? '✓' : '→';
+  document.getElementById('lrNextLbl').textContent  = last ? 'Finish' : 'Next';
+  document.getElementById('lrNextBtn').className    =
+    'lr-nav-btn primary'+(last?' sc-birdie':'');
+}
+
+function lrScoreBlock(player, holeIdx, hole, pi, shared) {
+  const s    = player.scores[holeIdx];
+  const diff = lrRelTopar(s.score, hole.par);
+  const netS = lrHasAnyHandicap() ? lrNetScore(player, holeIdx) : null;
+  const pts  = lrState.mode==='stableford' ? lrStablefordPts(player, holeIdx) : null;
+  const displayScore = (lrState.netView && netS!==null) ? netS : s.score;
+  const displayDiff  = (lrState.netView && netS!==null) ? lrRelTopar(netS, hole.par) : diff;
+  const label = shared ? 'Team Score' : 'Score';
+
+  const extraInfo = [
+    netS!==null && !lrState.netView ? `Net: ${netS}` : '',
+    pts!==null  ? `${pts} pt${pts!==1?'s':''}` : '',
+  ].filter(Boolean).join(' · ');
+
+  return `<div class="card" style="margin-bottom:0">
+    <div class="card-title">${label}</div>
+    <div class="lr-stepper" style="border-radius:8px;overflow:hidden">
+      <button class="lr-step-btn" onclick="lrAdj(${pi},${holeIdx},'score',-1,${shared})">−</button>
+      <div class="lr-step-val">
+        <div class="lr-step-num ${displayScore!==null?lrRelCls(displayDiff):''}">${displayScore!==null?displayScore:'—'}</div>
+        <div class="lr-step-rel ${displayScore!==null?lrRelCls(displayDiff):''}">${displayScore!==null?lrRelLabel(displayDiff):'tap to set'}</div>
+        ${extraInfo?`<div style="font-size:.54rem;color:var(--tx3);margin-top:2px">${extraInfo}</div>`:''}
+      </div>
+      <button class="lr-step-btn" onclick="lrAdj(${pi},${holeIdx},'score',1,${shared})">+</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">Putts</div>
+      <div class="lr-stepper">
+        <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',-1,${shared})">−</button>
+        <div class="lr-step-val"><div class="lr-step-num sm">${s.putts!==null?s.putts:'—'}</div></div>
+        <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',1,${shared})">+</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">GIR</div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button class="lr-tog ${s.gir===true?'on-y':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},true,${shared})">✓ Yes</button>
+        <button class="lr-tog ${s.gir===false?'on-n':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},false,${shared})">✗ No</button>
+      </div>
+      <div style="font-size:.54rem;color:var(--tx3);margin-top:6px">Reach in ${hole.par-2} stroke${hole.par-2!==1?'s':''}</div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:0" id="lrNoteCard">
+    <button class="notes-toggle" id="lrNoteToggle" onclick="lrToggleNote(${pi},${holeIdx})">📝 ${s.notes?s.notes.slice(0,40)+(s.notes.length>40?'…':''):'Add a note…'}</button>
+    <textarea id="lrNoteInput" style="display:${s.notes||lrState._noteOpen?'block':'none'};width:100%;background:var(--bg);border:1px solid var(--gr2);border-radius:6px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:10px;outline:none;resize:none;margin-top:8px;min-height:70px" oninput="lrSaveNote(${pi},${holeIdx},this.value,${shared})">${s.notes||''}</textarea>
+  </div>`;
+}
+
+function lrTallyStrip() {
+  if(lrState.players.length < 2) return '';
+  const mode = lrState.mode;
+  const shared = LR_MODES[mode]?.shared;
+  const rows = shared
+    ? lrState.teams.map(t=>{
+        const p0 = lrState.players.find(p=>t.playerIds.includes(p.id));
+        const rt = p0 ? lrRunningTotal(lrState.players.indexOf(p0)) : null;
+        return `<div class="lr-tally-row"><span class="lr-tally-name">${escHtml(t.name)}</span><span class="lr-tally-score ${rt!==null?lrRelCls(rt):''}">${rt!==null?lrRelLabel(rt):'—'}</span></div>`;
+      })
+    : lrState.players.map((p,i)=>{
+        const rt = lrRunningTotal(i);
+        return `<div class="lr-tally-row"><span class="lr-tally-name">${escHtml(p.name)}${p.isMe?' ★':''}</span><span class="lr-tally-score ${rt!==null?lrRelCls(rt):''}">${rt!==null?lrRelLabel(rt):'—'}</span></div>`;
+      });
+  return `<div class="lr-tally">${rows.join('')}</div>`;
+}
+
+// ── Interaction ────────────────────────────────────────────────────────────
+function lrAdj(pi, holeIdx, field, delta, shared) {
+  const targets = shared ? lrState.players : [lrState.players[pi]];
+  targets.forEach(p=>{
+    const s = p.scores[holeIdx];
+    if(field==='score'){
+      s.score = Math.max(1, (s.score!==null?s.score:lrState.holes[holeIdx].par)+delta);
+    } else {
+      s.putts = Math.max(0, (s.putts!==null?s.putts:0)+delta);
+    }
+  });
+  lrRenderHole();
+}
+
+function lrSetGir(pi, holeIdx, val, shared) {
+  const targets = shared ? lrState.players : [lrState.players[pi]];
+  targets.forEach(p=>{
+    const s = p.scores[holeIdx];
+    s.gir = s.gir===val ? null : val;
+  });
+  lrRenderHole();
+}
+
+function lrToggleNote(pi, holeIdx) {
+  lrState._noteOpen = !lrState._noteOpen;
+  lrRenderHole();
+  if(lrState._noteOpen) setTimeout(()=>document.getElementById('lrNoteInput')?.focus(),50);
+}
+
+function lrSaveNote(pi, holeIdx, val, shared) {
+  const targets = shared ? lrState.players : [lrState.players[pi]];
+  targets.forEach(p=>{ p.scores[holeIdx].notes = val; });
+}
+
+function lrSetPlayer(idx) {
+  lrState.curPlayer = idx;
+  lrState._noteOpen = false;
+  lrRenderHole();
+}
+
+function lrSetView(v) {
+  lrState.netView = v==='net';
+  lrRenderHole();
+}
+
+function lrGoHole(delta) {
+  const next = lrState.curHole + delta;
+  if(next < 0 || next >= lrState.holes.length) {
+    if(delta > 0) lrEndRound();
+    return;
+  }
+  lrState.curHole = next;
+  lrState.curPlayer = 0;
+  lrState._noteOpen = false;
+  lrRenderHole();
+}
+
+// ── Minimize / expand ──────────────────────────────────────────────────────
+function lrMinimize() {
+  document.getElementById('lrOverlay').classList.remove('active');
+  lrUpdatePill();
+}
+
+function lrExpand() {
+  document.getElementById('lrOverlay').classList.add('active');
+  lrShowScreen('lrHoleScreen');
+  lrRenderHole();
+}
+
+function lrUpdatePill() {
+  const pill = document.getElementById('lrPill');
+  if(!lrState || lrState.saved) { pill.classList.remove('visible'); return; }
+  pill.classList.add('visible');
+  const h = lrState.holes[lrState.curHole];
+  const meIdx = lrState.players.findIndex(p=>p.isMe);
+  const rt = meIdx>=0 ? lrRunningTotal(meIdx) : null;
+  document.getElementById('lrPillTxt').textContent =
+    `⛳ Live Round · H${h.n} of ${lrState.holes.length}`;
+  document.getElementById('lrPillMeta').textContent =
+    [lrState.courseName, rt!==null?lrRelLabel(rt)+' vs par':''].filter(Boolean).join(' · ');
+}
+
+// ── Tally view ─────────────────────────────────────────────────────────────
+function lrShowTally() {
+  lrRenderTally();
+  lrShowScreen('lrTallyScreen');
+}
+function lrShowTallyFromSummary() {
+  lrRenderTally();
+  lrShowScreen('lrTallyScreen');
+}
+function lrShowHole() {
+  lrShowScreen('lrHoleScreen');
+  lrRenderHole();
+}
+
+function lrRenderTally() {
+  const holesPlayed = lrState.holes;
+  const mode = lrState.mode;
+  const net  = lrState.netView && lrHasAnyHandicap();
+
+  // Build table header
+  const playerCols = LR_MODES[mode]?.shared
+    ? lrState.teams.map(t=>escHtml(t.name))
+    : lrState.players.map(p=>escHtml(p.name.split(' ')[0]||'P'));
+
+  let html = `<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.65rem">
+    <thead><tr style="border-bottom:2px solid var(--br)">
+      <th style="padding:5px 6px;text-align:left;color:var(--tx3);font-weight:400;font-size:.54rem;text-transform:uppercase;letter-spacing:.08em">H</th>
+      <th style="padding:5px 6px;text-align:center;color:var(--tx3);font-weight:400;font-size:.54rem">Par</th>
+      <th style="padding:5px 6px;text-align:center;color:var(--tx3);font-weight:400;font-size:.54rem">Yds</th>
+      ${playerCols.map(n=>`<th style="padding:5px 6px;text-align:center;color:var(--tx3);font-weight:400;font-size:.54rem">${n}</th>`).join('')}
+    </tr></thead>
+    <tbody>`;
+
+  let frontScore=[], backScore=[];
+  lrState.players.forEach(()=>{ frontScore.push(0); backScore.push(0); });
+
+  holesPlayed.forEach((h,hi)=>{
+    const rowBg = h.par===3?'background:var(--sky2)':h.par===5?'background:var(--sand2)':'';
+    const scores = LR_MODES[mode]?.shared
+      ? [lrState.players[0].scores[hi]] // team shared
+      : lrState.players.map(p=>p.scores[hi]);
+
+    const cells = scores.map((s,pi)=>{
+      const disp = net ? lrNetScore(lrState.players[pi],hi) : s.score;
+      const diff = lrRelTopar(disp, h.par);
+      if(disp!==null) hi<9 ? (frontScore[pi]+=disp) : (backScore[pi]+=disp);
+      return `<td style="padding:5px 6px;text-align:center"><span class="sbb ${lrSbbCls(diff)}">${disp!==null?disp:'—'}</span></td>`;
+    }).join('');
+
+    html += `<tr style="${rowBg};border-bottom:1px solid var(--br)">
+      <td style="padding:5px 6px;font-weight:700;color:var(--tx)">${h.n}</td>
+      <td style="padding:5px 6px;text-align:center;color:var(--tx2)">${h.par}</td>
+      <td style="padding:5px 6px;text-align:center;color:var(--tx3)">${h.yards||'—'}</td>
+      ${cells}
+    </tr>`;
+
+    // OUT subtotal after hole 9
+    if(h.n===9) {
+      const frontPar = holesPlayed.slice(0,9).reduce((t,x)=>t+x.par,0);
+      html += `<tr style="background:var(--gr3);border-bottom:1px solid var(--gr2)">
+        <td colspan="3" style="padding:5px 8px;font-size:.58rem;font-weight:600;color:var(--ac2);text-align:right">OUT</td>
+        ${lrState.players.map((_,pi)=>{
+          const v=frontScore[pi]; const d=v?v-frontPar:null;
+          return `<td style="padding:5px 6px;text-align:center;font-weight:600;color:var(--ac2)">${v||'—'}</td>`;
+        }).join('')}
+      </tr>`;
+    }
+  });
+
+  // IN + TOTAL
+  const totalPar = holesPlayed.reduce((t,h)=>t+h.par,0);
+  const frontPar = holesPlayed.slice(0,9).reduce((t,h)=>t+h.par,0);
+  const backPar  = totalPar - frontPar;
+  const hasBack  = holesPlayed.some(h=>h.n>9);
+
+  if(hasBack) {
+    html += `<tr style="background:var(--gr3);border-bottom:1px solid var(--gr2)">
+      <td colspan="3" style="padding:5px 8px;font-size:.58rem;font-weight:600;color:var(--ac2);text-align:right">IN</td>
+      ${lrState.players.map((_,pi)=>{const v=backScore[pi];return`<td style="padding:5px 6px;text-align:center;font-weight:600;color:var(--ac2)">${v||'—'}</td>`;}).join('')}
+    </tr>`;
+  }
+  html += `<tr style="background:var(--ac2);color:#fff">
+    <td colspan="3" style="padding:5px 8px;font-size:.58rem;font-weight:700;text-align:right">TOTAL</td>
+    ${lrState.players.map((_,pi)=>{
+      const v=(frontScore[pi]||0)+(backScore[pi]||0);
+      return `<td style="padding:5px 6px;text-align:center;font-weight:700">${v||'—'}</td>`;
+    }).join('')}
+  </tr>`;
+
+  html += `</tbody></table></div>`;
+
+  if(lrHasAnyHandicap()) {
+    html += `<div style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn sec" style="font-size:.6rem" onclick="lrState.netView=false;lrRenderTally()">Gross</button>
+      <button class="btn sec" style="font-size:.6rem" onclick="lrState.netView=true;lrRenderTally()">Net</button>
+    </div>`;
+  }
+  document.getElementById('lrTallyContent').innerHTML = html;
+}
+
+// ── End round ──────────────────────────────────────────────────────────────
+function lrEndRound() {
+  const played = lrState.holes.filter((_,i)=>lrState.players.some(p=>p.scores[i].score!==null)).length;
+  const msg = played < lrState.holes.length
+    ? `End round after hole ${lrState.holes[lrState.curHole].n}?\n${lrState.holes.length-played} hole(s) will be left blank.`
+    : 'Finish the round?';
+  if(!confirm(msg)) return;
+  lrShowScreen('lrSummaryScreen');
+  lrRenderSummary();
+}
+
+function lrRenderSummary() {
+  const meIdx = lrState.players.findIndex(p=>p.isMe);
+  const me    = meIdx>=0 ? lrState.players[meIdx] : lrState.players[0];
+  const totalScore = me.scores.reduce((t,s)=>t+(s.score||0),0);
+  const totalPar   = lrState.holes.reduce((t,h)=>t+h.par,0);
+  const played     = me.scores.filter(s=>s.score!==null).length;
+  const diff       = played ? totalScore-totalPar : null;
+  const totalPutts = me.scores.reduce((t,s)=>t+(s.putts||0),0);
+  const girCount   = me.scores.filter(s=>s.gir===true).length;
+  const girOf      = me.scores.filter(s=>s.gir!==null).length;
+
+  document.getElementById('lrSumScore').textContent = played ? totalScore : '—';
+  document.getElementById('lrSumScore').className   = 'lrSumScore '+(played?lrRelCls(diff):'');
+  document.getElementById('lrSumMeta').textContent  =
+    [lrState.courseName, lrState.tee?lrState.tee+' tees':'', played+' holes'].filter(Boolean).join(' · ');
+
+  document.getElementById('lrSumStats').innerHTML = [
+    {lbl:'vs Par', val:diff!==null?lrRelLabel(diff):'—', cls:diff!==null?lrRelCls(diff):''},
+    {lbl:'Putts',  val:totalPutts||'—', cls:''},
+    {lbl:'GIR',    val:girOf?`${girCount}/${girOf}`:'—', cls:''},
+  ].map(x=>`<div style="text-align:center">
+    <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:600;color:var(--ac2)" class="${x.cls}">${x.val}</div>
+    <div style="font-size:.52rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">${x.lbl}</div>
+  </div>`).join('<div style="width:1px;background:var(--br);margin:0 6px"></div>');
+
+  // Leaderboard
+  const sorted = [...lrState.players].sort((a,b)=>{
+    const as=a.scores.reduce((t,s)=>t+(s.score||0),0);
+    const bs=b.scores.reduce((t,s)=>t+(s.score||0),0);
+    return as-bs;
+  });
+  document.getElementById('lrSumLeaderboard').innerHTML = lrState.players.length>1
+    ? `<div class="card" style="margin-bottom:0"><div class="card-title">Leaderboard</div>
+    ${sorted.map((p,pos)=>{
+      const sc=p.scores.reduce((t,s)=>t+(s.score||0),0);
+      const par=lrState.holes.reduce((t,h)=>t+h.par,0);
+      const d=sc?sc-par:null;
+      return `<div class="lr-tally-row">
+        <span style="font-size:.6rem;color:var(--tx3);width:18px">${pos+1}.</span>
+        <span class="lr-tally-name">${escHtml(p.name)}${p.isMe?' ★':''}</span>
+        <span class="lr-tally-score ${d!==null?lrRelCls(d):''}">${sc||'—'}</span>
+        <span style="font-size:.6rem;color:var(--tx3);min-width:28px;text-align:right">${d!==null?lrRelLabel(d):''}</span>
+      </div>`;
+    }).join('')}</div>` : '';
+
+  // Save note
+  const noteEl = document.getElementById('lrSaveNote');
+  if(meIdx<0) {
+    noteEl.innerHTML = '⚠ No player marked as you — round will be saved without handicap eligibility. <a href="#" onclick="event.preventDefault();lrShowScreen(\'lrHoleScreen\');lrRenderHole()">Go back to mark yourself.</a>';
+  } else {
+    const hasSI = lrState.holes.every(h=>h.handicap>0);
+    const capNote = lrState.countForHandicap && me?.handicap && hasSI
+      ? ' Net double bogey cap applied per hole for differential.' : '';
+    noteEl.textContent = lrState.countForHandicap
+      ? 'Your score will be saved and counted toward your handicap.'+capNote
+      : 'Your score will be saved but excluded from handicap calculation.';
+  }
+}
+
+// ── Save ───────────────────────────────────────────────────────────────────
+function lrCalcDiffWithCap(meIdx) {
+  // Returns {diff, capped} where capped=true means net double bogey was applied
+  const me = lrState.players[meIdx];
+  const rating = parseFloat(lrState.rating);
+  const slope  = parseFloat(lrState.slope);
+  if(!rating || !slope) return {diff: null, capped: false};
+
+  const hasSI = lrState.holes.every(h=>h.handicap>0);
+  if(!hasSI || !me.handicap) {
+    // No SI data — fall back to raw total
+    const total = me.scores.reduce((t,s)=>t+(s.score||0),0);
+    return {diff: total ? calcDiff(total, rating, slope) : null, capped: false};
+  }
+
+  // Apply net double bogey cap per hole
+  let cappedTotal = 0, anyCapped = false;
+  lrState.holes.forEach((h,i)=>{
+    const s = me.scores[i];
+    if(s.score===null) return;
+    const strokes = lrStrokesOnHole(me, h);
+    const maxScore = h.par + 2 + strokes; // net double bogey
+    const actual = s.score;
+    const used   = Math.min(actual, maxScore);
+    if(used < actual) anyCapped = true;
+    cappedTotal += used;
+  });
+  const diff = calcDiff(cappedTotal, rating, slope);
+  return {diff, capped: anyCapped};
+}
+function lrSaveRound() {
+  if(lrState.saved) { document.getElementById('lrSaveStatus').textContent='Already saved.'; return; }
+  const meIdx = lrState.players.findIndex(p=>p.isMe);
+  const me    = meIdx>=0 ? lrState.players[meIdx] : null;
+  const totalScore = me ? me.scores.reduce((t,s)=>t+(s.score||0),0) : null;
+  const par        = lrState.holes.reduce((t,h)=>t+h.par,0);
+  const {diff, capped} = meIdx>=0 ? lrCalcDiffWithCap(meIdx) : {diff:null, capped:false};
+
+  const newRound = {
+    id: uid(),
+    date: lrState.date,
+    courseName: lrState.courseName,
+    tee: lrState.tee||'',
+    rating: lrState.rating||'',
+    slope: lrState.slope||'',
+    par: String(par),
+    score: totalScore ? String(totalScore) : '',
+    diff,
+    notes: lrState.conditions !== 'calm' ? lrState.conditions : '',
+    countForHandicap: me ? lrState.countForHandicap : false,
+    sessionIds: [],
+    holes: me ? me.scores.map((s,i)=>({
+      n: lrState.holes[i].n,
+      par: String(lrState.holes[i].par),
+      yards: String(lrState.holes[i].yards||''),
+      score: s.score!==null?String(s.score):'',
+      putts: s.putts!==null?String(s.putts):'',
+      gir: s.gir,
+      notes: s.notes||'',
+    })).filter(h=>h.score) : [],
+    players: lrState.players.map(p=>({
+      name: p.name,
+      isMe: p.isMe,
+      handicap: p.handicap,
+      score: p.scores.reduce((t,s)=>t+(s.score||0),0) || null,
+    })),
+  };
+
+  rounds = [newRound, ...rounds];
+  save();
+  renderHandicap();
+  lrState.saved = true;
+  const st = document.getElementById('lrSaveStatus');
+  st.style.color = 'var(--ac)';
+  st.textContent = '✓ Round saved.'+(capped?' Max score (net double bogey) applied to differential.':'');
+  lrUpdatePill();
+}
+
+// ── PDF export ─────────────────────────────────────────────────────────────
+function lrExportPdf() {
+  const players  = lrState.players;
+  const holes    = lrState.holes;
+  const hasHcp   = lrHasAnyHandicap();
+  const mode     = LR_MODES[lrState.mode]?.label || lrState.mode;
+  const totalPar = holes.reduce((t,h)=>t+h.par,0);
+
+  function scoreRow(hole, scores, net) {
+    const bg = hole.par===3?'#edf3f7':hole.par===5?'#fff8ee':'#fff';
+    const cells = scores.map(s=>{
+      const disp = net&&s.netScore!==null?s.netScore:s.score;
+      const d = disp!==null?disp-hole.par:null;
+      const cls = d===null?'':d<=-2?'color:#c8860a':d===-1?'color:#3d6b35':d===1?'color:#b89a5a':d>=2?'color:#a03030':'';
+      return `<td style="text-align:center;${cls};font-weight:${d!==null&&d<0?'700':'400'}">${disp!==null?disp:'—'}</td>`;
+    }).join('');
+    return `<tr style="background:${bg}">\n<td style="text-align:center;font-weight:700">${hole.n}</td><td style="text-align:center">${hole.par}</td><td style="text-align:center;color:#8a9e82">${hole.yards||'—'}</td>${cells}\n</tr>`;
+  }
+
+  function buildScores(net) {
+    return holes.map(h=>{
+      const ss = players.map(p=>{
+        const s = p.scores[holes.indexOf(h)];
+        const ns = hasHcp ? lrNetScore(p, holes.indexOf(h)) : null;
+        return {score:s.score, netScore:ns};
+      });
+      return scoreRow(h, ss, net);
+    });
+  }
+
+  function subRow(label, scores) {
+    return `<tr style="background:#e8f0e5;font-weight:600;font-size:.58rem">
+      <td colspan="3" style="text-align:right;padding:4px 7px;color:#2d5127">${label}</td>
+      ${scores.map(v=>`<td style="text-align:center;color:#2d5127">${v||'—'}</td>`).join('')}
+    </tr>`;
+  }
+
+  function buildTable(net, label) {
+    const front = holes.filter(h=>h.n<=9);
+    const back  = holes.filter(h=>h.n>9);
+    const rows  = buildScores(net).join('');
+    const frontTotals = players.map(p=>{
+      return front.reduce((t,h)=>{
+        const s=p.scores[holes.indexOf(h)];
+        const v=net?(lrNetScore(p,holes.indexOf(h))||0):( s.score||0);
+        return t+v;
+      },0);
+    });
+    const backTotals = players.map(p=>{
+      return back.reduce((t,h)=>{
+        const s=p.scores[holes.indexOf(h)];
+        const v=net?(lrNetScore(p,holes.indexOf(h))||0):(s.score||0);
+        return t+v;
+      },0);
+    });
+    const totals = players.map((_,i)=>(frontTotals[i]||0)+(backTotals[i]||0));
+
+    const outRow = front.length ? subRow('OUT',frontTotals) : '';
+    const inRow  = back.length  ? subRow('IN', backTotals)  : '';
+    const totRow = `<tr style="background:#2d5127;color:#fff;font-weight:700">
+      <td colspan="3" style="text-align:right;padding:4px 7px;font-size:.6rem">TOTAL</td>
+      ${totals.map(v=>`<td style="text-align:center">${v||'—'}</td>`).join('')}
+    </tr>`;
+
+    const phCols = players.map(p=>`<th style="text-align:center">${escHtml(p.name.split(' ')[0]||'P')}</th>`).join('');
+    return `<div class="card"><h3>${label}</h3>
+    <table><thead><tr><th style="text-align:center">H</th><th style="text-align:center">Par</th><th style="text-align:center">Yds</th>${phCols}</tr></thead>
+    <tbody>${rows}${outRow}${inRow}${totRow}</tbody></table></div>`;
+  }
+
+  const leaderboard = [...players].sort((a,b)=>{
+    return a.scores.reduce((t,s)=>t+(s.score||0),0) - b.scores.reduce((t,s)=>t+(s.score||0),0);
+  }).map((p,i)=>{
+    const sc=p.scores.reduce((t,s)=>t+(s.score||0),0);
+    const d=sc?sc-totalPar:null;
+    return `<tr><td>${i+1}</td><td>${escHtml(p.name)}${p.isMe?' ★':''}</td><td style="text-align:center">${sc||'—'}</td><td style="text-align:center;color:${d&&d<0?'#3d6b35':d&&d>0?'#a03030':'#2c3a28'}">${d!==null?lrRelLabel(d):'—'}</td><td style="text-align:center">${p.handicap||'—'}</td></tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GORDy Round — ${escHtml(lrState.courseName)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Mono',monospace;background:#f4efe6;color:#2c3a28;padding:20px;max-width:960px;margin:0 auto;font-size:.76rem;}
+@media print{body{background:#fff;padding:8px;font-size:.7rem;}.no-print{display:none;}.page-break{page-break-before:always;}}
+.hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:8px;padding:14px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;}
+.hero-title{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:#2d5127;}
+.hero-meta{font-size:.6rem;color:#8a9e82;margin-top:3px;}
+.card{background:#fff;border:1px solid #ddd5c4;border-radius:6px;padding:12px 14px;margin-bottom:10px;}
+h3{font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd5c4;}
+table{width:100%;border-collapse:collapse;}
+td,th{padding:3px 6px;border-bottom:1px solid #f0ebe0;vertical-align:middle;}
+th{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:#8a9e82;font-weight:400;border-bottom:2px solid #ddd5c4;}
+.print-btn{margin-bottom:12px;padding:5px 14px;background:#3d6b35;color:#fff;border:none;border-radius:4px;font-family:monospace;font-size:.68rem;cursor:pointer;}
+.footer{text-align:center;font-size:.5rem;color:#8a9e82;margin-top:16px;letter-spacing:.1em;text-transform:uppercase;}
+</style></head><body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+<div class="hero">
+  <div><div class="hero-title">⛳ ${escHtml(lrState.courseName)}</div>
+  <div class="hero-meta">${escHtml(mode)} · ${lrState.date} · ${escHtml(lrState.conditions)} · ${holes.length} holes</div></div>
+  <div style="text-align:right;font-size:.62rem;color:#8a9e82">${lrState.tee?lrState.tee+' tees':''}</div>
+</div>
+
+${buildTable(false,'Scorecard — Gross')}
+
+${hasHcp?`<div class="page-break"></div>${buildTable(true,'Scorecard — Net')}`:''}
+
+<div class="page-break"></div>
+<div class="card"><h3>Leaderboard</h3>
+<table><thead><tr><th>#</th><th>Player</th><th style="text-align:center">Gross</th><th style="text-align:center">vs Par</th><th style="text-align:center">HCP</th></tr></thead>
+<tbody>${leaderboard}</tbody></table></div>
+
+<div class="footer">GORDy the Virtual Caddy · Round generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+  const blob = new Blob([html],{type:'text/html'});
+  const url  = URL.createObjectURL(blob);
+  const w    = window.open(url,'_blank');
+  if(w) w.onunload=()=>URL.revokeObjectURL(url);
+  else  URL.revokeObjectURL(url);
+}
+
+// ── Discard ────────────────────────────────────────────────────────────────
+function lrDiscardRound() {
+  if(!confirm('Discard this round? All scores will be lost.')) return;
+  lrState = null;
+  document.getElementById('lrOverlay').classList.remove('active');
+  lrUpdatePill();
+}
+
+// ── Screen switcher ────────────────────────────────────────────────────────
+function lrShowScreen(id) {
+  ['lrSetup','lrHoleScreen','lrTallyScreen','lrSummaryScreen'].forEach(s=>{
+    const el=document.getElementById(s);
+    if(el) el.style.display = s===id ? 'flex' : 'none';
+  });
+}
+
+// ── Wire pill into renderHandicap ──────────────────────────────────────────
 
 // ── Disclaimer ────────────────────────────────────────────────────────────────
 function showDisclaimer() {
