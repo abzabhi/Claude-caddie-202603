@@ -132,6 +132,9 @@ body{
 .card{background:var(--sf);border:1px solid var(--br);border-radius:8px;padding:18px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05);}.card-body{font-size:.71rem;color:var(--tx2);line-height:1.9;}
 .card-title{font-family:'Playfair Display',serif;font-size:.95rem;font-weight:600;color:var(--ac2);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
 .card-title::after{content:'';flex:1;height:1px;background:var(--br);}
+.collapsible-hdr{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;cursor:pointer;user-select:none;font-size:.62rem;font-weight:600;color:var(--tx2);letter-spacing:.05em;}
+.collapsible-hdr .chev{font-size:.6rem;color:var(--tx3);transition:transform .2s;}
+.collapsible-hdr.open .chev{transform:rotate(180deg);}
 .flbl{font-size:.57rem;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);margin-bottom:3px;}
 .field{margin-bottom:10px;}
 .field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.74rem;padding:6px 9px;outline:none;transition:border-color .15s;}
@@ -158,6 +161,21 @@ body{
 .rnd-diff{color:var(--gold);min-width:40px;text-align:right;flex-shrink:0;}
 .rnd-del{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:.68rem;padding:2px 5px;flex-shrink:0;}
 .rnd-del:hover{color:var(--danger);}
+.rnd-card{border-bottom:1px solid var(--br);}
+.rnd-card:last-child{border-bottom:none;}
+.rnd-card .rnd-row{border-bottom:none;padding-bottom:2px;}
+.rnd-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:2px 0 6px;min-height:0;}
+.rnd-badge{display:inline-block;font-size:.5rem;letter-spacing:.05em;background:var(--gr3);color:var(--tx2);border:1px solid var(--br);border-radius:3px;padding:1px 5px;}
+.rnd-hole-tbl{width:100%;border-collapse:collapse;font-size:.62rem;margin-top:2px;}
+.rnd-hole-tbl th{color:var(--tx3);font-weight:normal;text-transform:uppercase;letter-spacing:.07em;font-size:.52rem;padding:3px 5px;border-bottom:1px solid var(--br);text-align:center;}
+.rnd-hole-tbl td{padding:3px 5px;border-bottom:1px solid var(--br);text-align:center;color:var(--tx2);}
+.rnd-hole-tbl tr:last-child td{border-bottom:none;}
+.rnd-hole-tbl td:first-child{color:var(--tx3);font-size:.55rem;}
+.rnd-hole-inp{background:transparent;border:none;border-bottom:1px solid var(--br);color:var(--tx);font-family:'DM Mono',monospace;font-size:.62rem;width:36px;text-align:center;padding:1px 2px;outline:none;}
+.rnd-hole-inp:focus{border-bottom-color:var(--gr2);background:var(--gr3);}
+.rnd-gir-btn{background:none;border:1px solid var(--br);border-radius:3px;font-family:'DM Mono',monospace;font-size:.55rem;padding:1px 5px;cursor:pointer;color:var(--tx3);}
+.rnd-gir-btn.on-y{background:var(--gr3);border-color:var(--gr2);color:var(--ac2);}
+.rnd-gir-btn.on-n{background:#3a1a1a;border-color:#7a2a2a;color:#c06060;}
 
 /* Courses */
 .course-card{background:var(--sf);border:1px solid var(--br);border-radius:6px;padding:14px;margin-bottom:8px;cursor:pointer;transition:all .18s;box-shadow:0 1px 3px rgba(0,0,0,.04);}
@@ -288,7 +306,7 @@ body{
   <div class="hdr">
     <div>
       <div class="hdr-title">Gordy the Virtual Caddy</div>
-      <div class="hdr-sub">Profile · Clubs · Courses · Handicap · Caddie · Viz · Notes</div>
+      <div class="hdr-sub">Profile · Clubs · Courses · Handicap · Caddie · Viz/Plan · Notes</div>
     </div>
     <div class="hdr-flag">⛳</div>
   </div>
@@ -315,11 +333,12 @@ body{
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" onclick="showTab('profile')">Profile</button>
-    <button class="tab" onclick="showTab('clubs')">Clubs <span class="badge" id="clubsBadge">0</span></button>
-    <button class="tab" onclick="showTab('courses')">Courses <span class="badge" id="coursesBadge">0</span></button>
-    <button class="tab" onclick="showTab('handicap')">Handicap</button>
-    <button class="tab" onclick="showTab('sessions')">Caddie <span class="badge" id="sessionsBadge">0</span></button>
+    <button class="tab" onclick="showTab('gordy')">GORDy</button>
+    <button class="tab" onclick="showTab('sessions')">Sessions <span class="badge" id="sessionsBadge">0</span></button>
     <button class="tab" onclick="showTab('viz')">Viz</button>
+    <button class="tab" onclick="showTab('rounds')">Rounds</button>
+    <button class="tab" onclick="showTab('courses')">Courses <span class="badge" id="coursesBadge">0</span></button>
+    <button class="tab" onclick="showTab('clubs')">Clubs <span class="badge" id="clubsBadge">0</span></button>
     <button class="tab" onclick="showTab('notes')">Notes</button>
   </div>
 
@@ -340,8 +359,8 @@ body{
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card" onclick="showTabFromProfile('sessions')" style="cursor:pointer" title="Go to Caddie tab"><div class="stat-num" id="statSessions">0</div><div class="stat-lbl">Caddie Sessions</div></div>
-      <div class="stat-card" onclick="showTabFromProfile('handicap')" style="cursor:pointer" title="Go to Handicap tab"><div class="stat-num" id="statRounds">0</div><div class="stat-lbl">Rounds Logged</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('sessions')" style="cursor:pointer" title="Go to Sessions tab"><div class="stat-num" id="statSessions">0</div><div class="stat-lbl">Caddie Sessions</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('rounds')" style="cursor:pointer" title="Go to Rounds tab"><div class="stat-num" id="statRounds">0</div><div class="stat-lbl">Rounds Logged</div></div>
       <div class="stat-card" onclick="showTabFromProfile('clubs')" style="cursor:pointer" title="Go to Clubs tab"><div class="stat-num" id="statClubSessions">0</div><div class="stat-lbl">Club Sessions</div></div>
     </div>
     <div class="stats-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
@@ -471,7 +490,7 @@ body{
   </div>
 
   <!-- HANDICAP -->
-  <div id="tab-handicap" class="panel">
+  <div id="tab-rounds" class="panel">
     <div class="hcp-display">
       <div class="hcp-num" id="hcpNum">—</div>
       <div class="hcp-lbl" id="hcpLbl">Handicap Index</div>
@@ -501,7 +520,7 @@ body{
         </div>
         <div class="field">
           <div class="flbl">Course</div>
-          <select id="rCourseSelect" onchange="onRoundCourseSelect()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 7px;outline:none;">
+          <select id="rCourseSelect" onchange="onRoundCourseSelect()">
             <option value="">— Select saved course —</option>
             <option value="__manual__">Enter manually…</option>
           </select>
@@ -549,89 +568,180 @@ body{
         <div class="flbl">Round Notes (optional)</div>
         <input id="rNotes" placeholder="e.g. Windy, drove well, struggled with irons…">
       </div>
-      <button class="btn" onclick="addRound()">+ Add Round</button>
+      <!-- Hole detail (detailed mode) -->
+      <div id="rHoleGrid" style="display:none;margin-bottom:8px"></div>
+      <!-- Session linker -->
+      <div style="border-top:1px solid var(--br);margin:8px 0 6px"></div>
+      <div class="collapsible-hdr" onclick="toggleRndLinker()" style="padding:4px 0">
+        <span>🔗 Link to caddie session <span style="font-size:.55rem;color:var(--tx3)">(optional)</span></span>
+        <span class="chev" id="rSessChev">▼</span>
+      </div>
+      <div id="rSessLinker" style="display:none;padding:4px 0 8px">
+        <div id="rSessLinkerList"></div>
+      </div>
+      <!-- Actions -->
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
+        <button class="btn" onclick="addRound()">+ Add Round</button>
+        <button class="implied-tog" id="rModeBtn" onclick="toggleRoundMode()" title="Switch between simple and detailed hole-by-hole entry">Simple</button>
+        <button class="btn sec" style="font-size:.62rem;padding:4px 10px" onclick="exportRoundTask()" title="Export a file to drop into an AI chat to log rounds or parse a scorecard">🤖 Get AI Help</button>
+      </div>
     </div>
     <div class="card" id="roundHistCard" style="display:none">
       <div class="card-title">Round History <span id="roundCount" style="font-size:.62rem;font-family:'IBM Plex Mono';color:var(--tx3)"></span></div>
       <div class="rnd-header">
         <span style="width:100px">Date</span>
         <span style="flex:1;min-width:80px">Course</span>
-        <span style="width:70px">Tee</span>
-        <span style="width:48px;text-align:center">Score</span>
-        <span style="width:38px;text-align:center">Rating</span>
-        <span style="width:36px;text-align:center">Slope</span>
-        <span style="width:44px;text-align:right">Diff</span>
-        <span style="flex:1;min-width:60px">Notes</span>
-        <span style="width:24px"></span>
+        <span style="width:60px">Tee</span>
+        <span style="width:44px;text-align:center">Score</span>
+        <span style="width:40px;text-align:right">Diff</span>
+        <span style="width:70px"></span>
       </div>
       <div id="roundList"></div>
     </div>
     <p class="note">Up to 20 rounds stored. WHS formula used — best differentials averaged × 0.96.</p>
   </div>
 
-  <!-- CADDIE -->
-  <div id="tab-sessions" class="panel">
+  <!-- AI HELP -->
+  <div id="tab-gordy" class="panel">
+
+    <!-- Card 1: Caddie Session -->
     <div class="card">
-      <div class="card-title">Session Parameters</div>
-      <div class="g2" style="margin-bottom:10px">
-        <div class="field">
-          <div class="flbl">Session Type</div>
-          <select id="cadType">
-            <option value="both">Bag + Hole-by-Hole</option>
-            <option value="optimisation">Bag Optimisation</option>
-            <option value="caddie">Hole-by-Hole</option>
-            <option value="data-update">Data Update</option>
-          </select>
-        </div>
-        <div class="field">
-          <div class="flbl">Holes</div>
-          <select id="cadHoles">
-            <option value="all 18">All 18</option>
-            <option value="front 9">Front 9 (1–9)</option>
-            <option value="back 9">Back 9 (10–18)</option>
-          </select>
-        </div>
-        <div class="field">
-          <div class="flbl">Course</div>
-          <select id="cadCourse" onchange="updateCadTees()"></select>
-        </div>
-        <div class="field">
-          <div class="flbl">Tee</div>
-          <select id="cadTee"></select>
-        </div>
+      <div class="collapsible-hdr" onclick="toggleCard('ah-caddie')" id="ah-caddie-hdr">
+        <span>🤖 Caddie Session</span><span class="chev">▼</span>
       </div>
-      <div class="g2" style="margin-bottom:12px">
-        <div class="field">
-          <div class="flbl">Conditions</div>
-          <select id="cadConditions">
-            <option value="calm">Calm</option>
-            <option value="light wind">Light Wind</option>
-            <option value="moderate wind">Moderate Wind</option>
-            <option value="strong wind">Strong Wind</option>
-            <option value="wet / soft">Wet / Soft</option>
-          </select>
+      <div id="ah-caddie-body" style="display:none;padding-top:10px">
+        <div class="g2" style="margin-bottom:10px">
+          <div class="field">
+            <div class="flbl">Session Type</div>
+            <select id="cadType">
+              <option value="both">Bag + Hole-by-Hole</option>
+              <option value="optimisation">Bag Optimisation</option>
+              <option value="caddie">Hole-by-Hole</option>
+              <option value="data-update">Data Update</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="flbl">Holes</div>
+            <select id="cadHoles">
+              <option value="all 18">All 18</option>
+              <option value="front 9">Front 9 (1–9)</option>
+              <option value="back 9">Back 9 (10–18)</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="flbl">Course</div>
+            <select id="cadCourse" onchange="updateCadTees()"></select>
+          </div>
+          <div class="field">
+            <div class="flbl">Tee</div>
+            <select id="cadTee"></select>
+          </div>
         </div>
-        <div class="field">
-          <div class="flbl">Optimisation Tier</div>
-          <select id="cadOptTier" onchange="localStorage.setItem('vc:optTier',this.value)">
-            <option value="4">4 — Full</option>
-            <option value="3">3 — Advanced</option>
-            <option value="2">2 — Standard</option>
-            <option value="1">1 — Basic</option>
-          </select>
+        <div class="g2" style="margin-bottom:12px">
+          <div class="field">
+            <div class="flbl">Conditions</div>
+            <select id="cadConditions">
+              <option value="calm">Calm</option>
+              <option value="light wind">Light Wind</option>
+              <option value="moderate wind">Moderate Wind</option>
+              <option value="strong wind">Strong Wind</option>
+              <option value="wet / soft">Wet / Soft</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="flbl">Optimisation Tier</div>
+            <select id="cadOptTier" onchange="localStorage.setItem('vc:optTier',this.value)">
+              <option value="4">4 — Full</option>
+              <option value="3">3 — Advanced</option>
+              <option value="2">2 — Standard</option>
+              <option value="1">1 — Basic</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn gold" onclick="exportForAI()">&#8679; Export for AI</button>
-        <label class="btn sec" style="cursor:pointer">&#8681; Import Session Result<input type="file" accept=".txt" style="display:none" onchange="importSessionResult(event)"></label>
-      </div>
-      <div id="cadStatus" style="font-size:.62rem;color:var(--tx3);margin-top:6px;min-height:1em">Set your session parameters, then export for AI. Import the session result when done.</div>
-      <div style="margin-top:10px">
-        <div class="flbl" style="margin-bottom:4px">Or paste session result text</div>
-        <textarea id="pasteResult" rows="4" placeholder="Paste the AI's session result here if you can't save it as a file…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
-        <button class="btn sec" style="margin-top:6px" onclick="importPastedResult()">&#8681; Import Pasted Result</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn gold" onclick="exportForAI()">&#8679; Export for AI</button>
+          <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importCaddieResult(event)"></label>
+        </div>
+        <div id="cadStatus" style="font-size:.62rem;color:var(--tx3);margin-top:6px;min-height:1em">Set your session parameters, then export for AI. Import the session result when done.</div>
+        <div style="margin-top:10px">
+          <div class="flbl" style="margin-bottom:4px">Or paste session result text</div>
+          <textarea id="pasteResult" rows="4" placeholder="Paste the AI's session result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
+          <button class="btn sec" style="margin-top:6px" onclick="importPastedCaddieResult()">&#8681; Import Pasted Result</button>
+        </div>
       </div>
     </div>
+
+    <!-- Card 2: Range Sessions (placeholder) -->
+    <div class="card">
+      <div class="collapsible-hdr" onclick="toggleCard('ah-range')" id="ah-range-hdr">
+        <span>📊 Range Sessions <span style="font-size:.55rem;color:var(--tx3)">(coming soon)</span></span><span class="chev">▼</span>
+      </div>
+      <div id="ah-range-body" style="display:none;padding-top:10px">
+        <p class="note">Range session logging — multi-distance carry and dispersion tracking — is planned for a future update.</p>
+      </div>
+    </div>
+
+    <!-- Card 3: Round Logging -->
+    <div class="card">
+      <div class="collapsible-hdr" onclick="toggleCard('ah-round')" id="ah-round-hdr">
+        <span>🏌️ Round Logging</span><span class="chev">▼</span>
+      </div>
+      <div id="ah-round-body" style="display:none;padding-top:10px">
+        <p class="note" style="margin-bottom:10px">Export a task file and drop it into any AI chat. Provide your scores verbally or upload a scorecard image. Import the result below.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn gold" onclick="exportRoundTask()">&#8679; Export Round Task</button>
+          <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importRoundResult(event)"></label>
+        </div>
+        <div style="margin-top:6px">
+          <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
+          <textarea id="pasteRoundResult" rows="3" placeholder="Paste the AI's round result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
+          <button class="btn sec" style="margin-top:6px" onclick="importPastedRoundResult()">&#8681; Import Pasted</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Course Lookup -->
+    <div class="card">
+      <div class="collapsible-hdr" onclick="toggleCard('ah-course')" id="ah-course-hdr">
+        <span>⛳ Course Lookup</span><span class="chev">▼</span>
+      </div>
+      <div id="ah-course-body" style="display:none;padding-top:10px">
+        <p class="note" style="margin-bottom:10px">Export a task file, drop it into any AI chat, and ask it to look up your course scorecard. Import the result below to add the course.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn gold" onclick="exportCourseTask()">&#8679; Export Course Task</button>
+          <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importCourseResult(event)"></label>
+        </div>
+        <div style="margin-top:6px">
+          <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
+          <textarea id="pasteCourseResult" rows="3" placeholder="Paste the AI's course result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
+          <button class="btn sec" style="margin-top:6px" onclick="importPastedCourseResult()">&#8681; Import Pasted</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 5: Club Setup -->
+    <div class="card">
+      <div class="collapsible-hdr" onclick="toggleCard('ah-clubs')" id="ah-clubs-hdr">
+        <span>🏌️ Club Setup</span><span class="chev">▼</span>
+      </div>
+      <div id="ah-clubs-body" style="display:none;padding-top:10px">
+        <p class="note" style="margin-bottom:10px">Export a task file and drop it into any AI chat. List your clubs by name and the AI will build your bag. Import the result below.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn gold" onclick="exportClubTask()">&#8679; Export Club Task</button>
+          <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importClubResult(event)"></label>
+        </div>
+        <div style="margin-top:6px">
+          <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
+          <textarea id="pasteClubResult" rows="3" placeholder="Paste the AI's club result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
+          <button class="btn sec" style="margin-top:6px" onclick="importPastedClubResult()">&#8681; Import Pasted</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CADDIE SESSIONS -->
+  <div id="tab-sessions" class="panel">
     <div id="sessionsList"></div>
   </div>
 
@@ -655,7 +765,7 @@ body{
           </div>
           <div class="field" id="vizOptSessionField" style="display:none">
             <div class="flbl">Session</div>
-            <select id="vizOptSessionSelect" onchange="onVizOptSessionChange()" style="min-width:190px"></select>
+            <select id="vizOptSessionSelect" onchange="onVizOptSessionChange()"></select>
           </div>
 
         </div>
@@ -667,31 +777,35 @@ body{
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:8px">
           <div class="field">
             <div class="flbl">Course</div>
-            <select id="vizCourseSelect" onchange="onVizCourseChange()" style="min-width:150px"></select>
+            <select id="vizCourseSelect" onchange="onVizCourseChange()"></select>
           </div>
           <div class="field">
             <div class="flbl">Tee</div>
-            <select id="vizTeeSelect" onchange="onVizTeeChange()" style="min-width:110px"></select>
+            <select id="vizTeeSelect" onchange="onVizTeeChange()"></select>
           </div>
           <div class="field">
             <div class="flbl">Session</div>
-            <select id="vizHoleSessionSelect" onchange="onVizHoleSessionChange()" style="min-width:190px"></select>
+            <select id="vizHoleSessionSelect" onchange="onVizHoleSessionChange()"></select>
           </div>
         </div>
         <!-- Hole shelf -->
         <div id="vizHoleShelf" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
         <!-- Path planner -->
         <div style="border:1px solid var(--br);border-radius:6px;margin-bottom:8px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;cursor:pointer;user-select:none" onclick="vizTogglePlanner()">
-            <span style="font-size:.65rem;font-weight:600;color:var(--tx2)">Shot Paths</span>
+          <div class="collapsible-hdr" onclick="vizTogglePlanner()" id="vizPlannerHdr">
+            <span>Shot Paths</span>
             <div style="display:flex;gap:6px;align-items:center">
-              <button onclick="event.stopPropagation();syncHoleClubsFromSession();renderViz()" class="implied-tog" style="padding:2px 8px;font-size:.6rem">↺ Reset</button>
-              <span id="vizPlannerChevron" style="font-size:.65rem;color:var(--tx3)">▼</span>
+              <button onclick="event.stopPropagation();delete vizHoleEdits[vizSelectedHole];syncHoleClubsFromSession();renderViz()" class="implied-tog" style="padding:2px 8px;font-size:.6rem">↺ Reset</button>
+              <span class="chev" id="vizPlannerChevron">▼</span>
             </div>
           </div>
           <div id="vizPlannerBody" style="display:none;padding:8px 10px;border-top:1px solid var(--br)">
             <div id="vizPathRows"></div>
           </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">
+          <button class="btn sec" onclick="saveManualBag()" style="font-size:.65rem;padding:5px 14px">💼 Save Bag</button>
+          <button class="btn gold" onclick="saveManualPlan()" style="font-size:.65rem;padding:5px 14px">✏️ Save Plan</button>
         </div>
       </div>
 
@@ -742,7 +856,8 @@ body{
     <div class="card">
       <div class="card-title">Genesis</div>
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
-        Thought Experiment. Vibe coded using Claude AI (almost) fully. Started with a simple query - optimize by golf bag for a course, and here we are. Philosophically 100% free. I hope this helps my game...
+        Thought experiment. Vibe coded using Claude AI (almost) fully. Started with a simple query — optimise my golf bag for a course — and here we are. Philosophically 100% free. I hope this helps my game...<br><br>
+        <strong>GORDy</strong> stands for <strong>G</strong>olf <strong>O</strong>ptimization <strong>R</strong>esearch &amp; <strong>D</strong>ecisions — with a lowercase <em>y</em> added to make it sound like an actual caddie.
       </div>
     </div>
 
@@ -1234,6 +1349,7 @@ const GIST_REF_URL       = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d8
 const GIST_CLUB_TASK_URL  = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/club-task.md';
 const GIST_CRSE_TASK_URL  = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/course-task.md';
 const GIST_SETUP_SKILL_URL= 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/setup-skill.md';
+const GIST_ROUND_TASK_URL = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/round-task.md';
 
 async function _fetchAndCache(url, storeKey, verField) {
   try {
@@ -1281,13 +1397,31 @@ Step 4 — Offer optimization now or skip.
 Output: session result Type data-update or both. DATA CHANGES includes PROFILE fields collected, CLUB+SESSION lines, COURSE+TEE+HOLE lines.
 Resource rule: one course, one optimization per chat.`;
 }
+function getRoundTaskText() {
+  return localStorage.getItem('vc:roundTask') || `RoundTaskVersion: 1
+# Virtual Caddie — Round Logging Task (bundled fallback)
+Help the user log one or more rounds of golf. Accept any input format: verbal scores, typed hole-by-hole, or a scorecard image/photo.
+Ask if anything is ambiguous: date, tee colour, course name. One clarifying question at a time.
+For each round collect: date, course name, tee, course rating, slope, par, gross score, and optionally hole-by-hole (par, score, putts, GIR Y/N, notes).
+Output: session result, Type: data-update. DATA CHANGES section contains one ROUND line per round, followed by indented SESSIONIDS and HOLE lines if detail was provided.
+Format:
+ROUND | YYYY-MM-DD | Course Name | Tee | Rating | Slope | Par | Score | Diff |  Notes
+  SESSIONIDS | id1,id2
+  HOLE | 1 | par | score | putts | gir | notes
+  HOLE | 2 | par | score | putts | gir | notes
+Diff = round((Score - Rating) * 113 / Slope, 1). Leave blank if rating/slope unknown.
+GIR: Y if green reached in (par minus 2) strokes or fewer, N otherwise. Leave blank if unknown.
+SESSIONIDS: only include if user specifies which caddie plan they used — leave line out entirely if not mentioned.
+AI-agnostic: plain language only, no platform-specific features.`;
+}
 // Fetch on load — silent, non-blocking; re-parse flight data after ref update
 Promise.allSettled([
   _fetchAndCache(GIST_SKILL_URL,      'vc:skill',      'SkillVersion'),
   _fetchAndCache(GIST_REF_URL,        'vc:ref',        'ReferenceVersion').then(applyRefDataCache),
   _fetchAndCache(GIST_CLUB_TASK_URL,  'vc:clubTask',   'ClubTaskVersion'),
   _fetchAndCache(GIST_CRSE_TASK_URL,  'vc:courseTask', 'CourseTaskVersion'),
-  _fetchAndCache(GIST_SETUP_SKILL_URL,'vc:setupSkill', 'SetupSkillVersion')
+  _fetchAndCache(GIST_SETUP_SKILL_URL,'vc:setupSkill', 'SetupSkillVersion'),
+  _fetchAndCache(GIST_ROUND_TASK_URL, 'vc:roundTask',  'RoundTaskVersion')
 ]);
 let bag = [], courses = [], rounds = [], history = [];
 let profile = {};
@@ -1296,6 +1430,7 @@ let currentEditTeeId = null;
 
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
 function today() { return new Date().toISOString().slice(0,10); }
+function fmtDate(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?iso:d.toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});}
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
 
@@ -1462,7 +1597,11 @@ function serialise() {
     });
   });
   lines.push(''); lines.push('=== ROUNDS ===');
-  rounds.forEach(r=>lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||''].join(' | ')));
+  rounds.forEach(r=>{
+    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||''].join(' | '));
+    if(r.sessionIds?.length) lines.push('  SESSIONIDS | '+r.sessionIds.join(','));
+    if(r.holes?.length) r.holes.forEach(h=>lines.push('  HOLE | '+[h.n,h.par,h.score,h.putts,h.gir===true?'Y':h.gir===false?'N':'',h.notes||''].join(' | ')));
+  });
   lines.push('');
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
   const manualVal = localStorage.getItem('vc:manualHcp')||'';
@@ -1598,7 +1737,13 @@ function importData(e) {
       }
       if(section==='rounds'&&line.startsWith('ROUND |')) {
         const p=line.split('|').map(s=>s.trim());
-        newRounds.push({id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||''});
+        cur={id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',sessionIds:[],holes:[]};
+        newRounds.push(cur);
+      } else if(section==='rounds'&&line.startsWith('SESSIONIDS |')&&cur) {
+        cur.sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);
+      } else if(section==='rounds'&&line.startsWith('HOLE |')&&cur) {
+        const p=line.split('|').map(s=>s.trim());
+        cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||''});
       }
       if(section==='history') {
         if(raw.trimStart().startsWith('ENTRY |')) {
@@ -1671,7 +1816,8 @@ function showTab(id) {
   if(id==='profile') renderProfile();
   if(id==='clubs') renderClubs();
   if(id==='courses') renderCourseList();
-  if(id==='handicap') renderHandicap();
+  if(id==='rounds') renderHandicap();
+  if(id==='gordy') renderAIHelp();
   if(id==='sessions') renderSessions();
   if(id==='viz') initViz();
 }
@@ -2124,7 +2270,7 @@ function showTabFromProfile(id) {
   if(tabBtn) tabBtn.classList.add('active');
   if(id==='clubs')    renderClubs();
   if(id==='courses')  renderCourseList();
-  if(id==='handicap') renderHandicap();
+  if(id==='rounds')   renderHandicap();
   if(id==='sessions') renderSessions();
 }
 function onHomeClubSelect() {
@@ -2315,18 +2461,39 @@ function renderHandicap() {
   document.getElementById('hcpMeta').textContent = hcp!==null?`${n} round${n!==1?'s':''} · best ${Math.min(take,n)} differentials · WHS formula`:'Log a round to calculate';
   document.getElementById('roundCount').textContent=`(${n}/20)`;
   document.getElementById('roundHistCard').style.display=n?'block':'none';
-  document.getElementById('roundList').innerHTML=rounds.map(r=>`
-    <div class="rnd-row" id="rnd-${r.id}">
-      <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:100px">
-      <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="flex:1;min-width:80px">
-      <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:70px">
-      <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:48px;text-align:center">
-      <input class="rnd-edit" type="text" inputmode="decimal" value="${r.rating}" placeholder="Rtg" onchange="updateRound('${r.id}','rating',this.value)" style="width:38px;text-align:center">
-      <input class="rnd-edit" type="text" inputmode="numeric" value="${r.slope}" placeholder="Slp" onchange="updateRound('${r.id}','slope',this.value)" style="width:36px;text-align:center">
-      <span class="rnd-diff" id="rdiff-${r.id}" style="width:44px;text-align:right">${r.diff!==null?r.diff:'—'}</span>
-      <input class="rnd-edit" type="text" value="${escHtml(r.notes||'')}" placeholder="notes…" onchange="updateRound('${r.id}','notes',this.value)" style="flex:1;min-width:60px;color:var(--tx2)">
-      <button class="rnd-del" onclick="deleteRound('${r.id}')">✕</button>
-    </div>`).join('');
+  document.getElementById('roundList').innerHTML=rounds.map(r=>{
+    const hasDetail=r.holes?.length>0;
+    const hasLinks=r.sessionIds?.length>0;
+    const gir=r.holes?.filter(h=>h.gir===true).length;
+    const girOf=r.holes?.filter(h=>h.gir!==null).length;
+    const girStr=girOf>0?`GIR: ${gir}/${girOf} · `:'';
+    const linkedBadges=(r.sessionIds||[]).map(sid=>{
+      const s=history.find(h=>h.id===sid);
+      if(!s) return '';
+      const ico=s.type==='manual'?'✏️':'🤖';
+      return `<span class="rnd-badge">${ico} ${fmtDate(s.date)}</span>`;
+    }).join('');
+    return `<div class="rnd-card" id="rnd-${r.id}">
+      <div class="rnd-row">
+        <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:100px">
+        <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="flex:1;min-width:80px">
+        <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:60px">
+        <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:44px;text-align:center">
+        <span class="rnd-diff" id="rdiff-${r.id}">${r.diff!==null?r.diff:'—'}</span>
+        <button class="rnd-del" onclick="rndToggleLink('${r.id}')" title="Link sessions" style="color:var(--tx3);font-size:.72rem">🔗</button>
+        ${hasDetail?`<button class="rnd-del" onclick="rndToggleDetail('${r.id}')" title="Hole detail">▼</button>`:''}
+        <button class="rnd-del" onclick="deleteRound('${r.id}')">✕</button>
+      </div>
+      <div class="rnd-meta">
+        <span style="font-size:.58rem;color:var(--tx3)">${girStr}${r.notes||''}</span>
+        ${linkedBadges}
+      </div>
+      <div id="rnd-link-${r.id}" style="display:none;padding:4px 0 6px">
+        ${_rndLinkHTML(r)}
+      </div>
+      ${hasDetail?`<div id="rnd-detail-${r.id}" style="display:none;overflow-x:auto;padding-bottom:6px">${_rndDetailHTML(r)}</div>`:''}
+    </div>`;
+  }).join('');
   // rCourse listener set once in renderAll
 }
 function onRoundCourseSelect() {
@@ -2334,6 +2501,8 @@ function onRoundCourseSelect() {
   const val = sel?.value||'';
   const manualRow = document.getElementById('rManualCourseRow');
   const teeRow    = document.getElementById('rTeeSelectRow');
+  // Rebuild session linker if open
+  if(document.getElementById('rSessLinker')?.style.display!=='none') _buildRndLinker();
   // Clear fields
   document.getElementById('rRating').value='';
   document.getElementById('rSlope').value='';
@@ -2389,7 +2558,20 @@ function addRound() {
     : (document.getElementById('rTeeSelect')?.options[document.getElementById('rTeeSelect').selectedIndex]?.text||'');
   const diff=calcDiff(score,rating,slope);
   const notes=document.getElementById('rNotes')?.value||'';
-  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes},...rounds].slice(0,20);
+  // Session links
+  const sessionIds=[...document.querySelectorAll('.rnd-sess-chk:checked')].map(el=>el.value).filter(Boolean);
+  // Hole detail
+  const holes=[];
+  document.querySelectorAll('.rnd-hole-row').forEach(row=>{
+    const n=parseInt(row.dataset.hole);
+    const sc=row.querySelector('.rh-score')?.value?.trim()||'';
+    const pt=row.querySelector('.rh-putts')?.value?.trim()||'';
+    const gBtn=row.querySelector('.rnd-gir-btn');
+    const gir=gBtn?.dataset.gir==='Y'?true:gBtn?.dataset.gir==='N'?false:null;
+    const nt=row.querySelector('.rh-notes')?.value?.trim()||'';
+    if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt});
+  });
+  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes},...rounds].slice(0,20);
   save(); renderHandicap();
   // Clear form
   document.getElementById('rScore').value='';
@@ -2401,8 +2583,71 @@ function addRound() {
   if(document.getElementById('rTeeManual')) document.getElementById('rTeeManual').value='';
   document.getElementById('rManualCourseRow').style.display='none';
   document.getElementById('rTeeSelectRow').style.display='none';
+  // Reset detail mode + session linker
+  document.getElementById('rHoleGrid').style.display='none';
+  document.getElementById('rSessLinker').style.display='none';
+  const mBtn=document.getElementById('rModeBtn');
+  if(mBtn){mBtn.textContent='Simple';mBtn.classList.remove('on');}
+  document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
 }
 function deleteRound(id){rounds=rounds.filter(r=>r.id!==id);save();renderHandicap();}
+function _rndLinkHTML(r){
+  const cn=(r.courseName||'').toLowerCase();
+  const matching=history.filter(h=>(h.type==='manual'||h.type==='optimisation'||h.type==='caddie'||h.type==='both')&&(h.course||'').toLowerCase().split(' ').some(w=>w&&cn.includes(w)));
+  if(!matching.length) return '<div style="font-size:.62rem;color:var(--tx3);padding:2px 0">No sessions for this course yet.</div>';
+  const ids=r.sessionIds||[];
+  return `<div style="font-size:.6rem;color:var(--tx3);margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase">Link caddie sessions</div>`
+    +matching.map(s=>{
+      const ico=s.type==='manual'?'✏️':'🤖';
+      const checked=ids.includes(s.id)?'checked':'';
+      return `<label style="display:flex;align-items:center;gap:6px;font-size:.62rem;color:var(--tx2);padding:2px 0;cursor:pointer"><input type="checkbox" class="rnd-link-chk" data-rid="${r.id}" value="${s.id}" ${checked}> ${ico} ${fmtDate(s.date)} · ${escHtml(s.course||'')} (${escHtml(s.tee||'')})</label>`;
+    }).join('')
+    +`<button class="btn" style="margin-top:6px;font-size:.6rem;padding:3px 10px" onclick="rndSaveLinks('${r.id}')">Save</button>`;
+}
+function _rndDetailHTML(r){
+  const holes=r.holes||[];
+  const front=holes.filter(h=>h.n>=1&&h.n<=9);
+  const back=holes.filter(h=>h.n>=10&&h.n<=18);
+  const renderRows=hs=>hs.map(h=>`<tr>
+    <td>${h.n}</td><td>${h.par||'—'}</td><td>${h.score||'—'}</td><td>${h.putts||'—'}</td>
+    <td style="color:${h.gir===true?'var(--ac2)':h.gir===false?'#c06060':'var(--tx3)'}">${h.gir===true?'Y':h.gir===false?'N':'—'}</td>
+    <td style="text-align:left;color:var(--tx3);font-size:.55rem">${escHtml(h.notes||'')}</td>
+  </tr>`).join('');
+  const tbl=hs=>`<table class="rnd-hole-tbl"><thead><tr><th>H</th><th>Par</th><th>Score</th><th>Putts</th><th>GIR</th><th style="text-align:left">Notes</th></tr></thead><tbody>${renderRows(hs)}</tbody></table>`;
+  if(!front.length&&!back.length) return '';
+  return `<div style="display:flex;gap:6px;margin-bottom:6px">
+    <button class="implied-tog on" onclick="rndDetailView(this,'f','${r.id}')" id="rdd-f-${r.id}">F9</button>
+    <button class="implied-tog" onclick="rndDetailView(this,'b','${r.id}')" id="rdd-b-${r.id}">B9</button>
+    <button class="implied-tog" onclick="rndDetailView(this,'a','${r.id}')" id="rdd-a-${r.id}">All</button>
+  </div>
+  <div id="rdd-front-${r.id}">${tbl(front)}</div>
+  <div id="rdd-back-${r.id}" style="display:none">${tbl(back)}</div>
+  <div id="rdd-all-${r.id}" style="display:none">${tbl(holes)}</div>`;
+}
+function rndToggleDetail(id){
+  const el=document.getElementById('rnd-detail-'+id);
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+function rndToggleLink(id){
+  const el=document.getElementById('rnd-link-'+id);
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+function rndDetailView(btn,view,id){
+  ['f','b','a'].forEach(v=>{
+    document.getElementById('rdd-'+v+'-'+id)?.style && (document.getElementById('rdd-front-'+id+(v==='f'?'':'').replace('f','').replace('f-'+id,'front-'+id).replace('b-'+id,'back-'+id).replace('a-'+id,'all-'+id),''));
+  });
+  document.getElementById('rdd-front-'+id).style.display=view==='f'?'block':'none';
+  document.getElementById('rdd-back-'+id).style.display=view==='b'?'block':'none';
+  document.getElementById('rdd-all-'+id).style.display=view==='a'?'block':'none';
+  document.getElementById('rdd-f-'+id)?.classList.toggle('on',view==='f');
+  document.getElementById('rdd-b-'+id)?.classList.toggle('on',view==='b');
+  document.getElementById('rdd-a-'+id)?.classList.toggle('on',view==='a');
+}
+function rndSaveLinks(id){
+  const r=rounds.find(x=>x.id===id); if(!r) return;
+  r.sessionIds=[...document.querySelectorAll(`.rnd-link-chk[data-rid="${id}"]:checked`)].map(el=>el.value);
+  save(); renderHandicap();
+}
 function updateRound(id, field, val) {
   const r = rounds.find(x=>x.id===id); if(!r) return;
   r[field] = val;
@@ -2422,6 +2667,123 @@ function updateRound(id, field, val) {
   const metaEl = document.getElementById('hcpMeta');
   if(metaEl) metaEl.textContent = hcp!==null?`${n} round${n!==1?'s':''} · best ${Math.min(take,n)} differentials · WHS formula`:'Log a round to calculate';
 }
+function toggleRoundMode(){
+  const btn=document.getElementById('rModeBtn');
+  const grid=document.getElementById('rHoleGrid');
+  if(!btn||!grid) return;
+  const on=btn.classList.toggle('on');
+  btn.textContent=on?'Detailed':'Simple';
+  grid.style.display=on?'block':'none';
+  if(on) _buildRoundHoleGrid();
+}
+function _buildRoundHoleGrid(){
+  const grid=document.getElementById('rHoleGrid');
+  if(!grid) return;
+  // Try to get par per hole from selected course/tee
+  let parMap={};
+  const csel=document.getElementById('rCourseSelect')?.value||'';
+  if(csel&&csel!=='__manual__'){
+    const course=courses.find(c=>c.id===csel);
+    const teeId=document.getElementById('rTeeSelect')?.value||'';
+    const tee=course?.tees?.find(t=>t.id===teeId)||course?.tees?.[0];
+    if(tee?.holes) tee.holes.forEach(h=>{parMap[h.number]=h.par;});
+  }
+  const rows=Array.from({length:18},(_,i)=>i+1).map(n=>`
+    <tr class="rnd-hole-row" data-hole="${n}" data-par="${parMap[n]||''}">
+      <td style="color:var(--tx3);font-size:.55rem;min-width:22px">${n}</td>
+      <td><input class="rnd-hole-inp" value="${parMap[n]||''}" placeholder="4" inputmode="numeric" style="width:28px"></td>
+      <td><input class="rnd-hole-inp rh-score" placeholder="—" inputmode="numeric" style="width:32px"></td>
+      <td><input class="rnd-hole-inp rh-putts" placeholder="—" inputmode="numeric" style="width:32px"></td>
+      <td><button class="rnd-gir-btn" data-gir="" onclick="rndGirCycle(this)">—</button></td>
+      <td><input class="rnd-hole-inp rh-notes" placeholder="" style="width:60px;text-align:left"></td>
+    </tr>`).join('');
+  grid.innerHTML=`
+    <div style="display:flex;gap:5px;margin-bottom:6px;align-items:center">
+      <span style="font-size:.6rem;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em">Hole detail</span>
+      <button class="implied-tog on" id="hgv-f" onclick="rndGridView('f')">F9</button>
+      <button class="implied-tog" id="hgv-b" onclick="rndGridView('b')">B9</button>
+      <button class="implied-tog" id="hgv-a" onclick="rndGridView('a')">All</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="rnd-hole-tbl">
+        <thead><tr><th>H</th><th>Par</th><th>Score</th><th>Putts</th><th>GIR</th><th style="text-align:left">Notes</th></tr></thead>
+        <tbody id="rndHoleRows">${rows}</tbody>
+      </table>
+    </div>`;
+  rndGridView('f');
+}
+function rndGridView(v){
+  const rows=document.querySelectorAll('.rnd-hole-row');
+  rows.forEach(r=>{
+    const n=parseInt(r.dataset.hole);
+    r.style.display=(v==='f'&&n<=9)||(v==='b'&&n>=10)||(v==='a')?'':'none';
+  });
+  ['f','b','a'].forEach(x=>document.getElementById('hgv-'+x)?.classList.toggle('on',x===v));
+}
+function rndGirCycle(btn){
+  const cur=btn.dataset.gir;
+  const next=cur===''?'Y':cur==='Y'?'N':'';
+  btn.dataset.gir=next;
+  btn.textContent=next||'—';
+  btn.className='rnd-gir-btn'+(next==='Y'?' on-y':next==='N'?' on-n':'');
+}
+function toggleRndLinker(){
+  const el=document.getElementById('rSessLinker');
+  const chev=document.getElementById('rSessChev');
+  if(!el) return;
+  const on=el.style.display==='none';
+  el.style.display=on?'block':'none';
+  if(chev) chev.textContent=on?'▲':'▼';
+  if(on) _buildRndLinker();
+}
+function _buildRndLinker(){
+  const el=document.getElementById('rSessLinkerList');
+  if(!el) return;
+  const csel=document.getElementById('rCourseSelect')?.value||'';
+  const courseName=csel&&csel!=='__manual__'
+    ? (courses.find(c=>c.id===csel)?.name||'').toLowerCase()
+    : (document.getElementById('rCourse')?.value||'').toLowerCase();
+  const matching=history.filter(h=>(h.type==='manual'||h.type==='optimisation'||h.type==='caddie'||h.type==='both')
+    &&(h.course||'').toLowerCase().split(' ').some(w=>w.length>2&&courseName.includes(w)));
+  if(!matching.length){el.innerHTML='<div style="font-size:.62rem;color:var(--tx3)">No sessions for this course yet.</div>';return;}
+  el.innerHTML=matching.map(s=>{
+    const ico=s.type==='manual'?'✏️':'🤖';
+    return `<label style="display:flex;align-items:center;gap:6px;font-size:.62rem;color:var(--tx2);padding:2px 0;cursor:pointer"><input type="checkbox" class="rnd-sess-chk" value="${s.id}"> ${ico} ${fmtDate(s.date)} · ${escHtml(s.course||'')} (${escHtml(s.tee||'')})</label>`;
+  }).join('');
+}
+function exportRoundTask(){
+  const taskText=getRoundTaskText();
+  const ver=(taskText.match(/RoundTaskVersion:\s*(\d+)/)||[])[1]||'?';
+  const csel=document.getElementById('rCourseSelect')?.value||'';
+  const course=csel&&csel!=='__manual__'?courses.find(c=>c.id===csel):null;
+  let courseSection='# No course selected — user can specify verbally.';
+  if(course){
+    courseSection=`COURSE | ${course.name} | Par ${course.par||'?'}`;
+    const teeId=document.getElementById('rTeeSelect')?.value||'';
+    const tee=course.tees?.find(t=>t.id===teeId)||course.tees?.[0];
+    if(tee){
+      courseSection+=`\nTEE | ${tee.name} | Rating ${tee.rating} | Slope ${tee.slope}`;
+      if(tee.holes?.length) tee.holes.forEach(h=>{courseSection+=`\nHOLE | ${h.number} | Par ${h.par} | ${h.yards||'?'}y`;});
+    }
+  }
+  const hcp=getHandicap();
+  const content=`=== VIRTUAL CADDIE TASK ===
+TaskType: log-round
+Date: ${today()}
+AppVersion: ${APP_VERSION}
+RoundTaskVersion: ${ver}
+
+--- TASK INSTRUCTIONS ---
+${taskText}
+
+--- USER DATA ---
+HANDICAP | ${hcp!==null?hcp:'Not set'}
+${courseSection}
+
+=== EXISTING SESSIONS ===
+${history.filter(h=>h.type==='manual'||h.type==='optimisation'||h.type==='caddie'||h.type==='both').slice(0,10).map(h=>`SESSION_ID | ${h.id} | ${fmtDate(h.date)} | ${h.type} | ${h.course||''} (${h.tee||''})`).join('\n')||'# No sessions yet.'}`;
+  downloadTask(`vc-round-task-${today()}.txt`, content);
+}
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 function updateCourseSelects() { updateCourseDropdowns(); }
@@ -2438,8 +2800,8 @@ function updateCadTees() {
   if(course.selectedTee) sel.value = course.selectedTee;
 }
 
-function renderSessions() {
-  // Populate caddie course select
+function renderAIHelp() {
+  // Populate caddie course select + restore opt tier
   const cs = document.getElementById('cadCourse');
   if(cs) {
     const prev = cs.value;
@@ -2450,21 +2812,23 @@ function renderSessions() {
     else if(profile.homeCourseId && courses.find(c=>c.id===profile.homeCourseId)) cs.value = profile.homeCourseId;
     updateCadTees();
   }
-  // Restore saved opt tier
   const ot = document.getElementById('cadOptTier');
   if(ot) { const saved = localStorage.getItem('vc:optTier'); if(saved) ot.value = saved; }
-
+}
+function renderSessions() {
+  // Badge counts all history entries
   const badge = document.getElementById('sessionsBadge');
-  if(badge) badge.textContent = history.length;
+  const caddieSessions = history.filter(h=>h.type!=='data-update');
+  if(badge) badge.textContent = caddieSessions.length;
   const el = document.getElementById('sessionsList');
   if(!el) return;
-  if(!history.length) {
-    el.innerHTML = '<div class="hist-empty">No sessions yet.<br><br>Set your session parameters above, export for AI,<br>then import the session result to log it here.</div>';
+  if(!caddieSessions.length) {
+    el.innerHTML = '<div class="hist-empty">No caddie sessions yet.<br><br>Go to the GORDy tab to run a caddie session, or save a manual plan from the Viz tab.</div>';
     return;
   }
-  el.innerHTML = history.map(h => {
-    const d = new Date(h.date).toLocaleDateString('en-CA', {year:'numeric', month:'short', day:'numeric'});
-    const typeLabel = h.type==='optimisation' ? '🎯 Bag Optimisation' : h.type==='caddie' ? '🏌️ Hole-by-Hole Caddie' : '📋 Session';
+  el.innerHTML = caddieSessions.map(h => {
+    const d = fmtDate(h.date);
+    const typeLabel = h.type==='optimisation' ? '🤖 Bag Optimisation' : h.type==='caddie' ? '🤖 Hole-by-Hole Caddie' : h.type==='both' ? '🤖 Full Caddie Session' : h.type==='manual' ? '✏️ Manual Plan' : '📋 Session';
     const meta = [
       h.tee ? h.tee + ' tees' : '',
       h.holes && h.holes !== 'all 18' ? h.holes : '',
@@ -2506,12 +2870,12 @@ function exportForAI() {
 
   // Gate 1 — clubs
   if(!eligibleClubs.length) {
-    if(st) st.innerHTML = '⚠ No active clubs with sessions. <a href="#" style="color:var(--ac)" onclick="showTab(\'clubs\');return false">Add clubs</a> or use 🤖 Get AI Help on the Clubs tab.';
+    if(st) st.innerHTML = '⚠ No active clubs with sessions. <a href="#" style="color:var(--ac)" onclick="showTab(\'clubs\');return false">Add clubs</a> or use 🤖 Get AI Help on the GORDy tab.';
     return;
   }
   // Gate 2 — course
   if(!courseId) {
-    if(st) st.innerHTML = '⚠ No course selected. <a href="#" style="color:var(--ac)" onclick="showTab(\'courses\');return false">Add a course</a> or use 🤖 Get AI Help on the Courses tab.';
+    if(st) st.innerHTML = '⚠ No course selected. <a href="#" style="color:var(--ac)" onclick="showTab(\'courses\');return false">Add a course</a> or use 🤖 Get AI Help on the GORDy tab.';
     return;
   }
 
@@ -2647,11 +3011,30 @@ function exportForAI() {
 }
 
 // ── Import Session Result ─────────────────────────────────────────────────────
-function processSessionResult(text) {
+function _sniffResultType(text) {
+  // Determine what data a session result contains from DATA CHANGES content
+  const dataIdx = text.indexOf('--- DATA CHANGES ---');
+  const dataSection = dataIdx !== -1 ? text.slice(dataIdx) : '';
+  const sessionType = (text.match(/^Type:\s*(.+)/m)||[])[1]?.trim()||'';
+  if(sessionType==='optimisation'||sessionType==='caddie'||sessionType==='both') return 'caddie';
+  if(dataSection.match(/^ROUND \|/m)) return 'rounds';
+  if(dataSection.match(/^COURSE \|/m)) return 'courses';
+  if(dataSection.match(/^CLUB \|/m)) return 'clubs';
+  return 'caddie'; // fallback — let processSessionResult handle validation
+}
+function processSessionResult(text, expectedType) {
   // Returns {ok, summary} — mutates bag/rounds/history and calls save()+renderAll()
+  // expectedType: 'caddie'|'clubs'|'courses'|'rounds'|undefined (undefined = no validation)
   const lines = text.split('\n');
   if(!lines[0]?.trim().startsWith('=== VIRTUAL CADDIE SESSION ==='))
     return {ok:false, summary:'Not a valid session result.\nExpected first line: "=== VIRTUAL CADDIE SESSION ==="'};
+  if(expectedType) {
+    const sniffed = _sniffResultType(text);
+    if(sniffed !== expectedType) {
+      const labels = {caddie:'Caddie Session', clubs:'Club Setup', courses:'Course Lookup', rounds:'Round Logging'};
+      return {ok:false, summary:`Wrong result type.\nThis looks like a ${labels[sniffed]||sniffed} result.\nImport it from the ${labels[sniffed]||sniffed} card in the GORDy tab.`};
+    }
+  }
 
   const sessionType = (text.match(/^Type:\s*(.+)/m)||[])[1]?.trim() || 'result';
   const sessionDate = (text.match(/^Date:\s*(.+)/m)||[])[1]?.trim() || today();
@@ -2763,9 +3146,15 @@ function processSessionResult(text) {
       // Rounds
       else if(line.startsWith('ROUND |')) {
         const p=line.split('|').map(s=>s.trim());
-        rounds.push({id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||''});
-        changes.push(`Logged round: ${p[2]} (${p[1]})`);
         curClub=null; curCourse=null; curTee=null;
+        const nr={id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',sessionIds:[],holes:[]};
+        rounds.push(nr);
+        changes.push(`Logged round: ${p[2]} (${p[1]})`);
+      } else if(line.startsWith('SESSIONIDS |')&&rounds.length) {
+        rounds[rounds.length-1].sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);
+      } else if(line.startsWith('HOLE |')&&rounds.length) {
+        const p=line.split('|').map(s=>s.trim());
+        rounds[rounds.length-1].holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||''});
       }
     }
   }
@@ -2777,21 +3166,42 @@ function processSessionResult(text) {
     : 'Session imported. Use Save Data to back up your updated file.';
   return {ok:true, summary};
 }
-function importSessionResult(e) {
+function toggleCard(id){
+  const body=document.getElementById(id+'-body');
+  const hdr=document.getElementById(id+'-hdr');
+  if(!body) return;
+  const open=body.style.display==='none';
+  body.style.display=open?'block':'none';
+  hdr?.classList.toggle('open',open);
+}
+function _fileImport(e, expectedType, pasteId) {
   const file=e.target.files[0]; if(!file) return;
   const reader=new FileReader();
-  reader.onload=ev=>{ const r=processSessionResult(ev.target.result); alert(r.summary); };
+  reader.onload=ev=>{ const r=processSessionResult(ev.target.result, expectedType); alert(r.summary); };
   reader.readAsText(file);
   e.target.value='';
 }
-function importPastedResult() {
-  const ta=document.getElementById('pasteResult');
+function _pasteImport(pasteId, expectedType) {
+  const ta=document.getElementById(pasteId);
   const text=(ta?.value||'').trim();
-  if(!text) { alert('Paste your session result text first.'); return; }
-  const r=processSessionResult(text);
+  if(!text){alert('Paste your result text first.');return;}
+  const r=processSessionResult(text, expectedType);
   alert(r.summary);
-  if(r.ok && ta) ta.value='';
+  if(r.ok&&ta) ta.value='';
 }
+// Per-card file importers
+function importCaddieResult(e){ _fileImport(e,'caddie','pasteResult'); }
+function importClubResult(e)  { _fileImport(e,'clubs','pasteClubResult'); }
+function importCourseResult(e){ _fileImport(e,'courses','pasteCourseResult'); }
+function importRoundResult(e) { _fileImport(e,'rounds','pasteRoundResult'); }
+// Per-card paste importers
+function importPastedCaddieResult(){ _pasteImport('pasteResult','caddie'); }
+function importPastedClubResult()  { _pasteImport('pasteClubResult','clubs'); }
+function importPastedCourseResult(){ _pasteImport('pasteCourseResult','courses'); }
+function importPastedRoundResult() { _pasteImport('pasteRoundResult','rounds'); }
+// Legacy aliases — keep so any stale references don't break
+function importSessionResult(e){ _fileImport(e,undefined,'pasteResult'); }
+function importPastedResult(){ _pasteImport('pasteResult',undefined); }
 
 // ── Phase 5.1 — Player Profile PDF ───────────────────────────────────────────
 function exportProfilePdf() {
@@ -2918,7 +3328,7 @@ ${rounds.length ? `
   </table>
 </div>` : ''}
 
-<div class="footer">Virtual Caddie · Generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
+<div class="footer">Gordy the Virtual Caddy · Generated ${fmtDate(new Date().toISOString())}</div>
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
@@ -3318,7 +3728,7 @@ function updateCourseDropdowns() {
 }
 function renderAll(){
   vizInitDone=false; // force viz shelf to rebuild with fresh bag IDs
-  renderProfile(); renderClubs(); renderCourseList(); renderHandicap(); updateCourseSelects(); renderSessions();
+  renderProfile(); renderClubs(); renderCourseList(); renderHandicap(); renderAIHelp(); updateCourseSelects(); renderSessions();
   // Set rCourse autofill once
   const rc=document.getElementById('rCourse');
   if(rc&&!rc._listenerSet){rc._listenerSet=true;rc.addEventListener('change',function(){
@@ -3350,6 +3760,7 @@ let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=fals
 let vizYardMode='total';
 let vizPaths=[[],[],[]]; // 3 paths, each = array of club IDs
 let vizPathVisible=[true,false,false];
+let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
 
 function vizTierIdx(hcp){const h=+hcp||15;if(h<5)return 0;if(h<10)return 1;if(h<15)return 2;if(h<20)return 3;if(h<25)return 4;return 5;}
 function vizNormCdf(x){return .5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-2*x*x/Math.PI)));}
@@ -3711,6 +4122,7 @@ function onVizTeeChange(){
   renderViz();
 }
 function onVizHoleSessionChange(){
+  vizHoleEdits={};
   const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
   if(!entry) return renderViz();
   // Snap course — strict: session course name must contain first word of stored course name
@@ -3743,10 +4155,22 @@ function onVizHoleSessionChange(){
   syncHoleClubsFromSession();
   renderViz();
 }
+function _saveCurrentHoleEdits(){
+  if(!vizSelectedHole) return;
+  vizHoleEdits[vizSelectedHole]={paths:vizPaths.map(p=>[...p]),visible:[...vizPathVisible]};
+}
 function syncHoleClubsFromSession(){
   // Reset to empty first — no stale bleed across holes
   vizPaths=[[],[],[]];
   vizPathVisible=[true,false,false];
+  // User edits take priority over session data
+  const edit=vizHoleEdits[vizSelectedHole];
+  if(edit){
+    vizPaths=edit.paths.map(p=>[...p]);
+    vizPathVisible=[...edit.visible];
+    _rebuildPathPlanner();
+    return;
+  }
   const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
   if(!entry){_rebuildPathPlanner();return;}
   const hm=entry.holeMap?.[vizSelectedHole];
@@ -3782,10 +4206,69 @@ function syncHoleClubsFromSession(){
 }
 let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
 let vizPlannerOpen=false;
+function _buildBagMap(){
+  return bag.filter(c=>vizSelectedClubs.has(c.id)&&c.type!=='Putter').map(c=>c.identifier||c.type);
+}
+function _buildHoleMapFromEdits(){
+  // Save current hole before building
+  _saveCurrentHoleEdits();
+  const idToIdent=id=>bag.find(c=>c.id===id)?.identifier||'';
+  const hm={};
+  Object.entries(vizHoleEdits).forEach(([n,edit])=>{
+    const namedPaths=edit.paths
+      .map(path=>path.map(idToIdent).filter(Boolean))
+      .filter(p=>p.length);
+    if(namedPaths.length) hm[+n]={paths:namedPaths};
+  });
+  return hm;
+}
+function saveManualBag(){
+  if(!vizActiveCourse){alert('Select a course first.');return;}
+  const bm=_buildBagMap();
+  if(!bm.length){alert('Select at least one club in Bag Coverage first.');return;}
+  const entry={
+    id:uid(), date:new Date().toISOString(),
+    type:'manual',
+    course:vizActiveCourse.name||'',
+    tee:vizActiveTee?.name||'',
+    hcp:String(getHandicap()||''),
+    playHcp:'', conditions:'', holes:'all 18',
+    text:`Manual Bag — ${vizActiveCourse.name} (${vizActiveTee?.name||''} tees)\nClubs: ${bm.join(', ')}`,
+    bagMap:bm,
+    holeMap:undefined
+  };
+  history.unshift(entry);
+  save();
+  renderSessions();
+  alert(`Bag saved: ${vizActiveCourse.name} — ${bm.length} clubs.`);
+}
+function saveManualPlan(){
+  if(!vizActiveCourse){alert('Select a course first.');return;}
+  const bm=_buildBagMap();
+  if(!bm.length){alert('Select at least one club in Bag Coverage first.');return;}
+  const hm=_buildHoleMapFromEdits();
+  if(!Object.keys(hm).length){alert('Plan at least one hole path in the Path Planner first.');return;}
+  const entry={
+    id:uid(), date:new Date().toISOString(),
+    type:'manual',
+    course:vizActiveCourse.name||'',
+    tee:vizActiveTee?.name||'',
+    hcp:String(getHandicap()||''),
+    playHcp:'', conditions:'', holes:'all 18',
+    text:`Manual Plan — ${vizActiveCourse.name} (${vizActiveTee?.name||''} tees)\nClubs: ${bm.join(', ')}\n${Object.keys(hm).length} holes planned.`,
+    bagMap:bm,
+    holeMap:hm
+  };
+  history.unshift(entry);
+  save();
+  renderSessions();
+  alert(`Plan saved: ${vizActiveCourse.name} — ${bm.length} clubs, ${Object.keys(hm).length} holes.`);
+}
 function vizTogglePlanner(){
   vizPlannerOpen=!vizPlannerOpen;
   document.getElementById('vizPlannerBody').style.display=vizPlannerOpen?'block':'none';
-  document.getElementById('vizPlannerChevron').textContent=vizPlannerOpen?'\u25b2 Edit paths':'\u25bc Edit paths';
+  document.getElementById('vizPlannerHdr')?.classList.toggle('open',vizPlannerOpen);
+  document.getElementById('vizPlannerChevron').textContent=vizPlannerOpen?'\u25b2':'\u25bc';
 }
 function vizTogglePath(pi){
   vizPathVisible[pi]=!vizPathVisible[pi];
@@ -3811,7 +4294,8 @@ function vizRemoveShotFromPath(pi){
 function _rebuildPathPlanner(){
   const rowsEl=document.getElementById('vizPathRows');
   if(!rowsEl) return;
-  const allClubs=bag.filter(c=>c.tested&&c.type!=='Putter');
+  const shelfIds=vizSelectedClubs.size?vizSelectedClubs:new Set(bag.filter(c=>c.tested&&c.type!=='Putter').map(c=>c.id));
+  const allClubs=bag.filter(c=>c.tested&&c.type!=='Putter'&&(vizMode!=='hole'||shelfIds.has(c.id)));
   const none='<option value="">\u2014 none \u2014</option>';
   const clubOpts=none+allClubs.map(c=>`<option value="${c.id}">${escHtml(c.identifier||c.type)}</option>`).join('');
   const PATH_NAMES=['Path 1','Path 2','Path 3'];
@@ -3870,6 +4354,7 @@ function buildVizHoleShelf(){
     `<button onclick="vizSelectHole(${h.number})" style="padding:5px 7px;background:${h.number===vizSelectedHole?'var(--gr3)':'var(--sf)'};border:1px solid ${h.number===vizSelectedHole?'var(--gr2)':'var(--br)'};border-radius:4px;font-family:inherit;font-size:.6rem;color:${h.number===vizSelectedHole?'var(--ac2)':'var(--tx2)'};cursor:pointer;text-align:center;min-width:40px" id="vhbtn${h.number}">H${h.number}<br><span style="font-size:.52rem;color:var(--tx3)">P${h.par}\xb7${h.yards||'?'}y</span></button>`).join('');
 }
 function vizSelectHole(n){
+  _saveCurrentHoleEdits();
   vizSelectedHole=n;
   document.querySelectorAll('[id^=vhbtn]').forEach(b=>{
     const hn=+b.id.replace('vhbtn','');
@@ -3903,9 +4388,9 @@ function buildVizDistanceDropdown(){
 function initViz(){
   if(vizInitDone){renderViz();return;}
   vizInitDone=true;
-  const sess=history.filter(h=>h.type==='optimisation'||h.type==='caddie'||h.type==='both');
+  const sess=history.filter(h=>h.type==='optimisation'||h.type==='caddie'||h.type==='both'||h.type==='manual');
   const sessOpts=sess.length
-    ? sess.map(h=>`<option value="${h.id}">${h.date?.slice(0,10)||''} \xb7 ${escHtml(h.course)} (${escHtml(h.tee||'')})</option>`).join('')
+    ? sess.map(h=>`<option value="${h.id}">${fmtDate(h.date)} \xb7 ${escHtml(h.course)} (${escHtml(h.tee||'')})</option>`).join('')
     : '<option value="">No sessions yet</option>';
   document.getElementById('vizOptSessionSelect').innerHTML=sessOpts;
   document.getElementById('vizHoleSessionSelect').innerHTML='<option value="">\u2014 none \u2014</option>'+sessOpts;
@@ -3922,7 +4407,7 @@ function initViz(){
   }
   vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===tsel.value)||vizActiveCourse?.tees?.[0]||null;
   // Init path planner with one empty path
-  vizPaths=[[],[],[]]; vizPathVisible=[true,false,false];
+  vizPaths=[[],[],[]]; vizPathVisible=[true,false,false]; vizHoleEdits={};
   _rebuildPathPlanner();
   // Reset club selection — ensures IDs match current bag after any import
   vizSelectedClubs=new Set();
@@ -3941,7 +4426,7 @@ function initViz(){
 }
 function vizToggleClub(id){
   if(vizSelectedClubs.has(id)) vizSelectedClubs.delete(id);
-  else vizSelectedClubs.add(id);
+  else{if(vizSelectedClubs.size>=13){alert('Maximum 13 clubs (14 with putter). Deselect a club first.');return;}vizSelectedClubs.add(id);}
   const on=vizSelectedClubs.has(id);
   const lbl=document.getElementById('vclbl'+id);
   if(lbl){lbl.style.background=on?'var(--gr3)':'var(--bg)';lbl.style.borderColor=on?'var(--gr2)':'var(--br)';}
