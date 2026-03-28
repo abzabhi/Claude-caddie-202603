@@ -310,7 +310,7 @@ body{
   <div class="hdr">
     <div>
       <div class="hdr-title">Gordy the Virtual Caddy</div>
-      <div class="hdr-sub">Profile · Clubs · Courses · Handicap · Caddie · Viz/Plan · Notes</div>
+      <div class="hdr-sub">Profile · GORDy · Sessions · Viz · Rounds · Courses · Clubs · Notes</div>
     </div>
     <div class="hdr-flag">⛳</div>
   </div>
@@ -326,10 +326,11 @@ body{
   <!-- Upload prompt banner -->
   <div id="uploadBanner">
     <div class="ub-text">
-      <strong>Welcome to Gordy the Virtual Caddy</strong>
-      Import an existing data file, or start fresh and use AI to set up your clubs and courses.
+      <strong>Welcome to GORDy the Virtual Caddy</strong>
+      Import an existing data file, load from Gist, or start fresh and use AI to set up your clubs and courses.
     </div>
     <label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);document.getElementById('uploadBanner').style.display='none'"></label>
+    <button class="btn gold" onclick="bannerLoadGist()" style="white-space:nowrap" id="bannerGistBtn">&#8681; Load from Gist</button>
     <button class="btn sec" onclick="exportStarterTxt()" style="white-space:nowrap">🤖 Set Up with AI</button>
     <button class="btn sec" onclick="document.getElementById('uploadBanner').style.display='none'" style="white-space:nowrap">Start fresh</button>
   </div>
@@ -439,7 +440,7 @@ body{
     <button class="add-club-btn" onclick="addClub()">＋ Add Club</button>
     <div class="slbl pur" style="margin-top:16px;">Putter — always in bag</div>
     <div id="putterSlot"></div>
-    <p class="note">Expand any club to log distance sessions or edit specs. Toggle Active/Retired to include or exclude from bag optimisation. Use <strong>Get AI Help</strong> to add clubs by name via any AI chat.</p>
+    <p class="note">Expand any club to log distance sessions or edit specs. Toggle Active/Retired to include or exclude from bag optimisation. Use the <strong>Club Setup</strong> card in the <strong>GORDy</strong> tab to add clubs by name via any AI chat.</p>
   </div>
 
   <!-- COURSES -->
@@ -966,7 +967,7 @@ body{
       <div class="card-title">AI Caddie Sessions</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">How Sessions Work</div>
-        Export a session file from the Caddie tab and upload it to any AI chat (Claude, ChatGPT, etc.). The AI reads your clubs, course, and handicap, then produces a bag optimisation and hole-by-hole strategy. Import the result back into the app.
+        Export a session file from the <strong>GORDy</strong> tab and upload it to any AI chat (Claude, ChatGPT, etc.). The AI reads your clubs, course, and handicap, then produces a bag optimisation and hole-by-hole strategy. Import the result back into the app via the Caddie Session card in GORDy.
         <div class="slbl" style="margin-top:12px">Structured Data Blocks</div>
         When the AI produces a session result, it appends two machine-readable blocks that the app uses for visualisation: a <strong>BAG-MAP</strong> listing the exact recommended club identifiers in order, and a <strong>HOLE-MAP</strong> listing the primary tee and approach club for each hole. These are stripped from the displayed scorecard text — they exist solely for the app to drive the Viz tab without text parsing.
         <div class="slbl" style="margin-top:12px">AI Output Varies</div>
@@ -1679,12 +1680,13 @@ function saveData() {
 }
 // Keep exportData as internal alias used by exportForAI status check
 function exportData() { saveData(); }
-function importData(e) {
-  const file = e.target.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const lines = ev.target.result.split('\n');
-    const newBag=[], newRounds=[];
+function processDataText(text) {
+  const hasExisting = bag.length || courses.length || rounds.length || history.length;
+  if(hasExisting) {
+    if(!confirm('This will replace your current data.\n\nAre you sure? This cannot be undone.')) return;
+  }
+  const lines = text.split('\n');
+  const newBag=[], newRounds=[];
     let section=null, cur=null, currentCourse=null, currentTee=null, currentEntry=null;
     const newCourses=[], newHistory=[];
     let newProfile={}, newHcpMode=null, newManualHcp=null, newNoteLines=[];
@@ -1807,7 +1809,11 @@ function importData(e) {
     document.getElementById('uploadBanner').style.display='none';
     save(); renderAll();
     alert('Data imported successfully.');
-  };
+}
+function importData(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => processDataText(ev.target.result);
   reader.readAsText(file); e.target.value='';
 }
 
@@ -3716,11 +3722,41 @@ async function gistDelete(filename) {
 // Called after every save() when in Gist mode — fire-and-forget
 async function syncSave() {
   if(!gistMode()) return;
+  const hasData = bag.length || courses.length || history.length || rounds.length;
+  if(!hasData) {
+    const el = document.getElementById('gistSyncStatus');
+    if(el) el.textContent = 'Push skipped — no data to sync.';
+    return;
+  }
   const ok = await gistPatch('virtual-caddie-data.txt', serialise());
   const ts = ok ? new Date().toLocaleTimeString() : null;
   if(ts) localStorage.setItem('vc:gistLastSync', ts);
   const el = document.getElementById('gistSyncStatus');
   if(el) el.textContent = ok ? `Last synced: ${ts}` : 'Sync failed — check PAT / Gist ID';
+}
+async function bannerLoadGist() {
+  if(!gistMode()) {
+    alert('Gist sync is not connected.\n\nConnect your Gist PAT and ID in the Profile tab → Gist Sync card, then come back and try again.');
+    return;
+  }
+  await syncLoad();
+  // Hide banner only if data was actually loaded
+  const hasData = bag.length || courses.length || rounds.length || history.length;
+  if(hasData) document.getElementById('uploadBanner').style.display='none';
+}
+async function syncLoad() {
+  if(!gistMode()) { alert('Gist not connected.'); return; }
+  const st = document.getElementById('gistSyncStatus');
+  if(st) st.textContent = 'Loading from Gist…';
+  const text = await gistGet('virtual-caddie-data.txt');
+  if(!text) {
+    if(st) st.textContent = 'Load failed — no data file found in Gist.';
+    return;
+  }
+  processDataText(text);
+  const ts = new Date().toLocaleTimeString();
+  localStorage.setItem('vc:gistLastSync', ts);
+  if(st) st.textContent = `Loaded from Gist: ${ts}`;
 }
 
 // On load in Gist mode: check for a pending session-result from AI
@@ -3795,7 +3831,8 @@ function renderGistSettings() {
       <div style="font-size:.72rem;color:var(--ac);margin-bottom:8px">✓ Connected to Gist <code style="font-size:.65rem">${gistId().slice(0,8)}…</code></div>
       <div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px" id="gistSyncStatus">${ts?'Last synced: '+ts:'Not synced yet this session'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" onclick="syncSave()">↑ Sync Now</button>
+        <button class="btn" onclick="syncSave()">↑ Push to Gist</button>
+        <button class="btn sec" onclick="syncLoad()">↓ Load from Gist</button>
         <button class="btn danger" onclick="disconnectGist()">Disconnect</button>
       </div>
     ` : `
