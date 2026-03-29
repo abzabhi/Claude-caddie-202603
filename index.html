@@ -473,7 +473,7 @@ body{
   <div id="uploadBanner">
     <div class="ub-text">
       <strong>Welcome to GORDy the Virtual Caddy</strong>
-      Import an existing data file, load from Gist, or start fresh and use AI to set up your clubs and courses.
+      Import an existing data file, load from sync, or start fresh and set up your clubs and courses with AI.
     </div>
     <label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);document.getElementById('uploadBanner').style.display='none'"></label>
     <button class="btn gold" onclick="bannerLoadGist()" style="white-space:nowrap" id="bannerGistBtn">&#8681; Load from sync</button>
@@ -1227,7 +1227,7 @@ body{
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         All personal data is stored exclusively in your browser's <code>localStorage</code>. Nothing is transmitted to any server operated by this app. Use <strong>Save Data</strong> to download a backup file — this is the only way to transfer data between devices or browsers. Clearing browser data will erase all app data; always save first.
         <br><br>
-        <strong>Gist sync</strong> (optional): if configured, the app will push your data file to a GitHub Gist when you save. This is a convenience backup only — the Gist is operated by GitHub under their own terms. The skill and reference files the app fetches on load are also hosted on GitHub Gist.
+        <strong>Cross-device sync</strong> (optional): if configured, your data is encrypted in-browser using AES-GCM before transmission and stored on Cloudflare's infrastructure under your chosen sync ID and passphrase. Anthropic has no access to your data. The skill and reference files the app fetches on first load are hosted on GitHub Gist (read-only, no personal data).
         <br><br>
         If you export a session file to an AI service, that data is processed under the terms of that AI provider.
       </div>
@@ -1266,7 +1266,7 @@ body{
       <div class="disc-body" style="line-height:1.8">
         This will permanently erase <strong>all</strong> clubs, courses, rounds, history, and profile data from this device.<br><br>
         <strong>Have you saved your data file?</strong> Use <em>Save Data</em> first to download a backup — once cleared, this action cannot be undone.<br><br>
-        <span style="color:var(--tx3);font-size:.63rem">Your Gist backup is not affected by clearing — but do not use Save Data until you have re-imported your data, or it will overwrite your Gist backup with an empty file. (Save Data automatically skips the Gist push when there is no data.)</span>
+        <span style="color:var(--tx3);font-size:.63rem">If you have a sync profile connected, your encrypted data remains on the server and is not affected — you can pull it again after clearing. If you rely only on local files, make sure you have downloaded a backup before proceeding.</span>
       </div>
     </div>
     <div class="disc-footer" style="gap:10px;display:flex;flex-direction:column">
@@ -1307,7 +1307,7 @@ body{
 
     <div class="disc-section">
       <div class="disc-section-title">Privacy &amp; Data Storage</div>
-      <div class="disc-body">All personal data — including your clubs, courses, rounds, handicap, and caddie history — is stored exclusively in your browser's local storage on your device. No data is transmitted to, collected by, or stored on any server operated by the developer. If you choose to use Gist sync or export files to an AI service, you do so under the terms of those third-party providers. The developer has no access to your data at any time.</div>
+      <div class="disc-body">All personal data — including your clubs, courses, rounds, handicap, and caddie history — is stored exclusively in your browser's local storage on your device. No data is transmitted to, collected by, or stored on any server operated by the developer. If you choose to use cross-device sync or export files to an AI service, you do so under the terms of those third-party providers. The developer has no access to your data at any time.</div>
     </div>
 
     <div class="disc-section">
@@ -1329,7 +1329,7 @@ body{
     <div style="font-size:.72rem;color:var(--tx);margin-bottom:8px" id="lrEndBannerMsg">End round?</div>
     <div style="display:flex;gap:8px">
       <button class="btn danger" style="flex:1" onclick="lrConfirmEnd()">End Round</button>
-      <button class="btn sec" style="flex:1" onclick="document.getElementById('lrEndBanner').style.display='none'">Cancel</button>
+      <button class="btn sec" style="flex:1" onclick="lrCancelEndBanner()">Cancel</button>
     </div>
   </div>
   <!-- Setup screen -->
@@ -1436,8 +1436,13 @@ body{
         <div style="font-size:.48rem;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase">Hole</div>
       </div>
       <div style="flex:1">
-        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--tx)" id="lrHoleInfo">Par · Yds</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--tx);cursor:pointer;display:inline-flex;align-items:center;gap:5px" id="lrHoleInfo" onclick="lrTogParPicker()" title="Tap to edit par">Par · Yds <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">✎</span></div>
         <div style="font-size:.6rem;color:var(--tx3);margin-top:3px" id="lrHoleSi"></div>
+        <div id="lrParPicker" style="display:none;gap:4px;margin-top:5px">
+          <button class="btn sec" style="font-size:.56rem;padding:2px 7px" data-par="3" onclick="lrSetPar(3)">Par 3</button>
+          <button class="btn sec" style="font-size:.56rem;padding:2px 7px" data-par="4" onclick="lrSetPar(4)">Par 4</button>
+          <button class="btn sec" style="font-size:.56rem;padding:2px 7px" data-par="5" onclick="lrSetPar(5)">Par 5</button>
+        </div>
       </div>
       <div class="lr-net-tog" id="lrNetTog" style="display:none">
         <button id="lrGrossBtn" class="on" onclick="lrSetView('gross')">Gross</button>
@@ -2975,7 +2980,7 @@ function renderCourseList() {
   if(dl2) dl2.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
   updateCourseSelects();
 }
-function deleteCourse(id) { courses=courses.filter(c=>c.id!==id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); renderCourseList(); }
+function deleteCourse(id) { courses=courses.filter(c=>c.id!==id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); vizInitDone=false; renderCourseList(); }
 function toggleHomeCourse(id) {
   profile.homeCourseId = profile.homeCourseId===id ? '' : id;
   // Sync homeClub text to match
@@ -3281,11 +3286,27 @@ function saveCourse() {
   editCourseData.slope=document.getElementById('cSlope').value;
   editCourseData.par=document.getElementById('cPar').value;
   editCourseData.yardage=document.getElementById('cYardage').value;
+  // Flush current hole edits into the active tee
   if(currentEditTeeId){const t=editCourseData.tees.find(x=>x.id===currentEditTeeId);if(t)t.holes=editCourseData.holes.map(h=>({...h}));}
+  // Auto-create a default tee from course-level data if none exist
+  // This ensures a basic manually-entered course works in Viz without the Add Tee flow
+  if(!editCourseData.tees.length) {
+    const defaultTee = {
+      id: uid(), name: 'Standard',
+      rating: editCourseData.rating,
+      slope:  editCourseData.slope,
+      yardage:editCourseData.yardage,
+      holes:  editCourseData.holes.map(h=>({...h}))
+    };
+    editCourseData.tees.push(defaultTee);
+    currentEditTeeId = defaultTee.id;
+  }
+  // Keep selectedTee in sync with what was last being edited
+  if(currentEditTeeId) editCourseData.selectedTee = currentEditTeeId;
   editCourseData.updatedAt = new Date().toISOString().slice(0,10);
   const idx=courses.findIndex(c=>c.id===editCourseData.id);
   if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
-  save(); cancelCourseEdit(); renderCourseList();
+  save(); vizInitDone=false; cancelCourseEdit(); renderCourseList();
 }
 
 
@@ -4989,6 +5010,7 @@ let vizPaths=[[],[],[]]; // 3 paths, each = array of club IDs
 let vizPathVisible=[true,false,false];
 let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
 
+
 function vizTierIdx(hcp){const h=+hcp||15;if(h<5)return 0;if(h<10)return 1;if(h<15)return 2;if(h<20)return 3;if(h<25)return 4;return 5;}
 function vizNormCdf(x){return .5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-2*x*x/Math.PI)));}
 
@@ -5491,6 +5513,7 @@ function saveManualPlan(){
   renderSessions();
   alert(`Plan saved: ${vizActiveCourse.name} — ${bm.length} clubs, ${Object.keys(hm).length} holes.`);
 }
+
 function vizTogglePlanner(){
   vizPlannerOpen=!vizPlannerOpen;
   document.getElementById('vizPlannerBody').style.display=vizPlannerOpen?'block':'none';
@@ -5910,6 +5933,15 @@ function lrCancelSetup() {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function lrParClass(par) { return par===3?'par3':par===5?'par5':'par4'; }
+function lrTogParPicker() {
+  const p = document.getElementById('lrParPicker');
+  if(p) p.style.display = p.style.display==='none' ? 'flex' : 'none';
+}
+function lrSetPar(par) {
+  if(!lrState) return;
+  lrState.holes[lrState.curHole].par = par;
+  lrRenderHole();
+}
 function lrRelTopar(score,par){ return score!==null?score-par:null; }
 function lrRelLabel(d){ if(d===null)return'—';if(d<=-2)return'−'+Math.abs(d);if(d===-1)return'−1';if(d===0)return'E';return'+'+d; }
 function lrRelCls(d){ if(d===null)return'';if(d<=-2)return'sc-eagle';if(d===-1)return'sc-birdie';if(d===0)return'sc-par';if(d===1)return'sc-bogey';return'sc-double'; }
@@ -5981,10 +6013,21 @@ function lrRenderHole() {
   const nEl = document.getElementById('lrHoleN');
   nEl.className = 'lr-hole-n '+pc;
   nEl.textContent = h.n;
-  document.getElementById('lrHoleInfo').textContent =
-    `Par ${h.par}${h.yards?' · '+h.yards+' yds':''}`;
+  document.getElementById('lrHoleInfo').innerHTML =
+    `Par ${h.par}${h.yards?' · '+h.yards+' yds':''} <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">✎</span>`;
   document.getElementById('lrHoleSi').textContent =
     h.handicap ? `SI ${h.handicap}` : '';
+  // Par picker — hide on hole change, highlight active par
+  const picker = document.getElementById('lrParPicker');
+  if(picker) {
+    picker.style.display = 'none';
+    picker.querySelectorAll('button[data-par]').forEach(b=>{
+      const active = +b.dataset.par === h.par;
+      b.style.background = active ? 'var(--ac2)' : '';
+      b.style.borderColor = active ? 'var(--ac2)' : '';
+      b.style.color = active ? '#fff' : '';
+    });
+  }
 
   // Net toggle
   const netTog = document.getElementById('lrNetTog');
@@ -6308,6 +6351,14 @@ function lrRenderTally() {
 }
 
 // ── End round ──────────────────────────────────────────────────────────────
+function lrCancelEndBanner() {
+  const banner = document.getElementById('lrEndBanner');
+  if(!banner) return;
+  // Always reset confirm button back to End Round regardless of how banner was opened
+  const confirmBtn = banner.querySelector('.btn.danger');
+  if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
+  banner.style.display = 'none';
+}
 function lrEndRound() {
   const played = lrState.holes.filter((_,i)=>lrState.players.some(p=>p.scores[i]?.score!==null)).length;
   const banner = document.getElementById('lrEndBanner');
