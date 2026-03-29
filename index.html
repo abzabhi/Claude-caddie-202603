@@ -43,13 +43,33 @@ body{
 .app{max-width:820px;margin:0 auto;padding:24px 16px 80px;}
 
 /* Header */
-.hdr{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px;padding-bottom:14px;border-bottom:2px solid var(--gr);}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;padding-bottom:14px;border-bottom:2px solid var(--gr);}
 .hdr-title{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--ac2);letter-spacing:-.01em;line-height:1;}
 .hdr-sub{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3);margin-top:5px;}
-.hdr-flag{font-size:1.5rem;opacity:.8;}
+.hdr-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.hdr-save{background:none;border:1px solid var(--br2);border-radius:6px;color:var(--tx2);font-size:1rem;padding:5px 9px;cursor:pointer;transition:all .15s;line-height:1;}
+.hdr-save:hover{border-color:var(--gr2);color:var(--ac);}
+.hdr-avatar{background:var(--gr);border:none;border-radius:20px;color:#fff;font-family:'Playfair Display',serif;font-weight:700;font-size:.78rem;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap;}
+.hdr-avatar:hover{background:var(--gr2);}
+.hdr-avatar-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
-/* Toolbar */
-.toolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:16px;flex-wrap:wrap;}
+/* Profile dropdown */
+.prof-dropdown{position:absolute;top:0;right:0;width:min(320px,calc(100vw - 32px));background:var(--sf);border:1px solid var(--br);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.16);z-index:200;overflow:hidden;display:none;}
+.prof-dropdown.open{display:block;}
+.prof-dd-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--br);background:linear-gradient(135deg,var(--gr3),var(--sf));}
+.prof-dd-name{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:var(--ac2);}
+.prof-dd-hcp{font-size:.72rem;color:var(--tx2);margin-top:1px;}
+.prof-dd-close{background:none;border:none;color:var(--tx3);font-size:1.1rem;cursor:pointer;padding:2px 6px;line-height:1;}
+.prof-dd-row{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--br);cursor:pointer;transition:background .12s;}
+.prof-dd-row:hover{background:var(--gr3);}
+.prof-dd-row-lbl{font-size:.68rem;color:var(--tx);font-weight:500;}
+.prof-dd-row-detail{font-size:.6rem;color:var(--tx3);margin-top:1px;}
+.prof-dd-row-arrow{color:var(--tx3);font-size:.7rem;flex-shrink:0;}
+.prof-dd-sync{padding:10px 16px;border-bottom:1px solid var(--br);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.prof-dd-actions{padding:12px 16px;display:flex;flex-direction:column;gap:8px;}
+
+/* Toolbar — removed, kept as no-op for safety */
+.toolbar{display:none;}
 
 /* Tabs */
 .tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--br);flex-wrap:wrap;}
@@ -310,6 +330,14 @@ body{
 .lr-pill-txt{font-size:.72rem;font-weight:500;letter-spacing:.03em;}
 .lr-pill-meta{font-size:.58rem;opacity:.8;margin-top:1px;}
 .lr-pill-resume{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;opacity:.7;}
+/* Floating pill — visible from any tab */
+#lrFloatPill{display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);width:calc(min(820px,100vw) - 32px);background:var(--ac2);color:#fff;border-radius:10px;padding:11px 16px;cursor:pointer;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 4px 16px rgba(45,81,39,.35);z-index:90;transition:all .2s;}
+#lrFloatPill:hover{background:var(--gr);}
+#lrFloatPill.visible{display:flex;}
+/* Header live dot */
+.hdr-live{width:8px;height:8px;border-radius:50%;background:var(--gr);display:none;cursor:pointer;flex-shrink:0;animation:livePulse 1.4s ease-in-out infinite;}
+.hdr-live.visible{display:block;}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.3);}}
 #lrOverlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:100;flex-direction:column;max-width:820px;margin:0 auto;}
 #lrOverlay.active{display:flex;}
 .lr-topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--br);background:var(--sf);flex-shrink:0;}
@@ -376,21 +404,70 @@ body{
 <body>
 <div class="app">
 
+  <div style="position:relative">
   <div class="hdr">
     <div>
       <div class="hdr-title">Gordy the Virtual Caddy</div>
-      <div class="hdr-sub">Profile · GORDy · Sessions · Viz · Rounds · Courses · Clubs · Notes</div>
+      <div class="hdr-sub">Golf Optimization Research &amp; Decisions</div>
     </div>
-    <div class="hdr-flag">⛳</div>
+    <div class="hdr-right">
+      <button class="hdr-save" onclick="saveData()" title="Save &amp; sync data">💾</button>
+      <div class="hdr-live" id="hdrLiveDot" onclick="lrExpand()" title="Live round in progress — tap to resume"></div>
+      <button class="hdr-avatar" id="hdrAvatarBtn" onclick="toggleProfileDropdown()">
+        <span id="hdrAvatarInitials">⛳</span>
+        <span id="hdrAvatarDot" class="hdr-avatar-dot" style="background:#888"></span>
+      </button>
+    </div>
   </div>
 
-  <!-- Toolbar -->
+  <!-- Profile dropdown -->
+  <div class="prof-dropdown" id="profDropdown">
+    <div class="prof-dd-hdr">
+      <div>
+        <div class="prof-dd-name" id="ddName">Welcome, Golfer</div>
+        <div class="prof-dd-hcp" id="ddHcp">Handicap Index: —</div>
+      </div>
+      <button class="prof-dd-close" onclick="closeProfileDropdown()">✕</button>
+    </div>
+    <!-- Quick links -->
+    <div class="prof-dd-row" onclick="ddNav('rounds')">
+      <div><div class="prof-dd-row-lbl">🏌️ Rounds</div><div class="prof-dd-row-detail" id="ddRounds">0 logged</div></div>
+      <div class="prof-dd-row-arrow">›</div>
+    </div>
+    <div class="prof-dd-row" onclick="ddNav('sessions')">
+      <div><div class="prof-dd-row-lbl">🤖 Sessions</div><div class="prof-dd-row-detail" id="ddSessions">0 caddie sessions</div></div>
+      <div class="prof-dd-row-arrow">›</div>
+    </div>
+    <div class="prof-dd-row" onclick="ddNav('courses')">
+      <div><div class="prof-dd-row-lbl">⛳ Courses</div><div class="prof-dd-row-detail" id="ddCourses">0 saved</div></div>
+      <div class="prof-dd-row-arrow">›</div>
+    </div>
+    <div class="prof-dd-row" onclick="ddNav('clubs')">
+      <div><div class="prof-dd-row-lbl">🏌️ Clubs</div><div class="prof-dd-row-detail" id="ddClubs">0 active</div></div>
+      <div class="prof-dd-row-arrow">›</div>
+    </div>
+    <!-- Sync status + quick push/pull -->
+    <div class="prof-dd-sync">
+      <div style="font-size:.62rem;color:var(--tx2)" id="ddSyncStatus">⚪ No sync profile</div>
+      <div style="display:flex;gap:6px" id="ddSyncBtns"></div>
+    </div>
+    <!-- Actions -->
+    <div class="prof-dd-actions">
+      <button class="btn sec" style="width:100%;font-size:.68rem" onclick="closeProfileDropdown();showTabFromProfile('profile');exportProfilePdf()">⬇ Export Player Card</button>
+      <div id="ddSignOutBlock"></div>
+    </div>
+  </div>
+  </div>
+
+  <!-- Toolbar (hidden — kept for any legacy references) -->
   <div class="toolbar">
     <button class="btn gold" onclick="saveData()">⬇ Save Data</button>
     <label class="btn sec" style="cursor:pointer;">⬆ Import Data<input type="file" accept=".txt" style="display:none" onchange="importData(event)"></label>
     <button class="btn sec" onclick="document.getElementById('clearModal').style.display='flex'" style="color:var(--danger);border-color:var(--danger)">🗑 Clear All Data</button>
     <span id="saveStatus" style="font-size:.62rem;align-self:center;transition:color .3s"></span>
   </div>
+
+  <span id="saveStatus" style="font-size:.62rem;display:block;text-align:right;min-height:1em;margin-bottom:4px;transition:color .3s"></span>
 
   <!-- Upload prompt banner -->
   <div id="uploadBanner">
@@ -399,7 +476,7 @@ body{
       Import an existing data file, load from Gist, or start fresh and use AI to set up your clubs and courses.
     </div>
     <label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);document.getElementById('uploadBanner').style.display='none'"></label>
-    <button class="btn gold" onclick="bannerLoadGist()" style="white-space:nowrap" id="bannerGistBtn">&#8681; Load from Gist</button>
+    <button class="btn gold" onclick="bannerLoadGist()" style="white-space:nowrap" id="bannerGistBtn">&#8681; Load from sync</button>
     <button class="btn sec" onclick="exportStarterTxt()" style="white-space:nowrap">🤖 Set Up with AI</button>
     <button class="btn sec" onclick="document.getElementById('uploadBanner').style.display='none'" style="white-space:nowrap">Start fresh</button>
   </div>
@@ -419,6 +496,12 @@ body{
   <!-- CLUBS -->
   <!-- PROFILE -->
   <div id="tab-profile" class="panel active">
+
+    <!-- Data Sync — top of profile for visibility -->
+    <div class="card" id="gistSettingsCard" style="margin-bottom:14px">
+      <!-- rendered by renderGistSettings() -->
+    </div>
+
     <div id="profileHero" class="profile-hero">
       <div class="profile-avatar" id="profileAvatar">⛳</div>
       <div class="profile-greeting">
@@ -492,9 +575,23 @@ body{
       </div>
     </div>
 
-    <div class="card" id="gistSettingsCard">
-      <!-- rendered by renderGistSettings() -->
+    <div class="card" id="gistSettingsCard2" style="display:none"><!-- sync card overflow target, unused --></div>
+
+    <!-- Data Management — collapsible, closed by default -->
+    <div class="card">
+      <div class="collapsible-hdr" onclick="toggleCard('dm-card')" id="dm-card-hdr">
+        <span>🗄 Data Management</span><span class="chev">▼</span>
+      </div>
+      <div id="dm-card-body" style="display:none;padding-top:10px">
+        <p class="note" style="margin-bottom:10px">Import, merge, or clear your local data. For cross-device sync, use the Data Sync card above.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <label class="btn sec" style="cursor:pointer;">⬆ Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event)"></label>
+        </div>
+        <div style="margin-bottom:8px;font-size:.62rem;color:var(--tx3)">For merge/append options use the 📥 Import &amp; Merge card in the GORDy tab.</div>
+        <button class="btn danger" onclick="document.getElementById('clearModal').style.display='flex'">🗑 Clear All Data</button>
+      </div>
     </div>
+
   </div>
   <div id="tab-clubs" class="panel">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -819,7 +916,19 @@ body{
         <span>⛳ Course Lookup</span><span class="chev">▼</span>
       </div>
       <div id="ah-course-body" style="display:none;padding-top:10px">
-        <p class="note" style="margin-bottom:10px">Export a task file, drop it into any AI chat, and ask it to look up your course scorecard. Import the result below to add the course.</p>
+        <!-- Repo search -->
+        <div style="margin-bottom:12px">
+          <div class="flbl" style="margin-bottom:4px">🔍 Search course repo</div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="repoSearchInput" placeholder="Course name or city…" style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none" onkeydown="if(event.key==='Enter') onRepoSearch()">
+            <button class="btn sec" onclick="onRepoSearch()" style="white-space:nowrap">Search</button>
+          </div>
+          <div id="repoSearchStatus" style="font-size:.62rem;color:var(--tx3);margin-top:5px;min-height:1em"></div>
+          <div id="repoSearchResults" style="margin-top:6px"></div>
+        </div>
+        <div style="border-top:1px solid var(--br);padding-top:10px;margin-bottom:6px">
+          <p class="note" style="margin-bottom:10px">Not in the repo? Export a task file, drop it into any AI chat, and ask it to look up your course scorecard. Import the result below to add the course.</p>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <button class="btn gold" onclick="exportCourseTask()">&#8679; Export Course Task</button>
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importCourseResult(event)"></label>
@@ -847,6 +956,27 @@ body{
           <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
           <textarea id="pasteClubResult" rows="3" placeholder="Paste the AI's club result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
           <button class="btn sec" style="margin-top:6px" onclick="importPastedClubResult()">&#8681; Import Pasted</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 6: Import & Merge -->
+    <div class="card">
+      <div class="collapsible-hdr" onclick="toggleCard('ah-merge')" id="ah-merge-hdr">
+        <span>📥 Import &amp; Merge</span><span class="chev">▼</span>
+      </div>
+      <div id="ah-merge-body" style="display:none;padding-top:10px">
+        <p class="note" style="margin-bottom:10px">Load a previously saved data file and choose how to combine it with your current data. <strong>Append</strong> is the safest — it only adds new rounds and sessions and never changes anything existing.</p>
+        <div style="background:var(--bg);border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px;font-size:.63rem;color:var(--tx2);line-height:1.8">
+          <div><strong style="color:var(--tx)">📎 Append</strong> — adds new rounds &amp; sessions only. Existing data untouched.</div>
+          <div><strong style="color:var(--tx)">🔀 Merge</strong> — adds new rounds, sessions, courses, clubs. Conflicts shown for review, never silently changed.</div>
+          <div><strong style="color:var(--tx)">⚠ Overwrite</strong> — replaces all current data. Requires confirmation. Cannot be undone.</div>
+        </div>
+        <div id="mergeStatus" style="font-size:.62rem;color:var(--tx3);margin-bottom:8px;min-height:1em"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label class="btn sec" style="cursor:pointer">📎 Append<input type="file" accept=".txt" style="display:none" onchange="onMergeFile(event,'append')"></label>
+          <label class="btn sec" style="cursor:pointer">🔀 Merge<input type="file" accept=".txt" style="display:none" onchange="onMergeFile(event,'merge')"></label>
+          <label class="btn danger" style="cursor:pointer">⚠ Overwrite<input type="file" accept=".txt" style="display:none" onchange="onMergeFile(event,'overwrite')"></label>
         </div>
       </div>
     </div>
@@ -1119,6 +1249,15 @@ body{
 
 </div>
 
+<!-- Floating live round pill — visible from any tab -->
+<div id="lrFloatPill" onclick="lrExpand()">
+  <div>
+    <div class="lr-pill-txt" id="lrFloatTxt">⛳ Live Round in progress</div>
+    <div class="lr-pill-meta" id="lrFloatMeta"></div>
+  </div>
+  <div class="lr-pill-resume">⏸ Tap to resume →</div>
+</div>
+
 <!-- Clear All Data modal -->
 <div id="clearModal" class="disc-overlay" style="display:none">
   <div class="disc-box" style="max-width:420px">
@@ -1185,6 +1324,14 @@ body{
 
 <!-- ── Live Round Overlay ─────────────────────────────────────────────── -->
 <div id="lrOverlay">
+  <!-- Inline end-round confirm banner — avoids confirm() which is blocked on some mobile browsers -->
+  <div id="lrEndBanner" style="display:none;position:fixed;bottom:60px;left:0;right:0;z-index:110;padding:10px 14px;background:var(--sf);border-top:2px solid var(--br);box-shadow:0 -4px 12px rgba(0,0,0,.12);max-width:820px;margin:0 auto">>
+    <div style="font-size:.72rem;color:var(--tx);margin-bottom:8px" id="lrEndBannerMsg">End round?</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn danger" style="flex:1" onclick="lrConfirmEnd()">End Round</button>
+      <button class="btn sec" style="flex:1" onclick="document.getElementById('lrEndBanner').style.display='none'">Cancel</button>
+    </div>
+  </div>
   <!-- Setup screen -->
   <div id="lrSetup" style="display:flex;flex-direction:column;height:100%;">
     <div class="lr-topbar">
@@ -1306,7 +1453,7 @@ body{
       <div class="lr-nav-sep"></div>
       <button class="lr-nav-btn danger" onclick="lrEndRound()"><span class="lr-nav-icon">⏹</span><span>End</span></button>
       <div class="lr-nav-sep"></div>
-      <button class="lr-nav-btn" onclick="lrMinimize()"><span class="lr-nav-icon">−</span><span>Pause</span></button>
+      <button class="lr-nav-btn" onclick="lrMinimize()"><span class="lr-nav-icon">⏸</span><span>Minimise</span></button>
       <div class="lr-nav-sep"></div>
       <button class="lr-nav-btn primary" id="lrNextBtn" onclick="lrGoHole(1)"><span class="lr-nav-icon" id="lrNextIcon">→</span><span id="lrNextLbl">Next</span></button>
     </div>
@@ -1625,6 +1772,10 @@ const GIST_CRSE_TASK_URL  = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d
 const GIST_SETUP_SKILL_URL= 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/setup-skill.md';
 const GIST_ROUND_TASK_URL = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/round-task.md';
 
+// ── Gordy Courses repo ────────────────────────────────────────────────────────
+const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
+const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/courses/';
+
 async function _fetchAndCache(url, storeKey, verField) {
   try {
     const r = await fetch(url);
@@ -1638,6 +1789,90 @@ async function _fetchAndCache(url, storeKey, verField) {
       localStorage.setItem(storeKey+':ver', String(newVer));
     }
   } catch {}
+}
+
+// ── Gordy Courses repo helpers ────────────────────────────────────────────────
+// Fetch lightweight index [{id,name,city}] — cached 24h
+async function _fetchCourseIndex() {
+  const CACHE_KEY='gordy:courseIndex', CACHE_TS='gordy:courseIndex:ts', TTL=24*60*60*1000;
+  const cached=localStorage.getItem(CACHE_KEY);
+  const ts=parseInt(localStorage.getItem(CACHE_TS)||'0');
+  if(cached&&(Date.now()-ts)<TTL) return JSON.parse(cached);
+  try {
+    const r=await fetch(GORDY_COURSES_INDEX_URL,{cache:'no-store'});
+    if(!r.ok) return cached?JSON.parse(cached):[];
+    const data=await r.json();
+    localStorage.setItem(CACHE_KEY,JSON.stringify(data));
+    localStorage.setItem(CACHE_TS,String(Date.now()));
+    return data;
+  } catch { return cached?JSON.parse(cached):[]; }
+}
+
+// Fetch full per-course file (metadata+tees+optional geometry) — cached until explicit refresh
+async function _fetchCourseFile(courseId) {
+  const CACHE_KEY='gordy:course:'+courseId;
+  const cached=localStorage.getItem(CACHE_KEY);
+  if(cached) return JSON.parse(cached);
+  try {
+    const r=await fetch(GORDY_COURSES_BASE_URL+courseId+'.json');
+    if(!r.ok) return null;
+    const data=await r.json();
+    localStorage.setItem(CACHE_KEY,JSON.stringify(data));
+    return data;
+  } catch { return null; }
+}
+
+// Strip geometry block before any AI export — geometry must NEVER be sent to AI context
+function _stripGeometry(courseObj) {
+  if(!courseObj) return courseObj;
+  // eslint-disable-next-line no-unused-vars
+  const {geometry,...clean}=courseObj;
+  return clean;
+}
+
+// Case-insensitive name/city search against cached index
+async function searchCourseRepo(query) {
+  const index=await _fetchCourseIndex();
+  const q=query.trim().toLowerCase();
+  if(!q) return [];
+  return index.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.city||'').toLowerCase().includes(q));
+}
+
+// Add a repo course to personal courses[] — fetches full file, normalises schema, merges by id
+async function addCourseFromRepo(courseId,statusElId) {
+  const st=statusElId?document.getElementById(statusElId):null;
+  if(st) st.textContent='Fetching course data…';
+  const data=await _fetchCourseFile(courseId);
+  if(!data){if(st) st.textContent='⚠ Could not fetch course — check connection.'; return;}
+  const course={
+    id:         data.courseId||data.id||courseId,
+    name:       data.name||'',
+    city:       data.city||'',
+    par:        data.par||'',
+    rating:     data.rating||'',
+    slope:      data.slope||'',
+    yardage:    data.totalYards||data.yardage||'',
+    selectedTee:data.selectedTee||'',
+    updatedAt:  data.updated||data.updatedAt||today(),
+    tees:(data.tees||[]).map(t=>({
+      id:t.id, name:t.name,
+      rating:t.rating||'', slope:t.slope||'',
+      yardage:t.totalYards||t.yardage||'',
+      holes:(t.holes||[]).map(h=>({number:h.number,par:h.par||'',yards:h.yards||'',handicap:h.handicap||'',note:h.note||''}))
+    }))
+    // geometry intentionally excluded from personal courses[]
+  };
+  const selTee=course.tees.find(t=>t.id===course.selectedTee);
+  if(selTee) course.holes=selTee.holes;
+  const existing=courses.find(c=>c.id===course.id);
+  if(existing){
+    if(!confirm(`"${course.name}" is already in your courses. Replace with the repo version?`)) return;
+    courses=courses.map(c=>c.id===course.id?course:c);
+  } else {
+    courses.push(course);
+  }
+  save(); renderAll();
+  if(st) st.textContent=`✅ "${course.name}" added to your courses.`;
 }
 function getSkillText() {
   return localStorage.getItem('vc:skill') ||
@@ -1839,7 +2074,7 @@ function load() {
 }
 // ── Export / Import ───────────────────────────────────────────────────────────
 function serialise() {
-  const lines = ['VIRTUAL CADDIE DATA — v2', 'Exported: '+today(), 'FlightDataVersion: 1', ''];
+  const lines = ['VIRTUAL CADDIE DATA — v3', 'DataVersion: 3', 'Exported: '+today(), 'FlightDataVersion: 1', ''];
   // Profile section
   lines.push('=== PROFILE ===');
   lines.push('NAME | '    +(profile.name||''));
@@ -1873,7 +2108,7 @@ function serialise() {
   });
   lines.push(''); lines.push('=== ROUNDS ===');
   rounds.forEach(r=>{
-    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||'',r.countForHandicap===false?'0':'1'].join(' | '));
+    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||'',r.countForHandicap===false?'0':'1',r.id||''].join(' | '));
     if(r.sessionIds?.length) lines.push('  SESSIONIDS | '+r.sessionIds.join(','));
     if(r.players?.length) lines.push('  PLAYERS | '+r.players.map(p=>`${p.name||''}:${p.isMe?'1':'0'}:${p.handicap??''}:${p.score??''}`).join(','));
     if(r.holes?.length) r.holes.forEach(h=>lines.push('  HOLE | '+[h.n,h.par,h.score,h.putts,h.gir===true?'Y':h.gir===false?'N':'',h.notes||'',h.yards||''].join(' | ')));
@@ -1925,7 +2160,7 @@ function serialise() {
   return lines.join('\n');
 }
 function saveData() {
-  // Primary save action: download TXT always + sync to Gist if connected
+  // Primary save action: always download TXT; auto-push to sync profile if connected + passphrase in session
   const txt = serialise();
   const blob = new Blob([txt], {type:'text/plain'});
   const a = document.createElement('a');
@@ -1933,20 +2168,13 @@ function saveData() {
   a.download = 'virtual-caddie-data-'+today()+'.txt';
   a.click();
   URL.revokeObjectURL(a.href);
-  // Gist sync — skip if data is empty to protect existing Gist backup
-  const hasData = bag.length || courses.length || history.length;
-  if(gistMode() && hasData) {
+  const st = document.getElementById('saveStatus');
+  if(kvMode() && sessionStorage.getItem('vc:kvPass')) {
     syncSave().then(()=>{
-      const st = document.getElementById('saveStatus');
-      if(st) { st.textContent='✓ Saved locally + synced to Gist'; st.style.color='var(--ac)'; setTimeout(()=>{st.textContent='';},4000); }
+      if(st) { st.textContent='✓ Saved locally + synced'; st.style.color='var(--ac)'; setTimeout(()=>{st.textContent='';},4000); }
     });
   } else {
-    const st = document.getElementById('saveStatus');
-    if(st) {
-      st.textContent = gistMode() && !hasData ? '✓ Saved locally (Gist skipped — no data)' : '✓ Saved locally';
-      st.style.color='var(--tx2)';
-      setTimeout(()=>{st.textContent='';},3000);
-    }
+    if(st) { st.textContent='✓ Saved locally'; st.style.color='var(--tx2)'; setTimeout(()=>{st.textContent='';},3000); }
   }
 }
 // Keep exportData as internal alias used by exportForAI status check
@@ -2014,7 +2242,7 @@ function processDataText(text) {
       }
       if(section==='rounds'&&line.startsWith('ROUND |')) {
         const p=line.split('|').map(s=>s.trim());
-        cur={id:uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',sessionIds:[],holes:[],players:[]};
+        cur={id:p[11]||uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',sessionIds:[],holes:[],players:[]};
         newRounds.push(cur);
       } else if(section==='rounds'&&line.startsWith('SESSIONIDS |')&&cur) {
         cur.sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);
@@ -2083,11 +2311,228 @@ function processDataText(text) {
     save(); renderAll();
     alert('Data imported successfully.');
 }
+
+// ── Shared parser used by both processDataText and mergeDataText ──────────────
+function _parseDataText(text) {
+  const lines=text.split('\n');
+  const newBag=[], newRounds=[], newCourses=[], newHistory=[];
+  let section=null, cur=null, currentCourse=null, currentTee=null, currentEntry=null;
+  let newProfile={}, newHcpMode=null, newManualHcp=null, newNoteLines=[];
+  for(const raw of lines) {
+    const line=raw.trim();
+    if(!line||line.startsWith('#')) continue;
+    if(line==='=== PROFILE ==='){section='profile';continue;}
+    if(line==='=== CLUBS ==='){section='clubs';continue;}
+    if(line==='=== COURSES ==='){section='courses';continue;}
+    if(line==='=== ROUNDS ==='){section='rounds';continue;}
+    if(line==='=== HANDICAP ==='){section='handicap';continue;}
+    if(line==='=== FLIGHT_REF ==='){section='flightref';continue;}
+    if(line==='=== HISTORY ==='){section='history';continue;}
+    if(section==='profile'){
+      const p=line.split('|').map(s=>s.trim());
+      if(p[0]==='NAME')        newProfile.name         =p[1]||'';
+      else if(p[0]==='AGE')        newProfile.age          =p[1]||'';
+      else if(p[0]==='GENDER')     newProfile.gender       =p[1]||'';
+      else if(p[0]==='HANDED')     newProfile.handed       =p[1]||'';
+      else if(p[0]==='HOMECLUB')   newProfile.homeClub     =p[1]||'';
+      else if(p[0]==='HOMECOURSE') newProfile.homeCourseId =p[1]||'';
+      else if(p[0]==='YARDPREF')   newProfile.yardType     =p[1]||'';
+      else if(p[0]==='NOTE')       newNoteLines.push(p.slice(1).join('|'));
+    }
+    if(section==='clubs'&&line.startsWith('CLUB |')){
+      const p=line.split('|').map(s=>s.trim());
+      cur={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',confidence:p[7]?parseInt(p[7]):4,bias:p[8]||'Straight',yardType:p[9]||'',loft:p[10]||'',model:p[11]||'',sessions:[]};
+      newBag.push(cur);
+    } else if(section==='clubs'&&line.startsWith('SESSION |')&&cur){
+      const p=line.split('|').map(s=>s.trim());
+      cur.sessions.push({id:uid(),date:p[1]||today(),min:p[2]||'',max:p[3]||'',notes:p[4]||''});
+    }
+    if(section==='courses'){
+      if(line.startsWith('COURSE |')){
+        const p=line.split('|').map(s=>s.trim());
+        currentCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||'',tees:[],holes:[]};
+        newCourses.push(currentCourse); currentTee=null;
+      } else if(line.startsWith('TEE |')&&currentCourse){
+        const p=line.split('|').map(s=>s.trim());
+        currentTee={id:p[1]||uid(),name:p[2]||'',rating:p[3]||'',slope:p[4]||'',yardage:p[5]||'',holes:[]};
+        currentCourse.tees.push(currentTee);
+      } else if(line.startsWith('HOLE |')&&currentTee){
+        const p=line.split('|').map(s=>s.trim());
+        currentTee.holes.push({number:parseInt(p[1])||0,par:p[2]||'',yards:p[3]||'',handicap:p[4]||'',note:p[5]||''});
+      }
+    }
+    if(section==='handicap'){
+      const p=line.split('|').map(s=>s.trim());
+      if(p[0]==='MODE')   newHcpMode  =p[1]||null;
+      if(p[0]==='MANUAL') newManualHcp=p[1]||null;
+    }
+    if(section==='rounds'&&line.startsWith('ROUND |')){
+      const p=line.split('|').map(s=>s.trim());
+      cur={id:p[11]||uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',sessionIds:[],holes:[],players:[]};
+      newRounds.push(cur);
+    } else if(section==='rounds'&&line.startsWith('SESSIONIDS |')&&cur){
+      cur.sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);
+    } else if(section==='rounds'&&line.startsWith('PLAYERS |')&&cur){
+      cur.players=line.replace(/^PLAYERS \| /,'').trim().split(',').map(s=>{const[n,me,hcp,sc]=s.split(':');return{name:n||'',isMe:me==='1',handicap:hcp?+hcp:null,score:sc?+sc:null};});
+    } else if(section==='rounds'&&line.startsWith('HOLE |')&&cur){
+      const p=line.split('|').map(s=>s.trim());
+      cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||'',yards:p[7]||''});
+    }
+    if(section==='history'){
+      if(raw.trimStart().startsWith('ENTRY |')){
+        const p=raw.trim().split('|').map(s=>s.trim());
+        currentEntry={id:p[1]||uid(),date:p[2]||today(),type:p[3]||'result',course:p[4]||'',tee:p[5]||'',hcp:p[6]||'',playHcp:p[7]||'',conditions:p[8]||'',holes:p[9]||'',text:''};
+        newHistory.push(currentEntry);
+      } else if(raw.trimStart().startsWith('TEXT |')&&currentEntry){
+        const txt=raw.replace(/^\s*TEXT \| /,'');
+        currentEntry.text=currentEntry.text?currentEntry.text+'\n'+txt:txt;
+      } else if(raw.trimStart().startsWith('HOLEMAP |')&&currentEntry){
+        const hm=raw.replace(/^\s*HOLEMAP \| /,'').trim();
+        currentEntry.holeMap={};
+        hm.split(';').forEach(tok=>{
+          if(tok.includes('|')){
+            const[hn,...pathParts]=tok.split('|');
+            const n=parseInt(hn.replace('H',''));
+            if(n) currentEntry.holeMap[n]={paths:pathParts.map(p=>p.split(',').filter(Boolean))};
+          } else {
+            const[hn,tee,layup,app]=tok.split(':');
+            if(hn){const n=parseInt(hn.replace('H',''));const paths=[[tee,layup,app].filter(Boolean)];if(n)currentEntry.holeMap[n]={paths};}
+          }
+        });
+      } else if(raw.trimStart().startsWith('BAGMAP |')&&currentEntry){
+        currentEntry.bagMap=raw.replace(/^\s*BAGMAP \| /,'').trim().split(',').filter(Boolean);
+      }
+    }
+  }
+  return {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines};
+}
+
+// mode: 'append' | 'merge' | 'overwrite'
+function mergeDataText(text, mode) {
+  const {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
+
+  if(mode==='overwrite') {
+    const hasExisting=bag.length||courses.length||rounds.length||history.length;
+    if(hasExisting&&!confirm('OVERWRITE will replace ALL your current data.\n\nThis cannot be undone. Are you sure?')) return;
+    if(newBag.length) bag=newBag;
+    if(newRounds.length) rounds=newRounds;
+    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); profile=newProfile;}
+    if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
+    if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
+    if(newCourses.length){
+      newCourses.forEach(ic=>{
+        const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
+        const existing=courses.find(c=>c.id===ic.id);
+        if(!existing) courses.push(ic);
+        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) courses=courses.map(c=>c.id===ic.id?ic:c);
+      });
+    }
+    if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
+    document.getElementById('uploadBanner').style.display='none';
+    save(); renderAll(); alert('Data overwritten successfully.');
+    return;
+  }
+
+  if(mode==='append') {
+    const roundIds=new Set(rounds.map(r=>r.id));
+    const toAdd=newRounds.filter(r=>!roundIds.has(r.id));
+    const histIds=new Set(history.map(h=>h.id));
+    const histToAdd=newHistory.filter(h=>!histIds.has(h.id));
+    if(!toAdd.length&&!histToAdd.length){
+      alert('Append: nothing new to add — all rounds and sessions already present.'); return;
+    }
+    if(!confirm(`Append will add ${toAdd.length} new round(s) and ${histToAdd.length} new session(s).\n\nNo existing data will be changed. Continue?`)) return;
+    rounds=[...rounds,...toAdd];
+    histToAdd.forEach(h=>history.unshift(h));
+    save(); renderAll();
+    alert(`Appended: ${toAdd.length} round(s), ${histToAdd.length} session(s).`);
+    return;
+  }
+
+  if(mode==='merge') {
+    const clubConflicts=[];
+    let roundsAdded=0, histAdded=0, coursesAdded=0, coursesUpdated=0;
+
+    // Rounds: append new by id only; never touch existing
+    const roundIds=new Set(rounds.map(r=>r.id));
+    newRounds.filter(r=>!roundIds.has(r.id)).forEach(r=>{rounds.push(r); roundsAdded++;});
+
+    // History: append new by id only
+    const histIds=new Set(history.map(h=>h.id));
+    newHistory.forEach(h=>{if(!histIds.has(h.id)){history.unshift(h); histAdded++;}});
+
+    // Courses: add if absent; update if incoming is newer; skip if same age or older
+    newCourses.forEach(ic=>{
+      const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
+      const existing=courses.find(c=>c.id===ic.id);
+      if(!existing){courses.push(ic); coursesAdded++;}
+      else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>existing.updatedAt)){
+        courses=courses.map(c=>c.id===ic.id?ic:c); coursesUpdated++;
+      }
+    });
+
+    // Clubs: add if no type+identifier match; flag conflicts — never change or delete existing
+    newBag.forEach(inc=>{
+      const match=bag.find(b=>b.type===inc.type&&b.identifier===inc.identifier);
+      if(!match) bag.push(inc);
+      else clubConflicts.push(`${inc.type}${inc.identifier?' ('+inc.identifier+')':''}`);
+    });
+
+    let msg=`Merge summary:\n• ${roundsAdded} round(s) added\n• ${histAdded} session(s) added\n• ${coursesAdded} course(s) added, ${coursesUpdated} updated`;
+    if(clubConflicts.length) msg+=`\n• ${clubConflicts.length} club(s) skipped (conflict — existing kept):\n  ${clubConflicts.join(', ')}`;
+    if(!confirm(msg+'\n\nSave and apply?')) return;
+    save(); renderAll();
+    alert('Merge saved.');
+    return;
+  }
+}
+
 function importData(e) {
   const file = e.target.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = ev => processDataText(ev.target.result);
   reader.readAsText(file); e.target.value='';
+}
+function onMergeFile(e, mode) {
+  const file=e.target.files[0]; e.target.value=''; if(!file) return;
+  const st=document.getElementById('mergeStatus');
+  if(st) st.textContent='Reading file…';
+  const reader=new FileReader();
+  reader.onload=ev=>{ if(st) st.textContent=''; mergeDataText(ev.target.result, mode); };
+  reader.readAsText(file);
+}
+
+async function onRepoSearch() {
+  const input=document.getElementById('repoSearchInput');
+  const status=document.getElementById('repoSearchStatus');
+  const results=document.getElementById('repoSearchResults');
+  if(!input||!status||!results) return;
+  const q=input.value.trim();
+  if(!q){status.textContent='Enter a course name or city to search.'; return;}
+  status.textContent='Searching…'; results.innerHTML='';
+  const matches=await searchCourseRepo(q);
+  if(!matches.length){
+    status.textContent='Not found in repo — use the AI export below.';
+    return;
+  }
+  status.textContent=matches.length+' match'+(matches.length===1?'':'es')+' found:';
+  results.innerHTML=matches.map(c=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border:1px solid var(--br);border-radius:4px;margin-bottom:5px;gap:8px">
+      <div>
+        <div style="font-size:.72rem;color:var(--tx);font-weight:600">${escHtml(c.name)}</div>
+        <div style="font-size:.62rem;color:var(--tx3)">${escHtml(c.city||'')}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn sec" style="font-size:.62rem;padding:4px 8px"
+          onclick="localStorage.setItem('gordy:courseTask:preloaded','${c.id}');exportCourseTask();document.getElementById('repoSearchStatus').textContent='Pre-loaded — exporting for AI…'">
+          🤖 Export with data
+        </button>
+        <button class="btn gold" style="font-size:.62rem;padding:4px 8px"
+          onclick="addCourseFromRepo('${c.id}','repoSearchStatus');document.getElementById('repoSearchResults').innerHTML=''">
+          ✅ Add to my courses
+        </button>
+      </div>
+    </div>`).join('');
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -2133,6 +2578,8 @@ function renderProfileHero() {
     : profile.homeClub;
   const tags = [profile.handed, homeLabel].filter(Boolean);
   if(el('profileTagline')) el('profileTagline').textContent = tags.length?tags.join(' · '):'Gordy the Virtual Caddy';
+  // Keep header avatar initials in sync
+  if(el('hdrAvatarInitials')) el('hdrAvatarInitials').textContent = initials;
 }
 function renderProfile() {
   // Populate form from saved profile
@@ -2555,6 +3002,133 @@ function showTabFromProfile(id) {
   if(id==='courses')  renderCourseList();
   if(id==='rounds')   renderHandicap();
   if(id==='sessions') renderSessions();
+  if(id==='profile')  renderProfile();
+}
+
+// ── Profile dropdown ──────────────────────────────────────────────────────────
+function toggleProfileDropdown() {
+  const dd=document.getElementById('profDropdown');
+  if(!dd) return;
+  if(dd.classList.contains('open')) { closeProfileDropdown(); return; }
+  renderDropdown();
+  dd.classList.add('open');
+  // Close on outside tap
+  setTimeout(()=>document.addEventListener('click', _ddOutsideClose, {once:true}), 0);
+}
+function closeProfileDropdown() {
+  document.getElementById('profDropdown')?.classList.remove('open');
+  document.removeEventListener('click', _ddOutsideClose);
+}
+function _ddOutsideClose(e) {
+  const dd=document.getElementById('profDropdown');
+  const btn=document.getElementById('hdrAvatarBtn');
+  if(dd&&!dd.contains(e.target)&&!btn?.contains(e.target)) closeProfileDropdown();
+}
+function ddNav(tab) {
+  closeProfileDropdown();
+  showTabFromProfile(tab);
+}
+
+function renderDropdown() {
+  const name=profile.name||'Golfer';
+  const hcp=getHandicap();
+  const initials=name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase()||'⛳';
+  const homeCourse=courses.find(c=>c.id===profile.homeCourseId);
+  const activeClubs=bag.filter(c=>c.type!=='Putter'&&c.tested);
+
+  // Header
+  const ddName=document.getElementById('ddName');
+  const ddHcp=document.getElementById('ddHcp');
+  if(ddName) ddName.textContent=name==='Golfer'?'Welcome, Golfer':name;
+  if(ddHcp) ddHcp.textContent='Handicap Index: '+(hcp!==null?hcp:'—');
+
+  // Avatar button initials
+  const ini=document.getElementById('hdrAvatarInitials');
+  if(ini) ini.textContent=initials;
+
+  // Quick link details
+  const el=id=>document.getElementById(id);
+  if(el('ddRounds')) el('ddRounds').textContent=rounds.length+' logged'+(rounds.length?` · HCP ${hcp!==null?hcp:'—'}`:'');
+  if(el('ddSessions')) el('ddSessions').textContent=history.filter(h=>h.type!=='data-update').length+' caddie session'+(history.length!==1?'s':'');
+  if(el('ddCourses')) el('ddCourses').textContent=courses.length+' saved'+(homeCourse?' · Home: '+homeCourse.name:'');
+  if(el('ddClubs')) el('ddClubs').textContent=activeClubs.length+' active'+(activeClubs.length?' · '+_clubRange(activeClubs):'');
+
+  // Sync status
+  const ts=localStorage.getItem('vc:kvLastSync');
+  const tsMs=localStorage.getItem('vc:kvLastSyncTs');
+  const offline=!navigator.onLine;
+  const pending=!!localStorage.getItem('vc:kvPendingPush');
+  const hasPass=!!sessionStorage.getItem('vc:kvPass');
+  const syncSt=el('ddSyncStatus');
+  const syncBtns=el('ddSyncBtns');
+  const dot=el('hdrAvatarDot');
+
+  if(kvMode()) {
+    const dotColor=offline?'var(--gold)':pending?'var(--gold)':'var(--gr)';
+    if(dot) dot.style.background=dotColor;
+    const label=offline?'📵 Offline':pending?'⏳ Push pending':ts?`🟢 Synced ${_fmtAgo(tsMs)}`:'⚪ Connected — not synced';
+    if(syncSt) syncSt.textContent=label;
+    if(syncBtns) syncBtns.innerHTML=hasPass
+      ?`<button class="btn" style="font-size:.6rem;padding:3px 8px" onclick="kvPush('kvSyncStatus')">↑ Push</button>
+         <button class="btn sec" style="font-size:.6rem;padding:3px 8px" onclick="kvPull('kvSyncStatus')" ${offline?'disabled':''}>↓ Pull</button>`
+      :`<button class="btn sec" style="font-size:.6rem;padding:3px 8px" onclick="closeProfileDropdown();showTabFromProfile('profile')">Unlock sync →</button>`;
+  } else {
+    if(dot) dot.style.background='#888';
+    if(syncSt) syncSt.textContent='⚪ No sync profile';
+    if(syncBtns) syncBtns.innerHTML=`<button class="btn gold" style="font-size:.6rem;padding:3px 8px" onclick="closeProfileDropdown();showTabFromProfile('profile')">Set up →</button>`;
+  }
+
+  // Sign out block
+  const sob=el('ddSignOutBlock');
+  if(sob) sob.innerHTML=kvMode()
+    ?`<button class="btn danger" style="width:100%;font-size:.68rem" onclick="signOutSync()">🔓 Sign out of sync</button>`
+    :``;
+}
+
+function _clubRange(activeClubs) {
+  // Return e.g. "4i – Driver"
+  const order=['Driver','Fairway Wood','Hybrid','Iron','Wedge'];
+  const sorted=activeClubs.slice().sort((a,b)=>order.indexOf(b.type)-order.indexOf(a.type));
+  if(!sorted.length) return '';
+  const short=c=>c.identifier||c.type.split(' ')[0];
+  if(sorted.length===1) return short(sorted[0]);
+  return short(sorted[sorted.length-1])+' – '+short(sorted[0]);
+}
+
+async function signOutSync() {
+  const id=kvId();
+  const hasPass=!!sessionStorage.getItem('vc:kvPass');
+  // Build confirm with three choices via a custom modal-like approach using confirm + follow-up
+  const choice=confirm(
+    `Sign out of sync profile ${id}?\n\nChoose an option:\n  OK = Push to cloud first, then sign out\n  Cancel = I'll choose below`
+  );
+  if(choice) {
+    // Push & sign out
+    if(!hasPass) {
+      const p=prompt('Enter your passphrase to push before signing out:');
+      if(!p) return;
+      sessionStorage.setItem('vc:kvPass',p);
+    }
+    await kvPush(null);
+    _doSignOut();
+  } else {
+    // Offer download & sign out
+    const dl=confirm('Download a local backup TXT first, then sign out?');
+    if(!dl) return; // cancelled entirely
+    saveData();
+    setTimeout(_doSignOut, 800); // slight delay so download fires
+  }
+}
+function _doSignOut() {
+  localStorage.removeItem('vc:kvId');
+  localStorage.removeItem('vc:kvLastSync');
+  localStorage.removeItem('vc:kvLastSyncTs');
+  localStorage.removeItem('vc:kvPendingPush');
+  sessionStorage.removeItem('vc:kvPass');
+  renderProfileSync();
+  closeProfileDropdown();
+  renderDropdown();
+  alert('Signed out of sync profile. Your data remains on this device.');
 }
 function onHomeClubSelect() {
   const val = document.getElementById('pfHomeClubSelect')?.value||'';
@@ -3411,8 +3985,9 @@ function exportForAI() {
 
   L.push('', '--- COURSES ---');
   if(course) {
-    L.push(`COURSE | ${course.id} | ${course.name} | ${course.city||''} | ${course.par||''} | ${course.rating||''} | ${course.slope||''} | ${course.yardage||''} | ${course.selectedTee||''} | ${course.updatedAt||''}`);
-    (course.tees||[]).forEach(t => {
+    const sc=_stripGeometry(course); // geometry must never be sent to AI
+    L.push(`COURSE | ${sc.id} | ${sc.name} | ${sc.city||''} | ${sc.par||''} | ${sc.rating||''} | ${sc.slope||''} | ${sc.yardage||''} | ${sc.selectedTee||''} | ${sc.updatedAt||''}`);
+    (sc.tees||[]).forEach(t => {
       L.push(`  TEE | ${t.id} | ${t.name} | ${t.rating||''} | ${t.slope||''} | ${t.yardage||''}`);
       (t.holes||[]).forEach(h => L.push(`    HOLE | ${h.number} | ${h.par} | ${h.yards||''} | ${h.handicap||''} | ${h.note||''}`));
     });
@@ -4038,6 +4613,22 @@ function exportCourseTask() {
   const taskText = getCourseTaskText();
   const ver = (taskText.match(/CourseTaskVersion:\s*(\d+)/)||[])[1]||'?';
 
+  // If a repo course was pre-loaded for this session, embed it so AI skips web search
+  const preLoadedId = localStorage.getItem('gordy:courseTask:preloaded');
+  let preLoadedBlock = '';
+  if(preLoadedId) {
+    const cached = localStorage.getItem('gordy:course:'+preLoadedId);
+    if(cached) {
+      const c = _stripGeometry(JSON.parse(cached));
+      const teeLines = (c.tees||[]).map(t=>{
+        const holes = (t.holes||[]).map(h=>`    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''}`).join('\n');
+        return `  TEE | ${t.id} | ${t.name} | ${t.rating||''} | ${t.slope||''} | ${t.totalYards||t.yardage||''}\n${holes}`;
+      }).join('\n');
+      preLoadedBlock = `\n\n--- PRE-LOADED COURSE DATA ---\n# Official data from Gordy repo — use as starting point, skip web search, confirm tees with user\nCOURSE | ${c.courseId||c.id} | ${c.name} | ${c.city||''} | ${c.par||''} | ${c.rating||''} | ${c.slope||''} | ${c.totalYards||c.yardage||''} | ${c.selectedTee||''} | ${c.updated||c.updatedAt||''}\n${teeLines}`;
+    }
+    localStorage.removeItem('gordy:courseTask:preloaded');
+  }
+
   const content = `=== VIRTUAL CADDIE TASK ===
 TaskType: add-course
 Date: ${today()}
@@ -4049,7 +4640,7 @@ ${taskText}
 
 --- USER DATA ---
 === CURRENT COURSES ===
-${existingLine}`;
+${existingLine}${preLoadedBlock}`;
 
   downloadTask(`vc-course-task-${today()}.txt`, content);
 }
@@ -4058,90 +4649,280 @@ ${existingLine}`;
 const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
 const APP_LATEST_FILE = 'golf-caddie-latest.html';
 
-function gistPat()    { return localStorage.getItem('vc:gistPat')||''; }
-function gistId()     { return localStorage.getItem('vc:gistId')||''; }
-function gistMode()   { return gistPat()&&gistId(); }
+// ── Gordy Sync — encrypted KV via Cloudflare Worker ─────────────────────────
+const GORDY_SYNC_URL = 'https://gordy-sync.gordythevirtualcaddie.workers.dev/sync/';
 
-async function gistPatch(filename, content) {
-  // PATCH a file in the user's gist; returns true on success
-  const r = await fetch(`https://api.github.com/gists/${gistId()}`, {
-    method: 'PATCH',
-    headers: {'Authorization':'token '+gistPat(),'Content-Type':'application/json','Accept':'application/vnd.github+json'},
-    body: JSON.stringify({files:{[filename]:{content}}})
-  });
-  return r.ok;
+function kvId()         { return localStorage.getItem('vc:kvId')||''; }
+function kvMode()       { return !!kvId(); }
+
+// PBKDF2 key derivation from passphrase + salt
+async function _kdfKey(passphrase, saltBuf) {
+  const enc = new TextEncoder();
+  const raw = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:saltBuf, iterations:200000, hash:'SHA-256'},
+    raw, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
+  );
 }
-async function gistGet(filename) {
-  // GET a single file from user's gist; returns text or null
+
+// Encrypt serialised data — returns base64-encoded JSON envelope
+async function _encrypt(plaintext, passphrase) {
+  const enc  = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await _kdfKey(passphrase, salt);
+  const ct   = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plaintext));
+  const b64  = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return JSON.stringify({v:1, salt:b64(salt), iv:b64(iv), ct:b64(ct)});
+}
+
+// Decrypt envelope — returns plaintext string or throws
+async function _decrypt(envelope, passphrase) {
+  const {salt, iv, ct} = JSON.parse(envelope);
+  const dec = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+  const key = await _kdfKey(passphrase, dec(salt));
+  const buf = await crypto.subtle.decrypt({name:'AES-GCM', iv:dec(iv)}, key, dec(ct));
+  return new TextDecoder().decode(buf);
+}
+
+// Generate a new GRD-xxxxxx ID
+function _genSyncId() {
+  const chars='abcdefghijklmnopqrstuvwxyz0123456789';
+  let s='GRD-';
+  const r=crypto.getRandomValues(new Uint8Array(6));
+  r.forEach(b=>s+=chars[b%chars.length]);
+  return s;
+}
+
+// Push encrypted data to Worker KV
+async function kvPush(statusElId) {
+  const id=kvId(); if(!id) return;
+  const pass=sessionStorage.getItem('vc:kvPass');
+  if(!pass){alert('Session expired — please re-enter your passphrase to sync.'); renderProfileSync(); return;}
+  const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
+  if(!navigator.onLine){
+    _kvQueuePush();
+    if(st) st.textContent='📵 Offline — push queued, will retry when back online.';
+    return;
+  }
+  if(st) st.textContent='Encrypting…';
   try {
-    const r = await fetch(`https://api.github.com/gists/${gistId()}`, {
-      headers: {'Authorization':'token '+gistPat(),'Accept':'application/vnd.github+json'}
-    });
-    if(!r.ok) return null;
-    const j = await r.json();
-    return j.files?.[filename]?.content || null;
-  } catch { return null; }
-}
-async function gistDelete(filename) {
-  // Delete a file from gist by setting content to null
-  await fetch(`https://api.github.com/gists/${gistId()}`, {
-    method:'PATCH',
-    headers:{'Authorization':'token '+gistPat(),'Content-Type':'application/json','Accept':'application/vnd.github+json'},
-    body:JSON.stringify({files:{[filename]:{content:null}}})
-  }).catch(()=>{});
+    const payload=await _encrypt(serialise(), pass);
+    const r=await fetch(GORDY_SYNC_URL+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:payload});
+    if(r.status===429){if(st) st.textContent='⚠ Rate limited — wait 30s and try again.'; return;}
+    if(!r.ok){if(st) st.textContent='⚠ Push failed ('+r.status+')'; _kvQueuePush(); return;}
+    const now=Date.now();
+    localStorage.setItem('vc:kvLastSyncTs', String(now));
+    localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
+    localStorage.removeItem('vc:kvPendingPush');
+    if(st) st.textContent='✓ Synced: '+new Date(now).toLocaleTimeString();
+  } catch(e){
+    _kvQueuePush();
+    if(st) st.textContent='⚠ Network error — push queued.';
+  }
 }
 
-// Called after every save() when in Gist mode — fire-and-forget
-async function syncSave() {
-  if(!gistMode()) return;
-  const hasData = bag.length || courses.length || history.length || rounds.length;
-  if(!hasData) {
-    const el = document.getElementById('gistSyncStatus');
-    if(el) el.textContent = 'Push skipped — no data to sync.';
-    return;
-  }
-  const ok = await gistPatch('virtual-caddie-data.txt', serialise());
-  const ts = ok ? new Date().toLocaleTimeString() : null;
-  if(ts) localStorage.setItem('vc:gistLastSync', ts);
-  const el = document.getElementById('gistSyncStatus');
-  if(el) el.textContent = ok ? `Last synced: ${ts}` : 'Sync failed — check PAT / Gist ID';
+// Pull and decrypt data from Worker KV
+async function kvPull(statusElId) {
+  const id=kvId(); if(!id) return;
+  const pass=sessionStorage.getItem('vc:kvPass');
+  if(!pass){alert('Session expired — please re-enter your passphrase to sync.'); renderProfileSync(); return;}
+  const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
+  if(st) st.textContent='Fetching…';
+  try {
+    const r=await fetch(GORDY_SYNC_URL+id);
+    if(r.status===404){if(st) st.textContent='⚠ No data found for this ID.'; return;}
+    if(!r.ok){if(st) st.textContent='⚠ Pull failed ('+r.status+')'; return;}
+    const envelope=await r.text();
+    if(st) st.textContent='Decrypting…';
+    let plaintext;
+    try { plaintext=await _decrypt(envelope, pass); }
+    catch { if(st) st.textContent='⚠ Wrong passphrase or corrupted data.'; return; }
+    processDataText(plaintext);
+    const ts=new Date().toLocaleTimeString();
+    localStorage.setItem('vc:kvLastSync', ts);
+    if(st) st.textContent='✓ Loaded: '+ts;
+  } catch(e){if(st) st.textContent='⚠ Pull error: '+e.message;}
 }
+
+// Banner load — pull if connected, else prompt
 async function bannerLoadGist() {
-  if(!gistMode()) {
-    alert('Gist sync is not connected.\n\nConnect your Gist PAT and ID in the Profile tab → Gist Sync card, then come back and try again.');
+  if(!kvMode()){
+    alert('No sync profile connected.\n\nSet up a sync profile in the Profile tab, or import your data file manually.');
     return;
   }
-  await syncLoad();
-  // Hide banner only if data was actually loaded
-  const hasData = bag.length || courses.length || rounds.length || history.length;
+  await kvPull('kvSyncStatus');
+  const hasData=bag.length||courses.length||rounds.length||history.length;
   if(hasData) document.getElementById('uploadBanner').style.display='none';
 }
-async function syncLoad() {
-  if(!gistMode()) { alert('Gist not connected.'); return; }
-  const st = document.getElementById('gistSyncStatus');
-  if(st) st.textContent = 'Loading from Gist…';
-  const text = await gistGet('virtual-caddie-data.txt');
-  if(!text) {
-    if(st) st.textContent = 'Load failed — no data file found in Gist.';
-    return;
-  }
-  processDataText(text);
-  const ts = new Date().toLocaleTimeString();
-  localStorage.setItem('vc:gistLastSync', ts);
-  if(st) st.textContent = `Loaded from Gist: ${ts}`;
+
+// Auto-push after every save when sync profile is connected and passphrase in session
+async function syncSave() {
+  if(!kvMode()) return;
+  if(!sessionStorage.getItem('vc:kvPass')) return; // silent skip — passphrase not in session
+  await kvPush('kvSyncStatus');
 }
 
-// On load in Gist mode: check for a pending session-result from AI
-async function checkSessionResult() {
-  if(!gistMode()) return;
-  const text = await gistGet('session-result.txt');
-  if(!text || !text.includes('=== VIRTUAL CADDIE SESSION ===')) return;
-  const r = processSessionResult(text);
-  await gistDelete('session-result.txt');
-  alert('AI session result auto-imported from Gist.\n\n'+r.summary);
+// ── Offline resilience ────────────────────────────────────────────────────────
+function _fmtAgo(tsMs) {
+  if(!tsMs) return '';
+  const s=Math.floor((Date.now()-parseInt(tsMs))/1000);
+  if(s<60)  return 'just now';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+function _kvQueuePush() { localStorage.setItem('vc:kvPendingPush','1'); }
+async function _kvRetryPending() {
+  if(!localStorage.getItem('vc:kvPendingPush')) return;
+  if(!kvMode()||!sessionStorage.getItem('vc:kvPass')) return;
+  localStorage.removeItem('vc:kvPendingPush');
+  await kvPush('kvSyncStatus');
+}
+window.addEventListener('online', _kvRetryPending);
+// Refresh "X ago" text every 60s without re-rendering the full card
+setInterval(()=>{
+  const el=document.getElementById('kvSyncAgo');
+  if(el) el.textContent=_fmtAgo(localStorage.getItem('vc:kvLastSyncTs'));
+}, 60000);
+
+// ── Profile sync card setup/load flow ────────────────────────────────────────
+function startSyncSetup() {
+  const card=document.getElementById('gistSettingsCard'); if(!card) return;
+  const newId=_genSyncId();
+  card.innerHTML=`
+    <div class="card-title">Set Up Sync Profile</div>
+    <div style="font-size:.68rem;color:var(--tx2);margin-bottom:12px;line-height:1.7">
+      Your data is encrypted in your browser before it leaves your device. Your passphrase never touches the server.
+    </div>
+    <div style="background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:10px;margin-bottom:12px">
+      <div style="font-size:.6rem;color:var(--tx3);margin-bottom:2px">Your sync ID — write this down</div>
+      <div style="font-size:.9rem;font-family:'DM Mono',monospace;color:var(--ac);letter-spacing:.08em">${newId}</div>
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <div class="flbl">Choose a passphrase</div>
+      <input id="kvPassA" type="password" placeholder="Something memorable…" autocomplete="new-password">
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <div class="flbl">Confirm passphrase</div>
+      <input id="kvPassB" type="password" placeholder="Repeat passphrase…" autocomplete="new-password">
+    </div>
+    <div id="kvSetupStatus" style="font-size:.62rem;color:var(--tx3);margin-bottom:8px;min-height:1em"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn gold" onclick="finishSyncSetup('${newId}')">Create profile</button>
+      <button class="btn sec" onclick="renderProfileSync()">Cancel</button>
+    </div>`;
 }
 
-// On load: check master Gist for a newer app version and prompt user
+async function finishSyncSetup(newId) {
+  const a=document.getElementById('kvPassA')?.value;
+  const b=document.getElementById('kvPassB')?.value;
+  const st=document.getElementById('kvSetupStatus');
+  if(!a){if(st) st.textContent='Enter a passphrase.'; return;}
+  if(a!==b){if(st) st.textContent='Passphrases do not match.'; return;}
+  if(a.length<4){if(st) st.textContent='Passphrase too short — use at least 4 characters.'; return;}
+  if(st) st.textContent='Creating profile…';
+  sessionStorage.setItem('vc:kvPass', a);
+  localStorage.setItem('vc:kvId', newId);
+  await kvPush('kvSetupStatus');
+  renderProfileSync();
+}
+
+function showSyncLoad() {
+  const card=document.getElementById('gistSettingsCard'); if(!card) return;
+  card.innerHTML=`
+    <div class="card-title">Load Sync Profile</div>
+    <div style="font-size:.68rem;color:var(--tx2);margin-bottom:12px;line-height:1.7">
+      Enter your sync ID and passphrase to load your data on this device.
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <div class="flbl">Sync ID</div>
+      <input id="kvLoadId" type="text" placeholder="GRD-xxxxxx" autocomplete="off">
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <div class="flbl">Passphrase</div>
+      <input id="kvLoadPass" type="password" placeholder="Your passphrase…" autocomplete="current-password">
+    </div>
+    <div id="kvLoadStatus" style="font-size:.62rem;color:var(--tx3);margin-bottom:8px;min-height:1em"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="finishSyncLoad()">Load profile</button>
+      <button class="btn sec" onclick="renderProfileSync()">Cancel</button>
+    </div>`;
+}
+
+async function finishSyncLoad() {
+  const id=(document.getElementById('kvLoadId')?.value||'').trim();
+  const pass=document.getElementById('kvLoadPass')?.value;
+  const st=document.getElementById('kvLoadStatus');
+  if(!id.match(/^GRD-[a-z0-9]{6}$/i)){if(st) st.textContent='Invalid sync ID — format is GRD-xxxxxx (lowercase).'; return;}
+  if(!pass){if(st) st.textContent='Enter your passphrase.'; return;}
+  if(st) st.textContent='Connecting…';
+  // Store temporarily to allow kvPull to work, then verify
+  const normId=id.toLowerCase().replace(/^grd-/,'GRD-'); // normalise case
+  sessionStorage.setItem('vc:kvPass', pass);
+  localStorage.setItem('vc:kvId', id);
+  await kvPull('kvLoadStatus');
+  // If pull succeeded, data will have loaded
+  renderProfileSync();
+}
+
+function disconnectSync() {
+  if(!confirm('Disconnect sync profile?\n\nYour local data is kept. Your encrypted backup stays in the cloud until you overwrite it.')) return;
+  localStorage.removeItem('vc:kvId');
+  localStorage.removeItem('vc:kvLastSync');
+  sessionStorage.removeItem('vc:kvPass');
+  renderProfileSync();
+}
+
+function renderProfileSync() {
+  const card=document.getElementById('gistSettingsCard'); if(!card) return;
+  const connected=kvMode();
+  const ts=localStorage.getItem('vc:kvLastSync');
+  const tsMs=localStorage.getItem('vc:kvLastSyncTs');
+  const hasPass=!!sessionStorage.getItem('vc:kvPass');
+  const offline=!navigator.onLine;
+  const pending=!!localStorage.getItem('vc:kvPendingPush');
+  card.innerHTML=`
+    <div class="card-title">Data Sync</div>
+    ${connected ? `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-size:.68rem;color:var(--ac)">✓ Profile: <strong>${kvId()}</strong></div>
+        ${offline ? `<span style="font-size:.58rem;background:var(--sand2);color:var(--gold);border:1px solid var(--sand);border-radius:3px;padding:1px 6px">📵 Offline</span>` : ''}
+        ${pending&&!offline ? `<span style="font-size:.58rem;background:var(--gr3);color:var(--ac2);border:1px solid var(--gr2);border-radius:3px;padding:1px 6px">⏳ Push pending</span>` : ''}
+      </div>
+      <div style="font-size:.62rem;color:var(--tx3);margin-bottom:${hasPass?'10px':'4px'}" id="kvSyncStatus">
+      ${ts ? `✓ Synced: ${ts}${tsMs?` <span id="kvSyncAgo" style="color:var(--tx3);opacity:.7">(${_fmtAgo(tsMs)})</span>`:''}` : 'Not synced this session'}
+      </div>
+      ${!hasPass ? `<div style="font-size:.62rem;color:var(--gold);margin-bottom:10px">⚠ Enter passphrase to enable push/pull this session</div>
+        <div class="field" style="margin-bottom:8px">
+          <div class="flbl">Passphrase</div>
+          <input id="kvSessionPass" type="password" placeholder="Your passphrase…" autocomplete="current-password">
+        </div>
+        <button class="btn" style="margin-bottom:10px" onclick="
+          const p=document.getElementById('kvSessionPass')?.value;
+          if(p){sessionStorage.setItem('vc:kvPass',p);renderProfileSync();}
+        ">Unlock</button>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="kvPush('kvSyncStatus')" ${!hasPass?'disabled':''}>↑ Push</button>
+        <button class="btn sec" onclick="kvPull('kvSyncStatus')" ${!hasPass||offline?'disabled':''}>↓ Pull</button>
+        <button class="btn sec" onclick="saveData()">⬇ Export backup</button>
+        <button class="btn danger" onclick="disconnectSync()">Disconnect</button>
+      </div>
+    ` : `
+      <div style="font-size:.68rem;color:var(--tx2);margin-bottom:12px;line-height:1.7">
+        Set up a sync profile to access your data on any device. Your data is encrypted before it leaves this browser — your passphrase never touches the server.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn gold" onclick="startSyncSetup()">Set up sync profile</button>
+        <button class="btn sec" onclick="showSyncLoad()">Load existing profile</button>
+      </div>
+    `}`;
+}
+
+// Alias for renderAll compatibility
+function renderGistSettings() { renderProfileSync(); }
+
+// Check master Gist for newer app version on load
 async function checkAppUpdate() {
   try {
     const r = await fetch(MASTER_GIST_RAW + APP_LATEST_FILE, {cache:'no-store'});
@@ -4150,75 +4931,15 @@ async function checkAppUpdate() {
     const m = html.match(/const APP_VERSION\s*=\s*'(\d+)'/);
     if(!m) return;
     const remote = parseInt(m[1]);
-    const local  = parseInt(APP_VERSION);
-    if(remote <= local) return;
+    if(remote <= parseInt(APP_VERSION)) return;
     const go = confirm(`A new version of Virtual Caddie is available (v${remote}).\n\nUpdate now? Your data will not be affected.`);
     if(!go) return;
-    // Replace current page with downloaded HTML
     const blob = new Blob([html], {type:'text/html'});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = `golf-caddie-v${remote}.html`; a.click();
     URL.revokeObjectURL(url);
   } catch {}
-}
-
-// Connect / test / disconnect
-async function connectGist() {
-  const pat = document.getElementById('gistPatInput')?.value.trim();
-  const id  = document.getElementById('gistIdInput')?.value.trim();
-  const st  = document.getElementById('gistConnectStatus');
-  if(!pat||!id) { if(st) st.textContent='Enter both PAT and Gist ID.'; return; }
-  if(st) st.textContent = 'Testing…';
-  const r = await fetch(`https://api.github.com/gists/${id}`, {
-    headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github+json'}
-  }).catch(()=>null);
-  if(!r||!r.ok) { if(st) st.textContent='❌ Connection failed — check PAT and Gist ID.'; return; }
-  localStorage.setItem('vc:gistPat', pat);
-  localStorage.setItem('vc:gistId',  id);
-  if(st) st.textContent='✓ Connected';
-  renderGistSettings();
-  syncSave();
-}
-function disconnectGist() {
-  if(!confirm('Disconnect Gist sync? PAT and Gist ID will be cleared.')) return;
-  localStorage.removeItem('vc:gistPat');
-  localStorage.removeItem('vc:gistId');
-  localStorage.removeItem('vc:gistLastSync');
-  renderGistSettings();
-}
-
-function renderGistSettings() {
-  const connected = gistMode();
-  const card = document.getElementById('gistSettingsCard');
-  if(!card) return;
-  const ts = localStorage.getItem('vc:gistLastSync');
-  card.innerHTML = `
-    <div class="card-title">Gist Sync</div>
-    <div style="font-size:.68rem;color:var(--tx2);margin-bottom:10px;line-height:1.7">
-      Optionally sync your data to a private GitHub Gist. Requires a GitHub Personal Access Token (gist scope only).
-      <br><strong style="color:var(--danger)">Keep your PAT private — it is stored only in this browser's localStorage.</strong>
-    </div>
-    ${connected ? `
-      <div style="font-size:.72rem;color:var(--ac);margin-bottom:8px">✓ Connected to Gist <code style="font-size:.65rem">${gistId().slice(0,8)}…</code></div>
-      <div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px" id="gistSyncStatus">${ts?'Last synced: '+ts:'Not synced yet this session'}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" onclick="syncSave()">↑ Push to Gist</button>
-        <button class="btn sec" onclick="syncLoad()">↓ Load from Gist</button>
-        <button class="btn danger" onclick="disconnectGist()">Disconnect</button>
-      </div>
-    ` : `
-      <div id="gistConnectStatus" style="font-size:.65rem;color:var(--tx3);margin-bottom:8px;min-height:1em"></div>
-      <div class="field">
-        <div class="flbl">Personal Access Token (gist scope)</div>
-        <input id="gistPatInput" type="password" placeholder="ghp_…" autocomplete="off">
-      </div>
-      <div class="field">
-        <div class="flbl">Gist ID</div>
-        <input id="gistIdInput" type="text" placeholder="32-character hex ID from your Gist URL" autocomplete="off">
-      </div>
-      <button class="btn" onclick="connectGist()">Connect</button>
-    `}`;
 }
 
 
@@ -4956,7 +5677,7 @@ renderAll();
   }
 })();
 // 2.5 — on load: check for pending session result in Gist + check for app update
-Promise.allSettled([checkSessionResult(), checkAppUpdate()]);
+checkAppUpdate();
 
 // ── Live Round Tracker ────────────────────────────────────────────────────────
 // lrState shape:
@@ -5458,15 +6179,31 @@ function lrExpand() {
 
 function lrUpdatePill() {
   const pill = document.getElementById('lrPill');
-  if(!lrState || lrState.saved) { pill.classList.remove('visible'); return; }
-  pill.classList.add('visible');
+  const floatPill = document.getElementById('lrFloatPill');
+  const liveDot = document.getElementById('hdrLiveDot');
+  if(!lrState || lrState.saved) {
+    pill.classList.remove('visible');
+    floatPill?.classList.remove('visible');
+    liveDot?.classList.remove('visible');
+    return;
+  }
   const h = lrState.holes[lrState.curHole];
   const meIdx = lrState.players.findIndex(p=>p.isMe);
   const rt = meIdx>=0 ? lrRunningTotal(meIdx) : null;
-  document.getElementById('lrPillTxt').textContent =
-    `⛳ Live Round · H${h.n} of ${lrState.holes.length}`;
-  document.getElementById('lrPillMeta').textContent =
-    [lrState.courseName, rt!==null?lrRelLabel(rt)+' vs par':''].filter(Boolean).join(' · ');
+  const txt = `⛳ Live Round · H${h.n} of ${lrState.holes.length}`;
+  const meta = [lrState.courseName, rt!==null?lrRelLabel(rt)+' vs par':''].filter(Boolean).join(' · ');
+  // Rounds tab pill
+  pill.classList.add('visible');
+  document.getElementById('lrPillTxt').textContent = txt;
+  document.getElementById('lrPillMeta').textContent = meta;
+  // Floating pill (all tabs)
+  if(floatPill) {
+    floatPill.classList.add('visible');
+    document.getElementById('lrFloatTxt').textContent = txt;
+    document.getElementById('lrFloatMeta').textContent = meta;
+  }
+  // Header pulsing dot
+  liveDot?.classList.add('visible');
 }
 
 // ── Tally view ─────────────────────────────────────────────────────────────
@@ -5572,11 +6309,17 @@ function lrRenderTally() {
 
 // ── End round ──────────────────────────────────────────────────────────────
 function lrEndRound() {
-  const played = lrState.holes.filter((_,i)=>lrState.players.some(p=>p.scores[i].score!==null)).length;
-  const msg = played < lrState.holes.length
-    ? `End round after hole ${lrState.holes[lrState.curHole].n}?\n${lrState.holes.length-played} hole(s) will be left blank.`
-    : 'Finish the round?';
-  if(!confirm(msg)) return;
+  const played = lrState.holes.filter((_,i)=>lrState.players.some(p=>p.scores[i]?.score!==null)).length;
+  const banner = document.getElementById('lrEndBanner');
+  const msg = document.getElementById('lrEndBannerMsg');
+  if(msg) msg.textContent = played < lrState.holes.length
+    ? `End after hole ${lrState.holes[lrState.curHole].n}? ${lrState.holes.length-played} hole(s) will be blank.`
+    : 'End round and go to summary?';
+  if(banner) banner.style.display='block';
+}
+function lrConfirmEnd() {
+  const banner = document.getElementById('lrEndBanner');
+  if(banner) banner.style.display='none';
   lrShowScreen('lrSummaryScreen');
   lrRenderSummary();
 }
@@ -5842,7 +6585,20 @@ ${hasHcp?`<div class="page-break"></div>${buildTable(true,'Scorecard — Net')}`
 
 // ── Discard ────────────────────────────────────────────────────────────────
 function lrDiscardRound() {
-  if(!confirm('Discard this round? All scores will be lost.')) return;
+  const banner = document.getElementById('lrEndBanner');
+  const msg = document.getElementById('lrEndBannerMsg');
+  if(msg) msg.textContent = 'Discard this round? All scores will be lost.';
+  // Temporarily rewire confirm button for discard
+  const confirmBtn = banner?.querySelector('.btn.danger');
+  if(confirmBtn) { confirmBtn.textContent = 'Discard Round'; confirmBtn.onclick = lrConfirmDiscard; }
+  if(banner) banner.style.display='block';
+}
+function lrConfirmDiscard() {
+  const banner = document.getElementById('lrEndBanner');
+  if(banner) banner.style.display='none';
+  // Reset confirm button back to End Round
+  const confirmBtn = banner?.querySelector('.btn.danger');
+  if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
   lrState = null;
   document.getElementById('lrOverlay').classList.remove('active');
   lrUpdatePill();
@@ -5854,6 +6610,9 @@ function lrShowScreen(id) {
     const el=document.getElementById(s);
     if(el) el.style.display = s===id ? 'flex' : 'none';
   });
+  // Always hide end banner on screen change
+  const b=document.getElementById('lrEndBanner');
+  if(b) b.style.display='none';
 }
 
 // ── Wire pill into renderHandicap ──────────────────────────────────────────
