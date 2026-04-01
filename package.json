@@ -1,0 +1,13 @@
+{
+  "name": "gordy",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "wrangler": "^3.0.0"
+  }
+}
