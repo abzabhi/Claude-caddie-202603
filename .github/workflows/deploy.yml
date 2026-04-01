@@ -21,8 +21,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check dist
-        run: ls -la
+      - name: Copy index
+        run: cp index.html dist/
 
       - name: Deploy
         run: npx wrangler deploy
