@@ -1949,7 +1949,7 @@ let currentEditTeeId = null;
 
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
 function today() { return new Date().toISOString().slice(0,10); }
-function fmtDate(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?iso:d.toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});}
+function fmtDateLong(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?iso:d.toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});}
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
 
