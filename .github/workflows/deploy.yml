@@ -21,6 +21,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check dist
+        run: ls dist/
+
       - name: Deploy
         run: npx wrangler deploy
         env:
