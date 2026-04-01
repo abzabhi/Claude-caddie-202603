@@ -22,7 +22,7 @@ jobs:
         run: npm run build
 
       - name: Check dist
-        run: ls dist/
+        run: ls -la
 
       - name: Deploy
         run: npx wrangler deploy
