@@ -1706,7 +1706,7 @@ function applyRefDataCache() {
 }
 
 // Helper: map a club record to its FLIGHT_DATA key
-function flightKey(c) {
+/*function flightKey(c) {
   if(c.type==='Driver')       return 'Driver';
   if(c.type==='Fairway Wood') return 'Fairway Wood';
   if(c.type==='Hybrid')       return 'Hybrid';
@@ -1732,10 +1732,10 @@ function flightKey(c) {
     return 'Iron-Mid'; // default
   }
   return null;
-}
+}*/
 
 // Helper: get tier index from handicap index value
-function tierIndex(hcp) {
+/*function tierIndex(hcp) {
   const h = hcp===null ? 3 : +hcp; // default to 15-19 tier if unknown
   if(h<5)  return 0;
   if(h<10) return 1;
@@ -1743,7 +1743,7 @@ function tierIndex(hcp) {
   if(h<20) return 3;
   if(h<25) return 4;
   return 5;
-}
+}*/
 
 // Return dispersion data object for a club at the current handicap
 function getDispersion(c) {
@@ -1953,12 +1953,12 @@ function fmtDate(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?iso
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
 
-function calcDiff(gross, rating, slope) {
+/*function calcDiff(gross, rating, slope) {
   const g=+gross, r=+rating, s=+slope;
   if(!g||!r||!s) return null;
   return Math.round((g-r)*113/s*10)/10;
-}
-function calcHandicap(rounds) {
+}*/
+/*function calcHandicap(rounds) {
   const eligible = rounds.filter(r=>r.countForHandicap!==false);
   const diffs = eligible.map(r=>r.diff).filter(d=>d!==null&&d!==undefined).sort((a,b)=>a-b);
   if(!diffs.length) return null;
@@ -1966,7 +1966,7 @@ function calcHandicap(rounds) {
   const take = n>=20?8:n>=17?7:n>=15?6:n>=12?5:n>=10?4:n>=9?3:n>=7?2:1;
   const use = diffs.slice(0,take);
   return Math.round(use.reduce((a,b)=>a+b,0)/use.length*0.96*10)/10;
-}
+}*/
 function getHandicap() {
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
   if(mode==='manual') {
@@ -1991,18 +1991,18 @@ function clearManualHcp() {
   if(el) el.value='';
   renderHandicap();
 }
-function calcPlayHcp(idx, slope, rating, par) {
+/*function calcPlayHcp(idx, slope, rating, par) {
   if(idx===null||!slope||!rating||!par) return null;
   return Math.round(idx*(+slope/113)+(+rating-+par));
-}
-function deriveStats(sessions) {
+}*/
+/*function deriveStats(sessions) {
   if(!sessions||!sessions.length) return null;
   const mins=sessions.map(s=>+s.min).filter(n=>n>0);
   const maxs=sessions.map(s=>+s.max).filter(n=>n>0);
   if(!mins.length&&!maxs.length) return null;
   const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):null;
   return {avgMin:avg(mins),avgMax:avg(maxs),count:sessions.length,lastDate:[...sessions].sort((a,b)=>b.date.localeCompare(a.date))[0]?.date};
-}
+}/*/
 
 function getYardLabel(c) {
   const t = c.yardType || profile.yardType || 'Total';
@@ -2010,7 +2010,7 @@ function getYardLabel(c) {
 }
 // Long clubs (Driver, FW, Hybrid, Iron-Long): gap threshold 20 yds
 // Mid-irons and below: gap threshold 15 yds
-function isLongClub(c) {
+/*function isLongClub(c) {
   const k = flightKey(c);
   if(k==='Driver'||k==='Fairway Wood'||k==='Iron-Long') return true;
   if(k==='Hybrid') {
@@ -2023,8 +2023,8 @@ function isLongClub(c) {
     return true; // default hybrids to long if unidentifiable
   }
   return false;
-}
-function calcImplied(stats, c) {
+}*/
+/*function calcImplied(stats, c) {
   if(!stats||(!stats.avgMin&&!stats.avgMax)) return null;
   const mn = stats.avgMin||0;
   const mx = stats.avgMax||mn;
@@ -2048,7 +2048,7 @@ function calcImplied(stats, c) {
   }
   return {impMin:Math.round(mn*minMult), impMax:mx,
           adjusted:true, suppressed:false, reason:label};
-}
+}*/
 function getTypeLabel(club) {
   const id=(club.identifier||'').trim(), t=club.type;
   if(t==='Driver') return {type:'Driver',loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};
@@ -5006,7 +5006,7 @@ const VIZ_ROLL={'Driver':[.22,.20,.18,.16,.14,.12],'Fairway Wood':[.13,.12,.10,.
   'Wedge':[.02,.02,.01,.01,.01,.00],'Chipper':[.30,.28,.26,.24,.22,.20]};
 
 const VIZ_PATH_COLORS=['#d94030','#3070c0','#28a050'];
-function vizLightenHex(hex,f){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[r,g,b].map(v=>Math.round(v+(255-v)*f).toString(16).padStart(2,'0')).join('');}
+//function vizLightenHex(hex,f){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'#'+[r,g,b].map(v=>Math.round(v+(255-v)*f).toString(16).padStart(2,'0')).join('');}
 
 let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
 let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=false, vizClubSrc='custom';
@@ -5016,10 +5016,10 @@ let vizPathVisible=[true,false,false];
 let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
 
 
-function vizTierIdx(hcp){const h=+hcp||15;if(h<5)return 0;if(h<10)return 1;if(h<15)return 2;if(h<20)return 3;if(h<25)return 4;return 5;}
-function vizNormCdf(x){return .5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-2*x*x/Math.PI)));}
-
-function vizFlightKey(c){
+/*function vizTierIdx(hcp){const h=+hcp||15;if(h<5)return 0;if(h<10)return 1;if(h<15)return 2;if(h<20)return 3;if(h<25)return 4;return 5;}
+/function vizNormCdf(x){return .5*(1+Math.sign(x)*Math.sqrt(1-Math.exp(-2*x*x/Math.PI)));}
+*/
+/*(function vizFlightKey(c){
   const t=c.type,id=(c.identifier||'').toLowerCase(),loft=+c.loft||0;
   if(t==='Driver')       return 'Driver';
   if(t==='Fairway Wood') return 'Fairway Wood';
@@ -5028,7 +5028,7 @@ function vizFlightKey(c){
   if(t==='Hybrid'){const n=id.match(/(\d+)h/);return(!n||+n[1]<=6)&&loft<=30?'Hybrid':'Iron-Short';}
   if(t==='Iron'){if(loft<=27)return 'Iron-Long';if(loft<=38)return 'Iron-Mid';return 'Iron-Short';}
   return 'Iron-Mid';
-}
+}*/
 
 function vizGetDisp(c,hcp,handed){
   const fk=vizFlightKey(c); if(!fk||!FLIGHT_DATA.clubs[fk]) return null;
@@ -5059,13 +5059,13 @@ function vizGetDisp(c,hcp,handed){
     pR:isL?lp.pl:lp.pr,pL:isL?lp.pr:lp.pl,pS:VIZ_LP[ti].s,pLn:VIZ_LP[ti].l};
 }
 
-function vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt){
+/*function vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt){
   const kr=rxR*.552,kl=rxL*.552,ku=ryU*.552,kd=ryD*.552;
   const r=tilt*Math.PI/180,co=Math.cos(r),si=Math.sin(r);
   const rt=(x,y)=>{const dx=x-cx,dy=y-cy;return[cx+dx*co-dy*si,cy+dx*si+dy*co];};
   const p=(x,y)=>{const[a,b]=rt(x,y);return`${a.toFixed(1)} ${b.toFixed(1)}`;};
   return`M ${p(cx,cy-ryU)} C ${p(cx+kr,cy-ryU)},${p(cx+rxR,cy-ku)},${p(cx+rxR,cy)} C ${p(cx+rxR,cy+kd)},${p(cx+kr,cy+ryD)},${p(cx,cy+ryD)} C ${p(cx-kl,cy+ryD)},${p(cx-rxL,cy+kd)},${p(cx-rxL,cy)} C ${p(cx-rxL,cy-ku)},${p(cx-kl,cy-ryU)},${p(cx,cy-ryU)} Z`;
-}
+}*/
 
 function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
   const ep=vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt);
