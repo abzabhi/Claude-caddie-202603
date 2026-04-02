@@ -4458,7 +4458,7 @@ function exportSessionPdf(id) {
     if(l.startsWith('YARDAGE GAPS:'))   { gaps=l.replace('YARDAGE GAPS:','').trim(); continue; }
     if(/^H\d+\s*\|/.test(l))           { holeLines.push(l); continue; }
     if(/^\d+\.\s+/.test(l))            { bagLines.push(l); continue; }
-    if(l.startsWith('+'))              { putterLine=l.replace(/^\+\s*/,''); continue; }
+    if(l.startsWith('+'))              { putterLine=l.replace(/^\+\s,''); continue; }
     if(/^\d+\.\s/.test(l) && holeLines.length===0 && bagLines.length>0) { stratLines.push(l); continue; }
     // Strategy lines appear after bag list and before holes
     if(bagLines.length>0 && holeLines.length===0 && /^\d+\./.test(l)) stratLines.push(l);
