@@ -527,12 +527,12 @@ export function _rebuildPathPlanner(){
 export function vizAddShot(){ vizAddShotToPath(0); }
 export function vizRemoveShot(){ vizRemoveShotFromPath(0); }
 export function _rebuildShotSlots(){ _rebuildPathPlanner(); } // alias for compat
-export function calcVizMaxRange(){
+/*export function calcVizMaxRange(){
   const actives=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
   const maxes=actives.flatMap(c=>c.sessions.map(s=>+s.max)).filter(v=>v>0);
   if(!maxes.length) return 300;
   return Math.ceil(Math.max(...maxes)*1.2/10)*10;
-}
+}*/
 export function resetVizMaxRange(){
   const el=document.getElementById('vizMaxRange');
   if(el) el.value=calcVizMaxRange();
