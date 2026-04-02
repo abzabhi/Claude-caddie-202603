@@ -1508,6 +1508,7 @@ body{
   VIZ_COLORS, VIZ_PATH_COLORS,
   VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL
 } from './src/constants.js';
+  import { getDispersion, vizGetDisp } from './src/dispersion.js';
 // ── Data ──────────────────────────────────────────────────────────────────────
 const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
@@ -1752,7 +1753,7 @@ function applyRefDataCache() {
 }*/
 
 // Return dispersion data object for a club at the current handicap
-function getDispersion(c) {
+/*function getDispersion(c) {
   const key = flightKey(c);
   if(!key) return null;
   const fd = FLIGHT_DATA.clubs[key];
@@ -1771,7 +1772,7 @@ function getDispersion(c) {
     tierLabel:  FLIGHT_DATA.tiers[ti],
     bias:       c.bias||'Straight'
   };
-}
+}*/
 
 const APP_VERSION = '20';
 // Clear stale localStorage from older app versions (preserve Gist settings)
@@ -4001,7 +4002,7 @@ function exportForAI() {
       activeCnt++;
       const stats = deriveStats(c.sessions);
       const imp   = stats ? calcImplied(stats, c) : null;
-      const disp  = getDispersion(c);
+      const disp = getDispersion(c, getHandicap());
       if(stats) {
         const impMin = imp ? imp.impMin : stats.avgMin;
         const impMax = imp ? imp.impMax : stats.avgMax;
@@ -5036,7 +5037,7 @@ let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
   return 'Iron-Mid';
 }*/
 
-function vizGetDisp(c,hcp,handed){
+/*function vizGetDisp(c,hcp,handed){
   const fk=vizFlightKey(c); if(!fk||!FLIGHT_DATA.clubs[fk]) return null;
   const fd=FLIGHT_DATA.clubs[fk],ti=vizTierIdx(hcp);
   const bk=c.bias||'Straight';
@@ -5063,7 +5064,7 @@ function vizGetDisp(c,hcp,handed){
     tilt:asym.td*(isL?-1:1),off:b.offset*(isL?-1:1),
     ds:fd.depShort[ti],dl:fd.depLong[ti],
     pR:isL?lp.pl:lp.pr,pL:isL?lp.pr:lp.pl,pS:VIZ_LP[ti].s,pLn:VIZ_LP[ti].l};
-}
+}*/
 
 /*function vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt){
   const kr=rxR*.552,kl=rxL*.552,ku=ryU*.552,kd=ryD*.552;
@@ -5212,7 +5213,7 @@ function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
     const baseCol=VIZ_PATH_COLORS[pi%VIZ_PATH_COLORS.length];
     let cumCarry=0;
     clubs.forEach((club,si)=>{
-      const d=vizGetDisp(club,hcp,handed); if(!d?.carry) return;
+      const d = vizGetDisp(club, hcp, handed, profile.yardType||'Total', vizYardMode); if(!d?.carry) return;
       cumCarry+=d.carry;
       const yft=Math.min(cumCarry,hole.yards-5);
       const col=si===0?baseCol:vizLightenHex(baseCol,Math.min(si*0.28,0.65));
@@ -5280,7 +5281,7 @@ function renderViz(){
       const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
       clubs=entry?vizClubsFromEntry(entry):bag.filter(c=>c.tested&&c.type!=='Putter');
     }
-    const disps=clubs.map(c=>vizGetDisp(c,hcp,handed)).filter(Boolean);
+    const disps = clubs.map(c => vizGetDisp(c, hcp, handed, profile.yardType||'Total', vizYardMode)).filter(Boolean);
     const title=vizClubSrc==='optimised'?'Optimised bag · HCP '+hcp:'Custom · HCP '+hcp;
     const maxRange=+document.getElementById('vizMaxRange')?.value||calcVizMaxRange();
     const interval=+document.getElementById('vizRangeInterval')?.value||25;
