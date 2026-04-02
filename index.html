@@ -1497,7 +1497,6 @@ body{
 </div>
 
 <script type=module>
-  //modules
   import {
   flightKey, vizFlightKey, isLongClub, tierIndex, vizTierIdx,
   calcDiff, calcHandicap, calcPlayHcp, deriveStats, calcImplied,
@@ -1510,6 +1509,11 @@ body{
   VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL
 } from './src/constants.js';
   import { getDispersion, vizGetDisp } from './src/dispersion.js';
+  import {
+  bag, courses, rounds, history, profile,
+  uid, today, save, load, serialise,
+  setBag, setRounds, replaceCourse, removeCourse, removeRound, removeHistory, setProfile, clearAll
+} from './src/store.js';
 // ── Data ──────────────────────────────────────────────────────────────────────
 const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
@@ -1885,7 +1889,7 @@ async function addCourseFromRepo(courseId,statusElId) {
   const existing=courses.find(c=>c.id===course.id);
   if(existing){
     if(!confirm(`"${course.name}" is already in your courses. Replace with the repo version?`)) return;
-    courses=courses.map(c=>c.id===course.id?course:c);
+    /* courses=courses.map(c=>c.id===course.id?course:c); */ replaceCourse(course);
   } else {
     courses.push(course);
   }
@@ -1950,13 +1954,13 @@ Promise.allSettled([
   _fetchAndCache(GIST_SETUP_SKILL_URL,'vc:setupSkill', 'SetupSkillVersion'),
   _fetchAndCache(GIST_ROUND_TASK_URL, 'vc:roundTask',  'RoundTaskVersion')
 ]);
-let bag = [], courses = [], rounds = [], history = [];
-let profile = {};
+/* let bag = [], courses = [], rounds = [], history = [];
+let profile = {}; */
 let editingCourseId = null;
 let currentEditTeeId = null;
 
-function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
-function today() { return new Date().toISOString().slice(0,10); }
+/* function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
+function today() { return new Date().toISOString().slice(0,10); } */
 function fmtDateLong(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?iso:d.toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});}
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
@@ -2072,7 +2076,7 @@ const DEFAULT_BAG = [];
 const DEFAULT_COURSES = [];
 
 // ── Persistence ───────────────────────────────────────────────────────────────
-function save() {
+/* function save() {
   localStorage.setItem('vc:bag', JSON.stringify(bag));
   localStorage.setItem('vc:courses', JSON.stringify(courses));
   localStorage.setItem('vc:rounds', JSON.stringify(rounds));
@@ -2091,7 +2095,7 @@ function load() {
   rounds=rounds.filter(x=>x&&x.id);
 }
 // ── Export / Import ───────────────────────────────────────────────────────────
-function serialise() {
+/* function serialise() {
   const lines = ['VIRTUAL CADDIE DATA — v3', 'DataVersion: 3', 'Exported: '+today(), 'FlightDataVersion: 1', ''];
   // Profile section
   lines.push('=== PROFILE ===');
@@ -2176,7 +2180,7 @@ function serialise() {
   lines.push('NOTE | Sources: TrackMan, GOLFTEC, Arccos, DECADE/Practical Golf.');
   lines.push('');
   return lines.join('\n');
-}
+} */ */
 function saveData() {
   // Primary save action: always download TXT; auto-push to sync profile if connected + passphrase in session
   const txt = serialise();
@@ -2299,11 +2303,11 @@ function processDataText(text) {
         }
       }
     }
-    if(newBag.length) bag=newBag;
-    if(newRounds.length) rounds=newRounds;
+    /* if(newBag.length) bag=newBag; */ if(newBag.length) setBag(newBag);
+    /* if(newRounds.length) rounds=newRounds; */ if(newRounds.length) setRounds(newRounds);
     if(Object.keys(newProfile).length) {
       if(newNoteLines.length) newProfile.notes = newNoteLines.join('\n');
-      profile = newProfile;
+      /* profile = newProfile; */ setProfile(newProfile);
     }
     if(newHcpMode) localStorage.setItem('vc:hcpMode', newHcpMode);
     if(newManualHcp) localStorage.setItem('vc:manualHcp', newManualHcp);
@@ -2317,7 +2321,7 @@ function processDataText(text) {
         if(!existing) {
           courses.push(ic);
         } else if(!existing.updatedAt || (ic.updatedAt && ic.updatedAt >= existing.updatedAt)) {
-          courses = courses.map(c=>c.id===ic.id?ic:c);
+          /* courses = courses.map(c=>c.id===ic.id?ic:c); */ replaceCourse(ic);
         }
       });
     }
@@ -2432,9 +2436,9 @@ function mergeDataText(text, mode) {
   if(mode==='overwrite') {
     const hasExisting=bag.length||courses.length||rounds.length||history.length;
     if(hasExisting&&!confirm('OVERWRITE will replace ALL your current data.\n\nThis cannot be undone. Are you sure?')) return;
-    if(newBag.length) bag=newBag;
-    if(newRounds.length) rounds=newRounds;
-    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); profile=newProfile;}
+    /* if(newBag.length) bag=newBag; */ if(newBag.length) setBag(newBag);
+    /* if(newRounds.length) rounds=newRounds; */ if(newRounds.length) setRounds(newRounds);
+    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); /* profile=newProfile; */ setProfile(newProfile);}
     if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
     if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
     if(newCourses.length){
@@ -2442,7 +2446,7 @@ function mergeDataText(text, mode) {
         const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
         const existing=courses.find(c=>c.id===ic.id);
         if(!existing) courses.push(ic);
-        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) courses=courses.map(c=>c.id===ic.id?ic:c);
+        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) { /* courses=courses.map(c=>c.id===ic.id?ic:c); */ replaceCourse(ic); }
       });
     }
     if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
@@ -2460,7 +2464,7 @@ function mergeDataText(text, mode) {
       alert('Append: nothing new to add — all rounds and sessions already present.'); return;
     }
     if(!confirm(`Append will add ${toAdd.length} new round(s) and ${histToAdd.length} new session(s).\n\nNo existing data will be changed. Continue?`)) return;
-    rounds=[...rounds,...toAdd];
+    /* rounds=[...rounds,...toAdd]; */ rounds.push(...toAdd);
     histToAdd.forEach(h=>history.unshift(h));
     save(); renderAll();
     alert(`Appended: ${toAdd.length} round(s), ${histToAdd.length} session(s).`);
@@ -2485,7 +2489,7 @@ function mergeDataText(text, mode) {
       const existing=courses.find(c=>c.id===ic.id);
       if(!existing){courses.push(ic); coursesAdded++;}
       else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>existing.updatedAt)){
-        courses=courses.map(c=>c.id===ic.id?ic:c); coursesUpdated++;
+        /* courses=courses.map(c=>c.id===ic.id?ic:c); */ replaceCourse(ic); coursesUpdated++;
       }
     });
 
@@ -2570,7 +2574,7 @@ function showTab(id) {
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
 function saveProfile() {
-  profile = {
+  /* profile = { */ setProfile({
     name:         document.getElementById('pfName')?.value||'',
     age:          document.getElementById('pfAge')?.value||'',
     gender:       document.getElementById('pfGender')?.value||'',
@@ -2579,7 +2583,7 @@ function saveProfile() {
     homeCourseId: profile.homeCourseId||'',
     notes:        document.getElementById('pfNotes')?.value||'',
     yardType:     document.getElementById('pfYardType')?.value||'Total'
-  };
+  /* }; */ });
   save();
   renderProfileHero();
 }
@@ -2912,7 +2916,7 @@ function deletClubeSession(cid, sid) {
   save(); renderClubs();
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
 }
-function deleteClub(id) { bag=bag.filter(c=>c.id!==id); save(); renderClubs(); }
+function deleteClub(id) { /* bag=bag.filter(c=>c.id!==id); */ setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
 function addClub() {
   const simple = !clubDetailMode();
   const defaultType = simple ? 'Iron' : 'Iron';
@@ -2993,7 +2997,7 @@ function renderCourseList() {
   if(dl2) dl2.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
   updateCourseSelects();
 }
-function deleteCourse(id) { courses=courses.filter(c=>c.id!==id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); vizInitDone=false; renderCourseList(); }
+function deleteCourse(id) { /* courses=courses.filter(c=>c.id!==id); */ removeCourse(id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); vizInitDone=false; renderCourseList(); }
 function toggleHomeCourse(id) {
   profile.homeCourseId = profile.homeCourseId===id ? '' : id;
   // Sync homeClub text to match
@@ -3496,7 +3500,7 @@ function addRound() {
     const nt=row.querySelector('.rh-notes')?.value?.trim()||'';
     if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt,yards:row.dataset.yards||''});
   });
-  rounds=[{id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes},...rounds];
+  /* rounds=[{id:uid(),...},...rounds]; */ rounds.unshift({id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes});
   save(); renderHandicap();
   // Clear form
   document.getElementById('rScore').value='';
@@ -3515,7 +3519,7 @@ function addRound() {
   if(mBtn){mBtn.textContent='Simple';mBtn.classList.remove('on');}
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
 }
-function deleteRound(id){rounds=rounds.filter(r=>r.id!==id);save();renderHandicap();}
+function deleteRound(id){ /* rounds=rounds.filter(r=>r.id!==id); */ removeRound(id);save();renderHandicap();}
 function toggleRndSection(key){
   const ids = {excluded:'roundListExcluded', multi:'roundListMulti', archive:'roundListArchive'};
   const listEl = document.getElementById(ids[key]);
@@ -3909,7 +3913,7 @@ function renderSessions() {
 }
 function toggleSession(id) { document.getElementById('si-' + id)?.classList.toggle('open'); }
 function deleteCaddieSession(id) {
-  history = history.filter(h => h.id !== id);
+  /* history = history.filter(h => h.id !== id); */ removeHistory(id);
   save(); renderSessions();
 }
 // Keep renderHistory as alias so import logic still works
@@ -4003,7 +4007,7 @@ function exportForAI() {
       activeCnt++;
       const stats = deriveStats(c.sessions);
       const imp   = stats ? calcImplied(stats, c) : null;
-      const disp = getDispersion(c, getHandicap());
+      const disp  = getDispersion(c,getHandicap());
       if(stats) {
         const impMin = imp ? imp.impMin : stats.avgMin;
         const impMax = imp ? imp.impMax : stats.avgMax;
@@ -5214,7 +5218,7 @@ function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
     const baseCol=VIZ_PATH_COLORS[pi%VIZ_PATH_COLORS.length];
     let cumCarry=0;
     clubs.forEach((club,si)=>{
-      const d = vizGetDisp(club, hcp, handed, profile.yardType||'Total', vizYardMode); if(!d?.carry) return;
+      const d=vizGetDisp(club,hcp,handed,profile.yardType||'Total',vizYardMode); if(!d?.carry) return;
       cumCarry+=d.carry;
       const yft=Math.min(cumCarry,hole.yards-5);
       const col=si===0?baseCol:vizLightenHex(baseCol,Math.min(si*0.28,0.65));
@@ -5282,7 +5286,7 @@ function renderViz(){
       const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
       clubs=entry?vizClubsFromEntry(entry):bag.filter(c=>c.tested&&c.type!=='Putter');
     }
-    const disps = clubs.map(c => vizGetDisp(c, hcp, handed, profile.yardType||'Total', vizYardMode)).filter(Boolean);
+    const disps=clubs.map(c=>vizGetDisp(club,hcp,handed,profile.yardType||'Total',vizYardMode)).filter(Boolean);
     const title=vizClubSrc==='optimised'?'Optimised bag · HCP '+hcp:'Custom · HCP '+hcp;
     const maxRange=+document.getElementById('vizMaxRange')?.value||calcVizMaxRange();
     const interval=+document.getElementById('vizRangeInterval')?.value||25;
@@ -6515,7 +6519,7 @@ function lrSaveRound() {
     })),
   };
 
-  rounds = [newRound, ...rounds];
+  /* rounds = [newRound, ...rounds]; */ rounds.unshift(newRound);
   save();
   renderHandicap();
   lrState.saved = true;
@@ -6691,7 +6695,7 @@ function acceptDisclaimer() {
 }
 function confirmClearAll() {
   ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version'].forEach(k=>localStorage.removeItem(k));
-  bag=[]; courses=[]; rounds=[]; history=[]; profile={};
+  /* bag=[]; courses=[]; rounds=[]; history=[]; profile={}; */ clearAll();
   document.getElementById('clearModal').style.display='none';
   document.getElementById('uploadBanner').style.display='flex';
   renderAll();
