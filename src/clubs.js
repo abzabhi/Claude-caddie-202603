@@ -327,7 +327,7 @@ export function calcVizMaxRange() {
   const actives=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
   const maxes=actives.flatMap(c=>c.sessions.map(s=>+s.max)).filter(v=>v>0);
   if(!maxes.length) return 300;
-  return Math.ceil(Math.max(...maxes)*1.2/10)*10;
+  return Math.ceil(Math.max(...maxes)*1.2/10)*10.0;
 }
 
 Object.assign(window, {
