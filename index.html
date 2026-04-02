@@ -1707,8 +1707,8 @@ function parseRefData(text) {
 function applyRefDataCache() {
   const parsed = parseRefData(localStorage.getItem('vc:ref'));
   if(!parsed) return;
-  FLIGHT_DATA = parsed.flightData;
-  BIAS_DATA   = parsed.biasData;
+  Object.assign(FLIGHT_DATA, parsed.flightData);
+  Object.assign(BIAS_DATA,   parsed.biasData);
 }
 
 // Helper: map a club record to its FLIGHT_DATA key
