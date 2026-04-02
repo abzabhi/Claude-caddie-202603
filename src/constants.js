@@ -208,3 +208,6 @@ export const VIZ_ROLL = {
   'Wedge':       [.02,.02,.01,.01,.01,.00],
   'Chipper':     [.30,.28,.26,.24,.22,.20]
 };
+export const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
+export const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
+export const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];
