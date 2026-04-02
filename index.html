@@ -1530,9 +1530,9 @@ body{
   saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots,setVisInitDone
 } from './src/viz.js';
 // ── Data ──────────────────────────────────────────────────────────────────────
-const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
+/*const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
-const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];
+const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];*/
 /*const CLUB_VARIANTS = {
   'Driver':       [{id:'Driver', loft:'10.5',shaft:45.75,stiffness:'Regular'}],
   'Fairway Wood': [{id:'3W',loft:'15',shaft:43.00,stiffness:'Regular'},{id:'5W',loft:'18',shaft:42.25,stiffness:'Regular'},
@@ -1978,7 +1978,7 @@ let currentEditTeeId = null;
 function today() { return new Date().toISOString().slice(0,10); } */
 function fmtDateLong(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?iso:d.toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'});}
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
+/*function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }*/
 
 /*function calcDiff(gross, rating, slope) {
   const g=+gross, r=+rating, s=+slope;
@@ -2917,19 +2917,19 @@ function updateSession(cid, sid, field, val) {
   const stats = deriveStats(c.sessions);
   const implied = stats ? calcImplied(stats,c) : null;
   const yLbl = getYardLabel(c);
-  const rawRange = stats ? (stats.avgMin&&stats.avgMax?stats.avgMin+'–'+stats.avgMax:stats.avgMax?'≤'+stats.avgMax:stats.avgMin+'+') : null;
-  const impRange = implied ? implied.impMin+'–'+implied.impMax : null;
+  const rawRange = stats ? (stats.avgMin&&stats.avgMax?stats.avgMin+'-'+stats.avgMax:stats.avgMax?'<='+stats.avgMax:stats.avgMin+'+') : null;
+  const impRange = implied ? implied.impMin+'-'+implied.impMax : null;
   const impTag = (showImplied()&&implied&&implied.adjusted)?`<span class="imp-badge adj" title="${implied.reason}">implied ${impRange} yds</span>`
                 :'';
   const yardBadge = `<span class="yard-badge">${yLbl}</span>`;
   const mid = document.querySelector(`#crow-${cid} .cmid`);
   if(mid&&stats) mid.querySelector('.cdist').innerHTML=`${rawRange} yds ${yardBadge}${impTag}`;
 }
-function deletClubeSession(cid, sid) {
+function deleteClubSession(cid, sid) {
   const c = bag.find(x=>x.id===cid); if(!c) return;
   c.sessions = c.sessions.filter(s=>s.id!==sid);
   save(); renderClubs();
-  setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='▲';}},50);
+  setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='&#9650;';}},50);
 }
 function deleteClub(id) { /* bag=bag.filter(c=>c.id!==id); */ setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
 function addClub() {
@@ -4429,7 +4429,7 @@ ${rounds.length ? `
   </table>
 </div>` : ''}
 
-<div class="footer">Gordy the Virtual Caddy · Generated ${fmtDate(new Date().toISOString())}</div>
+<div class="footer">Gordy the Virtual Caddy · Generated ${fmtDate(today())}</div>
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
