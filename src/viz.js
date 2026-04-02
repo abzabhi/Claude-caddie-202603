@@ -404,8 +404,8 @@ export function syncHoleClubsFromSession(){
   vizPaths[0]=[tc?.id,ac?.id].filter(Boolean);
   _rebuildPathPlanner();
 }
-let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
-let vizPlannerOpen=false;
+/*let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
+let vizPlannerOpen=false;*/
 function _buildBagMap(){
   return bag.filter(c=>vizSelectedClubs.has(c.id)&&c.type!=='Putter').map(c=>c.identifier||c.type);
 }
