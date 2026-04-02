@@ -1527,7 +1527,7 @@ body{
   setVizYard, setVizDisplay, buildVizHoleShelf, buildVizDistanceDropdown,
   vizClubsFromEntry, syncOptimisedSelection, _saveCurrentHoleEdits,
   syncHoleClubsFromSession, _buildBagMap, _buildHoleMapFromEdits,
-  saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots
+  saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots,setVisInitDone
 } from './src/viz.js';
 // ── Data ──────────────────────────────────────────────────────────────────────
 const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
@@ -3012,7 +3012,7 @@ function renderCourseList() {
   if(dl2) dl2.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
   updateCourseSelects();
 }
-function deleteCourse(id) { /* courses=courses.filter(c=>c.id!==id); */ removeCourse(id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); vizInitDone=false; renderCourseList(); }
+function deleteCourse(id) { /* courses=courses.filter(c=>c.id!==id); */ removeCourse(id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); /*vizInitDone=false*/setVizInitDone(false); renderCourseList(); }
 function toggleHomeCourse(id) {
   profile.homeCourseId = profile.homeCourseId===id ? '' : id;
   // Sync homeClub text to match
@@ -3338,7 +3338,7 @@ function saveCourse() {
   editCourseData.updatedAt = new Date().toISOString().slice(0,10);
   const idx=courses.findIndex(c=>c.id===editCourseData.id);
   if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
-  save(); vizInitDone=false; cancelCourseEdit(); renderCourseList();
+  save(); /*vizInitDone=false*/setVizInitDone(false); cancelCourseEdit(); renderCourseList();
 }
 
 
@@ -5007,7 +5007,7 @@ function updateCourseDropdowns() {
   if(cur && (cur==='__manual__' || courses.find(c=>c.id===cur))) sel.value=cur;
 }
 function renderAll(){
-  vizInitDone=false; // force viz shelf to rebuild with fresh bag IDs
+  /*vizInitDone=false*/setVizInitDone(false); // force viz shelf to rebuild with fresh bag IDs
   renderProfile(); renderClubs(); renderCourseList(); renderHandicap(); renderAIHelp(); updateCourseSelects(); renderSessions();
   // Set rCourse autofill once
   const rc=document.getElementById('rCourse');
