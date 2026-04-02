@@ -2749,7 +2749,7 @@ function clubRowHTML(c, isPutter) {
       <input class="sess-edit" type="text" inputmode="numeric" value="${s.max}" placeholder="max" onchange="updateSession('${c.id}','${s.id}','max',this.value)" style="width:54px">
       <span style="font-size:.62rem;color:var(--tx3)">yds</span>
       <input class="sess-edit" type="text" value="${s.notes||''}" placeholder="note…" onchange="updateSession('${c.id}','${s.id}','notes',this.value)" style="flex:1;min-width:60px">
-      <button class="sess-del" onclick="deleteSession('${c.id}','${s.id}')">x</button>
+      <button class="sess-del" onclick="deleteClubSession('${c.id}','${s.id}')">x</button>
     </div>`).join('');
 
   const simple   = !clubDetailMode() && !isPutter;
@@ -2898,7 +2898,7 @@ function updateSession(cid, sid, field, val) {
   const mid = document.querySelector(`#crow-${cid} .cmid`);
   if(mid&&stats) mid.querySelector('.cdist').innerHTML=`${rawRange} yds ${yardBadge}${impTag}`;
 }
-function deleteSession(cid, sid) {
+function deletClubeSession(cid, sid) {
   const c = bag.find(x=>x.id===cid); if(!c) return;
   c.sessions = c.sessions.filter(s=>s.id!==sid);
   save(); renderClubs();
@@ -3892,7 +3892,7 @@ function renderSessions() {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
           <button class="btn sec" style="font-size:.55rem;padding:2px 7px" onclick="event.stopPropagation();exportSessionPdf('${h.id}')">📄 Scorecard</button>
-          <button class="sess-del" onclick="event.stopPropagation();deleteSession('${h.id}')">✕</button>
+          <button class="sess-del" onclick="event.stopPropagation();deleteCaddieSession('${h.id}')">✕</button>
         </div>
       </div>
       <div class="hist-body">${escHtml(h.text)}</div>
@@ -3900,7 +3900,7 @@ function renderSessions() {
   }).join('');
 }
 function toggleSession(id) { document.getElementById('si-' + id)?.classList.toggle('open'); }
-function deleteSession(id) {
+function deleteCaddieSession(id) {
   history = history.filter(h => h.id !== id);
   save(); renderSessions();
 }
