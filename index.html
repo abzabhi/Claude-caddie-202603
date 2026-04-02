@@ -2931,8 +2931,8 @@ function deleteClubSession(cid, sid) {
   c.sessions = c.sessions.filter(s=>s.id!==sid);
   save(); renderClubs();
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='&#9650;';}},50);
-}
-function deleteClub(id) { bag=bag.filter(c=>c.id!==id); */ setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
+}*/
+function deleteClub(id) { bag=bag.filter(c=>c.id!==id);  setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
 function addClub() {
   const simple = !clubDetailMode();
   const defaultType = simple ? 'Iron' : 'Iron';
