@@ -1556,9 +1556,9 @@ const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];*/
   'Putter':       [{id:'Putter',loft:'3',shaft:34.50,stiffness:'Regular'}],
   'Chipper':      [{id:'Chipper',loft:'35',shaft:35.00,stiffness:'Regular'}]
 };*/
-function getVariantDefault(type, variantId) {
+/*function getVariantDefault(type, variantId) {
   return (CLUB_VARIANTS[type]||[]).find(v=>v.id===variantId)||null;
-}
+}*/
 //const TYPE_COLOR = {"Driver":"#3d7a2e","Fairway Wood":"#2a6a50","Hybrid":"#2a507a","Iron":"#5a4a2a","Wedge":"#6a3a2a","Putter":"#4a2a6a","Chipper":"#5a2a4a"};
 
 // ── Ball Flight Reference Data ─────────────────────────────────────────────────
@@ -2032,10 +2032,10 @@ function clearManualHcp() {
   return {avgMin:avg(mins),avgMax:avg(maxs),count:sessions.length,lastDate:[...sessions].sort((a,b)=>b.date.localeCompare(a.date))[0]?.date};
 }*/
 
-function getYardLabel(c) {
+/*function getYardLabel(c) {
   const t = c.yardType || profile.yardType || 'Total';
   return t;
-}
+}*/
 // Long clubs (Driver, FW, Hybrid, Iron-Long): gap threshold 20 yds
 // Mid-irons and below: gap threshold 15 yds
 /*function isLongClub(c) {
@@ -2077,7 +2077,7 @@ function getYardLabel(c) {
   return {impMin:Math.round(mn*minMult), impMax:mx,
           adjusted:true, suppressed:false, reason:label};
 }*/
-function getTypeLabel(club) {
+/*function getTypeLabel(club) {
   const id=(club.identifier||'').trim(), t=club.type;
   if(t==='Driver') return {type:'Driver',loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};
   if(t==='Fairway Wood'){const n=id.match(/(\d+)[Ww]/);return{type:n?n[1]+'W':'FW',loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};}
@@ -2086,7 +2086,7 @@ function getTypeLabel(club) {
   if(t==='Wedge'){const nm=id.match(/^(PW|GW|SW|LW|AW)/i);if(nm)return{type:nm[1].toUpperCase(),loft:id.match(/[\d.]+°/)?id.match(/[\d.]+°/)[0]:''};const d=id.match(/([\d.]+)°/);return{type:d?d[1]+'°':'WDG',loft:''};}
   if(t==='Putter') return{type:'PUT',loft:''};
   return{type:t.slice(0,3).toUpperCase(),loft:''};
-}
+}*/
 
 const DEFAULT_BAG = [];
 const DEFAULT_COURSES = [];
@@ -2668,7 +2668,7 @@ function renderProfile() {
 }
 
 // ── Club entry mode (Simple / Detailed) ──────────────────────────────────────
-function clubDetailMode() { return localStorage.getItem('vc:clubMode')!=='simple'; }
+/*function clubDetailMode() { return localStorage.getItem('vc:clubMode')!=='simple'; }
 function toggleClubMode() {
   const next = !clubDetailMode();
   localStorage.setItem('vc:clubMode', next?'detailed':'simple');
@@ -2955,7 +2955,7 @@ function addClub() {
     if(p){p.style.display='block';const r=document.getElementById('crow-'+c.id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='&#9650;';}
   },50);
 }
-
+*/
 // ── Courses tab ───────────────────────────────────────────────────────────────
 let editCourseData = null;
 
@@ -3123,7 +3123,7 @@ function renderDropdown() {
     :``;
 }
 
-function _clubRange(activeClubs) {
+/*function _clubRange(activeClubs) {
   // Return e.g. "4i – Driver"
   const order=['Driver','Fairway Wood','Hybrid','Iron','Wedge'];
   const sorted=activeClubs.slice().sort((a,b)=>order.indexOf(b.type)-order.indexOf(a.type));
@@ -3131,7 +3131,7 @@ function _clubRange(activeClubs) {
   const short=c=>c.identifier||c.type.split(' ')[0];
   if(sorted.length===1) return short(sorted[0]);
   return short(sorted[sorted.length-1])+' – '+short(sorted[0]);
-}
+}*/
 
 async function signOutSync() {
   const id=kvId();
