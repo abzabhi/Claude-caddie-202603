@@ -3,17 +3,17 @@ import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLI
 import { vizGetDisp } from './dispersion.js';
 import { bag, courses, history, profile, save } from './store.js';
 
-let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
-let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=false, vizClubSrc='custom';
-let vizYardMode='total';
-let vizPaths=[[],[],[]]; // 3 paths, each = array of club IDs
-let vizPathVisible=[true,false,false];
-let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
-let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
-let vizPlannerOpen=false;
+export let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
+export let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=false, vizClubSrc='custom';
+export let vizYardMode='total';
+export let vizPaths=[[],[],[]]; // 3 paths, each = array of club IDs
+export let vizPathVisible=[true,false,false];
+export let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
+export let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
+export let vizPlannerOpen=false;
 
 
-function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
+export function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
   const ep=vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt);
   const r=tilt*Math.PI/180,co=Math.cos(r),si=Math.sin(r);
   const rt=(x,y)=>{const dx=x-cx,dy=y-cy;return[cx+dx*co-dy*si,cy+dx*si+dy*co];};
@@ -32,7 +32,7 @@ function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
 }
 
 // ── Core stacked canvas renderer ──────────────────────────────────────────────
-function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interval){
+export function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interval){
   const svg=document.getElementById('vizSvg');
   const filtered=dispList.filter(d=>d&&d.carry>0).sort((a,b)=>b.carry-a.carry);
   if(!filtered.length){svg.innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No session data for selected clubs</text>';return;}
@@ -82,7 +82,7 @@ function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interval){
 }
 
 // ── Same-distance overlay renderer ───────────────────────────────────────────
-function vizDrawDistance(dispList,targetYds,fwYds,mode,title){
+export function vizDrawDistance(dispList,targetYds,fwYds,mode,title){
   const svg=document.getElementById('vizSvg');
   // All ellipses drawn at the same carry distance — overlapping comparison
   const clubs=dispList.filter(d=>d&&d.min>0&&d.max>=targetYds&&d.min<=targetYds);
@@ -134,7 +134,7 @@ function vizDrawDistance(dispList,targetYds,fwYds,mode,title){
 }
 
 // ── Hole view renderer ────────────────────────────────────────────────────────
-function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
+export function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
   const svg=document.getElementById('vizSvg'); if(!svg) return;
   if(!vizActiveCourse){svg.innerHTML='<text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="11" fill="#8a9e82">No course selected</text>';return;}
   const tee=vizActiveTee||vizActiveCourse.tees?.[0]; if(!tee?.holes?.length) return;
@@ -193,7 +193,7 @@ function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
   vizSetLegendChips(legs,chips);
 }
 
-function vizSetLegendChips(legs,chips){
+export function vizSetLegendChips(legs,chips){
   const legEl=document.getElementById('vizLegend');
   const chipEl=document.getElementById('vizChips');
   if(!legEl||!chipEl) return;
@@ -204,7 +204,7 @@ function vizSetLegendChips(legs,chips){
 }
 
 // ── Main render dispatch ──────────────────────────────────────────────────────
-function renderViz(){
+export function renderViz(){
   if(!document.getElementById('vizSvg')) return; // tab not yet active
   const hcp=getHandicap()||25, handed=profile.handed||'Right-handed';
   const fwYds=+document.getElementById('vizFwWidth')?.value||35;
@@ -241,7 +241,7 @@ function renderViz(){
 }
 
 // ── UI helpers ─────────────────────────────────────────────────────────────────
-function onVizModeChange(m){
+export function onVizModeChange(m){
   vizMode=m;
   ['coverage','hole'].forEach(x=>document.getElementById('vmode-'+x).classList.toggle('on',x===m));
   document.getElementById('vizCoverageControls').style.display=m==='coverage'?'block':'none';
@@ -258,12 +258,12 @@ function onVizClubSrcChange(){
   if(mrEl) mrEl.value=calcVizMaxRange();
   renderViz();
 }
-function onVizOptSessionChange(){
+export function onVizOptSessionChange(){
   syncOptimisedSelection();
   buildVizDistanceDropdown();
   renderViz();
 }
-function vizClubsFromEntry(entry){
+export function vizClubsFromEntry(entry){
   // Prefer structured bagMap; fall back to text parsing for legacy entries
   if(entry.bagMap?.length){
     return entry.bagMap.map(id=>bag.find(c=>c.tested&&c.sessions?.length&&(c.identifier===id||(c.type==='Driver'&&id==='Driver')))).filter(Boolean);
@@ -273,7 +273,7 @@ function vizClubsFromEntry(entry){
   (entry.text||'').split('\n').forEach(l=>{const m=l.match(/^\d+\.\s+(\S+)/);if(m)usedIds.push(m[1]);});
   return bag.filter(c=>c.tested&&c.sessions?.length&&usedIds.some(u=>c.identifier?.startsWith(u)||(c.type==='Driver'&&u==='Driver')));
 }
-function syncOptimisedSelection(){
+export function syncOptimisedSelection(){
   const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
   if(!entry) return;
   vizSelectedClubs.clear();
@@ -286,7 +286,7 @@ function syncOptimisedSelection(){
     lbl.style.borderColor=on?'var(--gr2)':'var(--br)';
   });
 }
-function onVizCourseChange(){
+export function onVizCourseChange(){
   const id=document.getElementById('vizCourseSelect').value;
   vizActiveCourse=courses.find(c=>c.id===id)||null;
   // Rebuild tee dropdown, default to course's selectedTee
@@ -302,7 +302,7 @@ function onVizCourseChange(){
   syncHoleClubsFromSession();
   renderViz();
 }
-function onVizTeeChange(){
+export function onVizTeeChange(){
   const id=document.getElementById('vizTeeSelect').value;
   vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===id)||null;
   buildVizHoleShelf(); vizSelectedHole=1;
@@ -321,7 +321,7 @@ function onVizTeeChange(){
   syncHoleClubsFromSession();
   renderViz();
 }
-function onVizHoleSessionChange(){
+export function onVizHoleSessionChange(){
   vizHoleEdits={};
   const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
   if(!entry) return renderViz();
@@ -355,11 +355,11 @@ function onVizHoleSessionChange(){
   syncHoleClubsFromSession();
   renderViz();
 }
-function _saveCurrentHoleEdits(){
+export function _saveCurrentHoleEdits(){
   if(!vizSelectedHole) return;
   vizHoleEdits[vizSelectedHole]={paths:vizPaths.map(p=>[...p]),visible:[...vizPathVisible]};
 }
-function syncHoleClubsFromSession(){
+export function syncHoleClubsFromSession(){
   // Reset to empty first — no stale bleed across holes
   vizPaths=[[],[],[]];
   vizPathVisible=[true,false,false];
@@ -409,7 +409,7 @@ let vizPlannerOpen=false;
 function _buildBagMap(){
   return bag.filter(c=>vizSelectedClubs.has(c.id)&&c.type!=='Putter').map(c=>c.identifier||c.type);
 }
-function _buildHoleMapFromEdits(){
+export function _buildHoleMapFromEdits(){
   // Save current hole before building
   _saveCurrentHoleEdits();
   const idToIdent=id=>bag.find(c=>c.id===id)?.identifier||'';
@@ -422,7 +422,7 @@ function _buildHoleMapFromEdits(){
   });
   return hm;
 }
-function saveManualBag(){
+export function saveManualBag(){
   if(!vizActiveCourse){alert('Select a course first.');return;}
   const bm=_buildBagMap();
   if(!bm.length){alert('Select at least one club in Bag Coverage first.');return;}
@@ -442,7 +442,7 @@ function saveManualBag(){
   renderSessions();
   alert(`Bag saved: ${vizActiveCourse.name} — ${bm.length} clubs.`);
 }
-function saveManualPlan(){
+export function saveManualPlan(){
   if(!vizActiveCourse){alert('Select a course first.');return;}
   const bm=_buildBagMap();
   if(!bm.length){alert('Select at least one club in Bag Coverage first.');return;}
@@ -465,34 +465,34 @@ function saveManualPlan(){
   alert(`Plan saved: ${vizActiveCourse.name} — ${bm.length} clubs, ${Object.keys(hm).length} holes.`);
 }
 
-function vizTogglePlanner(){
+export function vizTogglePlanner(){
   vizPlannerOpen=!vizPlannerOpen;
   document.getElementById('vizPlannerBody').style.display=vizPlannerOpen?'block':'none';
   document.getElementById('vizPlannerHdr')?.classList.toggle('open',vizPlannerOpen);
   document.getElementById('vizPlannerChevron').textContent=vizPlannerOpen?'\u25b2':'\u25bc';
 }
-function vizTogglePath(pi){
+export function vizTogglePath(pi){
   vizPathVisible[pi]=!vizPathVisible[pi];
   _rebuildPathPlanner();
   renderViz();
 }
-function vizUpdatePath(pi,si,id){
+export function vizUpdatePath(pi,si,id){
   vizPaths[pi][si]=id;
   renderViz();
 }
-function vizAddShotToPath(pi){
+export function vizAddShotToPath(pi){
   if(vizPaths[pi].length>=6) return;
   vizPaths[pi].push('');
   _rebuildPathPlanner();
   renderViz();
 }
-function vizRemoveShotFromPath(pi){
+export function vizRemoveShotFromPath(pi){
   if(vizPaths[pi].length<=1) return;
   vizPaths[pi].pop();
   _rebuildPathPlanner();
   renderViz();
 }
-function _rebuildPathPlanner(){
+export function _rebuildPathPlanner(){
   const rowsEl=document.getElementById('vizPathRows');
   if(!rowsEl) return;
   const shelfIds=vizSelectedClubs.size?vizSelectedClubs:new Set(bag.filter(c=>c.tested&&c.type!=='Putter').map(c=>c.id));
@@ -523,38 +523,38 @@ function _rebuildPathPlanner(){
     sels.forEach((sel,si)=>{sel.value=path[si]||'';});
   });
 }
-function vizAddShot(){ vizAddShotToPath(0); }
-function vizRemoveShot(){ vizRemoveShotFromPath(0); }
-function _rebuildShotSlots(){ _rebuildPathPlanner(); } // alias for compat
-function calcVizMaxRange(){
+export function vizAddShot(){ vizAddShotToPath(0); }
+export function vizRemoveShot(){ vizRemoveShotFromPath(0); }
+export function _rebuildShotSlots(){ _rebuildPathPlanner(); } // alias for compat
+export function calcVizMaxRange(){
   const actives=bag.filter(c=>c.tested&&c.sessions?.length&&c.type!=='Putter');
   const maxes=actives.flatMap(c=>c.sessions.map(s=>+s.max)).filter(v=>v>0);
   if(!maxes.length) return 300;
   return Math.ceil(Math.max(...maxes)*1.2/10)*10;
 }
-function resetVizMaxRange(){
+export function resetVizMaxRange(){
   const el=document.getElementById('vizMaxRange');
   if(el) el.value=calcVizMaxRange();
 }
-function setVizYard(m){
+export function setVizYard(m){
   vizYardMode=m;
   ['carry','total'].forEach(x=>document.getElementById('vytgl-'+x).classList.toggle('on',x===m));
   resetVizMaxRange();
   renderViz();
 }
-function setVizDisplay(m){
+export function setVizDisplay(m){
   vizDisplayMode=m;
   ['both','shape','prob'].forEach(x=>document.getElementById('vptgl-'+x).classList.toggle('on',x===m));
   renderViz();
 }
-function buildVizHoleShelf(){
+export function buildVizHoleShelf(){
   if(!vizActiveTee?.holes?.length) return;
   const shelf=document.getElementById('vizHoleShelf');
   if(!shelf) return;
   shelf.innerHTML=vizActiveTee.holes.map(h=>
     `<button onclick="vizSelectHole(${h.number})" style="padding:5px 7px;background:${h.number===vizSelectedHole?'var(--gr3)':'var(--sf)'};border:1px solid ${h.number===vizSelectedHole?'var(--gr2)':'var(--br)'};border-radius:4px;font-family:inherit;font-size:.6rem;color:${h.number===vizSelectedHole?'var(--ac2)':'var(--tx2)'};cursor:pointer;text-align:center;min-width:40px" id="vhbtn${h.number}">H${h.number}<br><span style="font-size:.52rem;color:var(--tx3)">P${h.par}\xb7${h.yards||'?'}y</span></button>`).join('');
 }
-function vizSelectHole(n){
+export function vizSelectHole(n){
   _saveCurrentHoleEdits();
   vizSelectedHole=n;
   document.querySelectorAll('[id^=vhbtn]').forEach(b=>{
@@ -566,7 +566,7 @@ function vizSelectHole(n){
   syncHoleClubsFromSession();
   renderViz();
 }
-function buildVizDistanceDropdown(){
+export function buildVizDistanceDropdown(){
   let clubs=[];
   if(vizClubSrc==='custom') clubs=bag.filter(c=>c.tested&&c.sessions?.length&&vizSelectedClubs.has(c.id));
   else{
@@ -586,7 +586,7 @@ function buildVizDistanceDropdown(){
   }
   sel.innerHTML=opts;
 }
-function initViz(){
+export function initViz(){
   if(vizInitDone){renderViz();return;}
   vizInitDone=true;
   const sess=history.filter(h=>h.type==='optimisation'||h.type==='caddie'||h.type==='both'||h.type==='manual');
@@ -625,7 +625,7 @@ function initViz(){
   syncHoleClubsFromSession();
   onVizModeChange('coverage');
 }
-function vizToggleClub(id){
+export function vizToggleClub(id){
   if(vizSelectedClubs.has(id)) vizSelectedClubs.delete(id);
   else{if(vizSelectedClubs.size>=13){alert('Maximum 13 clubs (14 with putter). Deselect a club first.');return;}vizSelectedClubs.add(id);}
   const on=vizSelectedClubs.has(id);
