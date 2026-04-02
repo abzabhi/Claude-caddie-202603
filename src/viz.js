@@ -12,7 +12,7 @@ export let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of c
 export let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
 export let vizPlannerOpen=false;
 
-
+export function setVizInitDone(v) { vizInitDone = v; }
 export function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
   const ep=vizEllipsePath(cx,cy,rxR,rxL,ryU,ryD,tilt);
   const r=tilt*Math.PI/180,co=Math.cos(r),si=Math.sin(r);
