@@ -337,3 +337,4 @@ export function vizEllipsePath(cx, cy, rxR, rxL, ryU, ryD, tilt) {
     `C ${p(cx - rxL, cy - ku)},${p(cx - kl,  cy - ryU)},${p(cx, cy - ryU)} Z`,
   ].join(' ');
 }
+export function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
