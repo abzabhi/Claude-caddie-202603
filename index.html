@@ -2014,7 +2014,7 @@ function clearManualHcp() {
   if(!mins.length&&!maxs.length) return null;
   const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):null;
   return {avgMin:avg(mins),avgMax:avg(maxs),count:sessions.length,lastDate:[...sessions].sort((a,b)=>b.date.localeCompare(a.date))[0]?.date};
-}/*/
+}*/
 
 function getYardLabel(c) {
   const t = c.yardType || profile.yardType || 'Total';
@@ -2180,7 +2180,7 @@ function load() {
   lines.push('NOTE | Sources: TrackMan, GOLFTEC, Arccos, DECADE/Practical Golf.');
   lines.push('');
   return lines.join('\n');
-} */ */
+} */ 
 function saveData() {
   // Primary save action: always download TXT; auto-push to sync profile if connected + passphrase in session
   const txt = serialise();
