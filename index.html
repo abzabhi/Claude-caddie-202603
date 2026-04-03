@@ -3340,7 +3340,7 @@ function saveCourse() {
   editCourseData.updatedAt = new Date().toISOString().slice(0,10);
   const idx=courses.findIndex(c=>c.id===editCourseData.id);
   if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
-  save(); /*vizInitDone=false*/setVizInitDone(false); cancelCourseEdit(); renderCourseList();
+  save(); vizInitDone=false setVizInitDone(false); cancelCourseEdit(); renderCourseList();
 }
 */
 
