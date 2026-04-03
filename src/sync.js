@@ -335,3 +335,4 @@ Object.assign(window, {
   renderProfileSync, renderGistSettings, checkAppUpdate,
   signOutSync
 });
+Object.assign(window, { bannerLoadGist });
