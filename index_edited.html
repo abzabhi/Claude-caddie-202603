@@ -1523,13 +1523,13 @@ body{
   onVizOptSessionChange, onVizCourseChange, onVizTeeChange,
   onVizHoleSessionChange, vizSelectHole, vizToggleClub, vizTogglePlanner,
   vizTogglePath, vizUpdatePath, vizAddShotToPath, vizRemoveShotFromPath,
-  vizAddShot, vizRemoveShot, calcVizMaxRange, resetVizMaxRange,
+  vizAddShot, vizRemoveShot, /*calcVizMaxRange*/, resetVizMaxRange,
   setVizYard, setVizDisplay, buildVizHoleShelf, buildVizDistanceDropdown,
   vizClubsFromEntry, syncOptimisedSelection, _saveCurrentHoleEdits,
   syncHoleClubsFromSession, _buildBagMap, _buildHoleMapFromEdits,
   saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots,setVizInitDone
 } from './src/viz.js';
-  import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange } from './src/clubs.js';
+  import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange,calcVizMaxRange } from './src/clubs.js';
   import { renderCourseList } from './src/courses.js';
   import './src/live-round.js';
   import './src/sync.js';
