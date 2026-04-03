@@ -1730,7 +1730,7 @@ renderAll();
 })();
 // 2.5 — on load: check for pending session result in Gist + check for app update
 checkAppUpdate();
-
+Object.assign(window, { showTab, showTabFromProfile, setHcpMode, onManualHcpChange });
 if(!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
 Object.assign(window, {
   showTab, showTabFromProfile, ddNav,
