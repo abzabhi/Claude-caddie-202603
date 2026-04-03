@@ -1535,6 +1535,7 @@ body{
   import './src/sync.js';
   import { renderHandicap } from './src/rounds.js';
   import './src/caddie.js';
+  import { renderAll } from './src/ui.js';
   
   // ── Data ──────────────────────────────────────────────────────────────────────
 /*const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
@@ -6722,7 +6723,7 @@ function confirmClearAll() {
   document.getElementById('uploadBanner').style.display='flex';
   renderAll();
 }*/
-if(!localStorage.getItem('vc:disc') && window.self === window.top) showDisclaimer();
+if(!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
 </script>
 
 </body>
