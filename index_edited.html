@@ -1732,7 +1732,7 @@ renderAll();
 checkAppUpdate();
 Object.assign(window, { showTab, showTabFromProfile, setHcpMode, onManualHcpChange });
 if(!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
-Object.assign(window, {
+/*Object.assign(window, {
   showTab, showTabFromProfile, ddNav,
   acceptDisclaimer, addClub, addCourseFromRepo, addRound, addSession, addSessionSimple,
   bannerLoadGist, cancelAddTee, cancelCourseEdit, confirmAddTee, confirmClearAll,
@@ -1755,6 +1755,7 @@ Object.assign(window, {
   toggleRndLinker, toggleRndSection, toggleRoundMode, toggleSession,
   vizSelectHole, vizToggleClub, vizTogglePath, vizTogglePlanner,
 });
+*/
 </script>
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
