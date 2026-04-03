@@ -781,3 +781,4 @@ Object.assign(window, {
   exportSessionPdf, exportStarterTxt, downloadTask, exportClubTask, exportCourseTask,
   getRoundTaskText
 });
+Object.assign(window, { exportClubTask, exportCourseTask, exportForAI, exportStarterTxt, importCaddieResult, importClubResult, importCourseResult, importPastedCaddieResult, importPastedClubResult, importPastedCourseResult, importPastedRoundResult, importRoundResult, toggleCard, updateCadTees });
