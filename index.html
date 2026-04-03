@@ -1530,7 +1530,8 @@ body{
   saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots,setVisInitDone
 } from './src/viz.js';
   import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange } from './src/clubs.js';
-// ── Data ──────────────────────────────────────────────────────────────────────
+  import { renderCourseList } from './src/courses.js';
+  // ── Data ──────────────────────────────────────────────────────────────────────
 /*const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
 const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];*/
@@ -1811,7 +1812,7 @@ const GIST_SETUP_SKILL_URL= 'https://gist.githubusercontent.com/abzabhi/e91a5f6d
 const GIST_ROUND_TASK_URL = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/round-task.md';
 
 // ── Gordy Courses repo ────────────────────────────────────────────────────────
-const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
+/*const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';*/
 const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/courses/';
 
 async function _fetchAndCache(url, storeKey, verField) {
@@ -1831,7 +1832,7 @@ async function _fetchAndCache(url, storeKey, verField) {
 
 // ── Gordy Courses repo helpers ────────────────────────────────────────────────
 // Fetch lightweight index [{id,name,city}] — cached 24h
-async function _fetchCourseIndex() {
+/*async function _fetchCourseIndex() {
   const CACHE_KEY='gordy:courseIndex', CACHE_TS='gordy:courseIndex:ts', TTL=24*60*60*1000;
   const cached=localStorage.getItem(CACHE_KEY);
   const ts=parseInt(localStorage.getItem(CACHE_TS)||'0');
@@ -1905,13 +1906,13 @@ async function addCourseFromRepo(courseId,statusElId) {
   const existing=courses.find(c=>c.id===course.id);
   if(existing){
     if(!confirm(`"${course.name}" is already in your courses. Replace with the repo version?`)) return;
-    /* courses=courses.map(c=>c.id===course.id?course:c); */ replaceCourse(course);
+     courses=courses.map(c=>c.id===course.id?course:c); replaceCourse(course);
   } else {
     courses.push(course);
   }
   save(); renderAll();
   if(st) st.textContent=`✅ "${course.name}" added to your courses.`;
-}
+} */
 function getSkillText() {
   return localStorage.getItem('vc:skill') ||
     '[Skill unavailable — cache empty and Gist unreachable. Upload skill.md alongside this export file in your AI chat.]';
@@ -1973,7 +1974,7 @@ Promise.allSettled([
 /* let bag = [], courses = [], rounds = [], history = [];
 let profile = {}; */
 let editingCourseId = null;
-let currentEditTeeId = null;
+/*let currentEditTeeId = null;*/
 
 /* function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
 function today() { return new Date().toISOString().slice(0,10); } */
@@ -2540,7 +2541,7 @@ function onMergeFile(e, mode) {
   reader.readAsText(file);
 }
 
-async function onRepoSearch() {
+/*async function onRepoSearch() {
   const input=document.getElementById('repoSearchInput');
   const status=document.getElementById('repoSearchStatus');
   const results=document.getElementById('repoSearchResults');
@@ -2571,7 +2572,7 @@ async function onRepoSearch() {
         </button>
       </div>
     </div>`).join('');
-}
+}*/
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(id) {
@@ -2957,9 +2958,9 @@ function addClub() {
 }
 */
 // ── Courses tab ───────────────────────────────────────────────────────────────
-let editCourseData = null;
+/*let editCourseData = null;*/
 
-function getFavCourseId() {
+/*function getFavCourseId() {
   if(!rounds.length) return null;
   const counts = {};
   rounds.forEach(r=>{ if(r.courseName) counts[r.courseName]=(counts[r.courseName]||0)+1; });
@@ -3013,7 +3014,7 @@ function renderCourseList() {
   if(dl2) dl2.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
   updateCourseSelects();
 }
-function deleteCourse(id) { /* courses=courses.filter(c=>c.id!==id); */ removeCourse(id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); /*vizInitDone=false*/setVizInitDone(false); renderCourseList(); }
+function deleteCourse(id) {  courses=courses.filter(c=>c.id!==id);  removeCourse(id); if(profile.homeCourseId===id){profile.homeCourseId='';save();} save(); vizInitDone=false setVizInitDone(false); renderCourseList(); }
 function toggleHomeCourse(id) {
   profile.homeCourseId = profile.homeCourseId===id ? '' : id;
   // Sync homeClub text to match
@@ -3025,7 +3026,7 @@ function toggleHomeCourse(id) {
     const hci = document.getElementById('pfHomeClub'); if(hci) hci.style.display='none';
   } else if(el) {
     el.value='';
-  }
+  }*/
   renderCourseList();
   renderProfileHero();
 }
@@ -3187,7 +3188,7 @@ function onHomeClubInput() {
   if(coursesPanel&&coursesPanel.classList.contains('active')) renderCourseList();
 }
 
-function editCourse(id) {
+/*function editCourse(id) {
   const foundCourse = id ? courses.find(c=>c.id===id) : null;
   if(id && !foundCourse) return; // safety: id given but not found
   editCourseData = foundCourse
@@ -3341,7 +3342,7 @@ function saveCourse() {
   if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
   save(); /*vizInitDone=false*/setVizInitDone(false); cancelCourseEdit(); renderCourseList();
 }
-
+*/
 
 // ── Handicap tab ──────────────────────────────────────────────────────────────
 function renderHandicap() {
