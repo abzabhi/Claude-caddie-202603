@@ -249,7 +249,7 @@ export function onVizModeChange(m){
   document.getElementById('vizHoleControls').style.display=m==='hole'?'block':'none';
   renderViz();
 }
-function onVizClubSrcChange(){
+export function onVizClubSrcChange(){
   vizClubSrc=document.getElementById('vizClubSrcSel').value;
   document.getElementById('vizOptSessionField').style.display=vizClubSrc==='optimised'?'flex':'none';
   document.getElementById('vizClubShelf').style.display='flex';
@@ -407,7 +407,7 @@ export function syncHoleClubsFromSession(){
 }
 /*let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
 let vizPlannerOpen=false;*/
-function _buildBagMap(){
+export function _buildBagMap(){
   return bag.filter(c=>vizSelectedClubs.has(c.id)&&c.type!=='Putter').map(c=>c.identifier||c.type);
 }
 export function _buildHoleMapFromEdits(){
