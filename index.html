@@ -1797,7 +1797,7 @@ function applyRefDataCache() {
   };
 }*/
 
-const APP_VERSION = '20';
+const APP_VERSION = '20';window.APP_VERSION = APP_VERSION;
 // Clear stale localStorage from older app versions (preserve Gist settings)
 if(localStorage.getItem('vc:version') !== APP_VERSION) {
   ['vc:bag','vc:courses','vc:rounds','vc:history','vc:hcpMode','vc:manualHcp','vc:profile'].forEach(k=>localStorage.removeItem(k));
@@ -2218,7 +2218,7 @@ function saveData() {
   }
 }
 // Keep exportData as internal alias used by exportForAI status check
-function exportData() { saveData(); }
+function exportData() { saveData(); }window.saveData = saveData;
 function processDataText(text) {
   const hasExisting = bag.length || courses.length || rounds.length || history.length;
   if(hasExisting) {
@@ -2350,7 +2350,7 @@ function processDataText(text) {
     document.getElementById('uploadBanner').style.display='none';
     save(); renderAll();
     alert('Data imported successfully.');
-}
+}window.processDataText = processDataText;
 
 // ── Shared parser used by both processDataText and mergeDataText ──────────────
 function _parseDataText(text) {
@@ -3058,7 +3058,7 @@ function toggleProfileDropdown() {
 function closeProfileDropdown() {
   document.getElementById('profDropdown')?.classList.remove('open');
   document.removeEventListener('click', _ddOutsideClose);
-}
+}window.closeProfileDropdown = closeProfileDropdown;
 function _ddOutsideClose(e) {
   const dd=document.getElementById('profDropdown');
   const btn=document.getElementById('hdrAvatarBtn');
@@ -3123,7 +3123,7 @@ function renderDropdown() {
   if(sob) sob.innerHTML=kvMode()
     ?`<button class="btn danger" style="width:100%;font-size:.68rem" onclick="signOutSync()">🔓 Sign out of sync</button>`
     :``;
-}
+}window.renderDropdown = renderDropdown;
 
 /*function _clubRange(activeClubs) {
   // Return e.g. "4i – Driver"
@@ -3135,7 +3135,7 @@ function renderDropdown() {
   return short(sorted[sorted.length-1])+' – '+short(sorted[0]);
 }*/
 
-async function signOutSync() {
+/*async function signOutSync() {
   const id=kvId();
   const hasPass=!!sessionStorage.getItem('vc:kvPass');
   // Build confirm with three choices via a custom modal-like approach using confirm + follow-up
@@ -3169,7 +3169,7 @@ function _doSignOut() {
   closeProfileDropdown();
   renderDropdown();
   alert('Signed out of sync profile. Your data remains on this device.');
-}
+}*/
 function onHomeClubSelect() {
   const val = document.getElementById('pfHomeClubSelect')?.value||'';
   if(val==='') { profile.homeClub=''; profile.homeCourseId=''; save(); renderProfileHero(); renderCourseList(); return; }
@@ -4702,7 +4702,7 @@ ${existingLine}${preLoadedBlock}`;
 }
 
 
-const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
+/*const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
 const APP_LATEST_FILE = 'golf-caddie-latest.html';
 
 // ── Gordy Sync — encrypted KV via Cloudflare Worker ─────────────────────────
@@ -4996,7 +4996,7 @@ async function checkAppUpdate() {
     a.href = url; a.download = `golf-caddie-v${remote}.html`; a.click();
     URL.revokeObjectURL(url);
   } catch {}
-}
+}*/
 
 
 function updateCourseDropdowns() {
