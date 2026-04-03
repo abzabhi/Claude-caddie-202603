@@ -771,7 +771,7 @@ ${existingLine}${preLoadedBlock}`;
   downloadTask(`vc-course-task-${today()}.txt`, content);
 }
 
-Object.assign(window, {
+export Object.assign(window, {
   updateCourseSelects, updateCadTees, renderAIHelp, renderSessions,
   toggleSession, deleteCaddieSession, renderHistory,
   exportForAI, toggleCard,
