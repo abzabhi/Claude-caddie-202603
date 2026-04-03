@@ -2581,7 +2581,7 @@ function onMergeFile(e, mode) {
 }*/
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-/*function showTab(id) {
+function showTab(id) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
@@ -2593,10 +2593,10 @@ function onMergeFile(e, mode) {
   if(id==='gordy') renderAIHelp();
   if(id==='sessions') renderSessions();
   if(id==='viz') initViz();
-}*/
+}
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-/*function saveProfile() {
+function saveProfile() {
   profile = { setProfile({
     name:         document.getElementById('pfName')?.value||'',
     age:          document.getElementById('pfAge')?.value||'',
@@ -2672,7 +2672,7 @@ function renderProfile() {
     }
   }
   renderGistSettings();
-}*/
+}
 
 // ── Club entry mode (Simple / Detailed) ──────────────────────────────────────
 /*function clubDetailMode() { return localStorage.getItem('vc:clubMode')!=='simple'; }
