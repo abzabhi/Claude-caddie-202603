@@ -2203,7 +2203,7 @@ function load() {
   lines.push('');
   return lines.join('\n');
 } */ 
-function saveData() {
+/*function saveData() {
   // Primary save action: always download TXT; auto-push to sync profile if connected + passphrase in session
   const txt = serialise();
   const blob = new Blob([txt], {type:'text/plain'});
@@ -2325,11 +2325,11 @@ function processDataText(text) {
         }
       }
     }
-    /* if(newBag.length) bag=newBag; */ if(newBag.length) setBag(newBag);
-    /* if(newRounds.length) rounds=newRounds; */ if(newRounds.length) setRounds(newRounds);
+     if(newBag.length) bag=newBag;  if(newBag.length) setBag(newBag);
+    if(newRounds.length) rounds=newRounds; if(newRounds.length) setRounds(newRounds);
     if(Object.keys(newProfile).length) {
       if(newNoteLines.length) newProfile.notes = newNoteLines.join('\n');
-      /* profile = newProfile; */ setProfile(newProfile);
+       profile = newProfile; setProfile(newProfile);
     }
     if(newHcpMode) localStorage.setItem('vc:hcpMode', newHcpMode);
     if(newManualHcp) localStorage.setItem('vc:manualHcp', newManualHcp);
@@ -2343,7 +2343,7 @@ function processDataText(text) {
         if(!existing) {
           courses.push(ic);
         } else if(!existing.updatedAt || (ic.updatedAt && ic.updatedAt >= existing.updatedAt)) {
-          /* courses = courses.map(c=>c.id===ic.id?ic:c); */ replaceCourse(ic);
+           courses = courses.map(c=>c.id===ic.id?ic:c); replaceCourse(ic);
         }
       });
     }
@@ -2458,9 +2458,9 @@ function mergeDataText(text, mode) {
   if(mode==='overwrite') {
     const hasExisting=bag.length||courses.length||rounds.length||history.length;
     if(hasExisting&&!confirm('OVERWRITE will replace ALL your current data.\n\nThis cannot be undone. Are you sure?')) return;
-    /* if(newBag.length) bag=newBag; */ if(newBag.length) setBag(newBag);
-    /* if(newRounds.length) rounds=newRounds; */ if(newRounds.length) setRounds(newRounds);
-    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); /* profile=newProfile; */ setProfile(newProfile);}
+    if(newBag.length) bag=newBag;  if(newBag.length) setBag(newBag);
+     if(newRounds.length) rounds=newRounds; if(newRounds.length) setRounds(newRounds);
+    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); profile=newProfile; setProfile(newProfile);}
     if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
     if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
     if(newCourses.length){
@@ -2468,7 +2468,7 @@ function mergeDataText(text, mode) {
         const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
         const existing=courses.find(c=>c.id===ic.id);
         if(!existing) courses.push(ic);
-        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) { /* courses=courses.map(c=>c.id===ic.id?ic:c); */ replaceCourse(ic); }
+        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) { courses=courses.map(c=>c.id===ic.id?ic:c);  replaceCourse(ic); }
       });
     }
     if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
@@ -2486,7 +2486,7 @@ function mergeDataText(text, mode) {
       alert('Append: nothing new to add — all rounds and sessions already present.'); return;
     }
     if(!confirm(`Append will add ${toAdd.length} new round(s) and ${histToAdd.length} new session(s).\n\nNo existing data will be changed. Continue?`)) return;
-    /* rounds=[...rounds,...toAdd]; */ rounds.push(...toAdd);
+     rounds=[...rounds,...toAdd];  rounds.push(...toAdd);
     histToAdd.forEach(h=>history.unshift(h));
     save(); renderAll();
     alert(`Appended: ${toAdd.length} round(s), ${histToAdd.length} session(s).`);
@@ -2511,7 +2511,7 @@ function mergeDataText(text, mode) {
       const existing=courses.find(c=>c.id===ic.id);
       if(!existing){courses.push(ic); coursesAdded++;}
       else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>existing.updatedAt)){
-        /* courses=courses.map(c=>c.id===ic.id?ic:c); */ replaceCourse(ic); coursesUpdated++;
+         courses=courses.map(c=>c.id===ic.id?ic:c);  replaceCourse(ic); coursesUpdated++;
       }
     });
 
@@ -2545,7 +2545,7 @@ function onMergeFile(e, mode) {
   reader.onload=ev=>{ if(st) st.textContent=''; mergeDataText(ev.target.result, mode); };
   reader.readAsText(file);
 }
-
+*/
 /*async function onRepoSearch() {
   const input=document.getElementById('repoSearchInput');
   const status=document.getElementById('repoSearchStatus');
@@ -2580,7 +2580,7 @@ function onMergeFile(e, mode) {
 }*/
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function showTab(id) {
+/*function showTab(id) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
@@ -2592,11 +2592,11 @@ function showTab(id) {
   if(id==='gordy') renderAIHelp();
   if(id==='sessions') renderSessions();
   if(id==='viz') initViz();
-}
+}*/
 
 // ── Profile tab ───────────────────────────────────────────────────────────────
-function saveProfile() {
-  /* profile = { */ setProfile({
+/*function saveProfile() {
+  profile = { setProfile({
     name:         document.getElementById('pfName')?.value||'',
     age:          document.getElementById('pfAge')?.value||'',
     gender:       document.getElementById('pfGender')?.value||'',
@@ -2605,7 +2605,7 @@ function saveProfile() {
     homeCourseId: profile.homeCourseId||'',
     notes:        document.getElementById('pfNotes')?.value||'',
     yardType:     document.getElementById('pfYardType')?.value||'Total'
-  /* }; */ });
+   };  });
   save();
   renderProfileHero();
 }
@@ -2671,7 +2671,7 @@ function renderProfile() {
     }
   }
   renderGistSettings();
-}
+}*/
 
 // ── Club entry mode (Simple / Detailed) ──────────────────────────────────────
 /*function clubDetailMode() { return localStorage.getItem('vc:clubMode')!=='simple'; }
@@ -3050,7 +3050,7 @@ function showTabFromProfile(id) {
 }
 
 // ── Profile dropdown ──────────────────────────────────────────────────────────
-function toggleProfileDropdown() {
+/*function toggleProfileDropdown() {
   const dd=document.getElementById('profDropdown');
   if(!dd) return;
   if(dd.classList.contains('open')) { closeProfileDropdown(); return; }
@@ -3120,7 +3120,7 @@ function renderDropdown() {
     if(dot) dot.style.background='#888';
     if(syncSt) syncSt.textContent='⚪ No sync profile';
     if(syncBtns) syncBtns.innerHTML=`<button class="btn gold" style="font-size:.6rem;padding:3px 8px" onclick="closeProfileDropdown();showTabFromProfile('profile')">Set up →</button>`;
-  }
+  }*/
 
   // Sign out block
   const sob=el('ddSignOutBlock');
@@ -3174,7 +3174,7 @@ function _doSignOut() {
   renderDropdown();
   alert('Signed out of sync profile. Your data remains on this device.');
 }*/
-function onHomeClubSelect() {
+/*function onHomeClubSelect() {
   const val = document.getElementById('pfHomeClubSelect')?.value||'';
   if(val==='') { profile.homeClub=''; profile.homeCourseId=''; save(); renderProfileHero(); renderCourseList(); return; }
   const course = courses.find(c=>c.id===val);
@@ -3191,7 +3191,7 @@ function onHomeClubInput() {
   // Re-sort course list if on courses tab
   const coursesPanel = document.getElementById('tab-courses');
   if(coursesPanel&&coursesPanel.classList.contains('active')) renderCourseList();
-}
+}*/
 
 /*function editCourse(id) {
   const foundCourse = id ? courses.find(c=>c.id===id) : null;
@@ -5003,7 +5003,7 @@ async function checkAppUpdate() {
 }*/
 
 
-function updateCourseDropdowns() {
+/*function updateCourseDropdowns() {
   const sel = document.getElementById('rCourseSelect');
   if(!sel) return;
   const cur = sel.value;
@@ -5014,7 +5014,7 @@ function updateCourseDropdowns() {
   if(cur && (cur==='__manual__' || courses.find(c=>c.id===cur))) sel.value=cur;
 }
 function renderAll(){
-  /*vizInitDone=false*/setVizInitDone(false); // force viz shelf to rebuild with fresh bag IDs
+  vizInitDone=falsesetVizInitDone(false); // force viz shelf to rebuild with fresh bag IDs
   renderProfile(); renderClubs(); renderCourseList(); renderHandicap(); renderAIHelp(); updateCourseSelects(); renderSessions();
   // Set rCourse autofill once
   const rc=document.getElementById('rCourse');
@@ -5022,7 +5022,7 @@ function renderAll(){
     const c=courses.find(x=>x.name===this.value);
     if(c){const r=document.getElementById('rRating'),s=document.getElementById('rSlope'),p=document.getElementById('rPar');if(r)r.value=c.rating;if(s)s.value=c.slope;if(p)p.value=c.par;updateDiffPreview();}
   });}
-}
+}*/
 
 // ── Viz Tab ───────────────────────────────────────────────────────────────────
 /*const VIZ_COLORS=['#d94030','#3070c0','#28a050','#c07820','#8050c0','#c03080','#20a0a0',
@@ -6708,7 +6708,7 @@ function lrShowScreen(id) {
 // ── Wire pill into renderHandicap ──────────────────────────────────────────
 
 // ── Disclaimer ────────────────────────────────────────────────────────────────
-function showDisclaimer() {
+/*function showDisclaimer() {
   document.getElementById('discModal').style.display = 'flex';
 }
 function acceptDisclaimer() {
@@ -6717,11 +6717,11 @@ function acceptDisclaimer() {
 }
 function confirmClearAll() {
   ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version'].forEach(k=>localStorage.removeItem(k));
-  /* bag=[]; courses=[]; rounds=[]; history=[]; profile={}; */ clearAll();
+   bag=[]; courses=[]; rounds=[]; history=[]; profile={};  clearAll();
   document.getElementById('clearModal').style.display='none';
   document.getElementById('uploadBanner').style.display='flex';
   renderAll();
-}
+}*/
 if(!localStorage.getItem('vc:disc') && window.self === window.top) showDisclaimer();
 </script>
 
