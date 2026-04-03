@@ -3343,7 +3343,7 @@ function saveCourse() {
   save(); vizInitDone=false setVizInitDone(false); cancelCourseEdit(); renderCourseList();
 }
 */
-
+/*
 // ── Handicap tab ──────────────────────────────────────────────────────────────
 function renderHandicap() {
   const rDateEl=document.getElementById('rDate'); if(rDateEl) rDateEl.value=today();
@@ -3517,7 +3517,7 @@ function addRound() {
     const nt=row.querySelector('.rh-notes')?.value?.trim()||'';
     if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt,yards:row.dataset.yards||''});
   });
-  /* rounds=[{id:uid(),...},...rounds]; */ rounds.unshift({id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes});
+   rounds=[{id:uid(),...},...rounds];  rounds.unshift({id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes});
   save(); renderHandicap();
   // Clear form
   document.getElementById('rScore').value='';
@@ -3536,7 +3536,7 @@ function addRound() {
   if(mBtn){mBtn.textContent='Simple';mBtn.classList.remove('on');}
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
 }
-function deleteRound(id){ /* rounds=rounds.filter(r=>r.id!==id); */ removeRound(id);save();renderHandicap();}
+function deleteRound(id){  rounds=rounds.filter(r=>r.id!==id);  removeRound(id);save();renderHandicap();}
 function toggleRndSection(key){
   const ids = {excluded:'roundListExcluded', multi:'roundListMulti', archive:'roundListArchive'};
   const listEl = document.getElementById(ids[key]);
@@ -3857,7 +3857,7 @@ ${courseSection}
 === EXISTING SESSIONS ===
 ${history.filter(h=>h.type==='manual'||h.type==='optimisation'||h.type==='caddie'||h.type==='both').slice(0,10).map(h=>`SESSION_ID | ${h.id} | ${fmtDate(h.date)} | ${h.type} | ${h.course||''} (${h.tee||''})`).join('\n')||'# No sessions yet.'}`;
   downloadTask(`vc-round-task-${today()}.txt`, content);
-}
+}*/
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 function updateCourseSelects() { updateCourseDropdowns(); }
@@ -4307,7 +4307,7 @@ function importSessionResult(e){ _fileImport(e,undefined,'pasteResult'); }
 function importPastedResult(){ _pasteImport('pasteResult',undefined); }
 
 // ── Phase 5.1 — Player Profile PDF ───────────────────────────────────────────
-function exportProfilePdf() {
+/*function exportProfilePdf() {
   const hcp     = getHandicap();
   const name    = profile.name || 'Golfer';
   const handed  = profile.handed || '';
@@ -4440,7 +4440,7 @@ ${rounds.length ? `
   const w    = window.open(url, '_blank');
   if(w) w.onunload = () => URL.revokeObjectURL(url);
   else  URL.revokeObjectURL(url);
-}
+}*/
 
 // ── Phase 5.1 — Session Scorecard PDF ────────────────────────────────────────
 function exportSessionPdf(id) {
