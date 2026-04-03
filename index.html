@@ -1531,6 +1531,7 @@ body{
 } from './src/viz.js';
   import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange } from './src/clubs.js';
   import { renderCourseList } from './src/courses.js';
+  import './src/live-round.js';
   // ── Data ──────────────────────────────────────────────────────────────────────
 /*const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
@@ -5735,7 +5736,7 @@ renderAll();
 })();
 // 2.5 — on load: check for pending session result in Gist + check for app update
 checkAppUpdate();
-
+/*
 // ── Live Round Tracker ────────────────────────────────────────────────────────
 // lrState shape:
 // { courseId, courseName, tee, date, conditions, mode, countForHandicap,
@@ -6536,7 +6537,7 @@ function lrSaveRound() {
     })),
   };
 
-  /* rounds = [newRound, ...rounds]; */ rounds.unshift(newRound);
+   rounds = [newRound, ...rounds];  rounds.unshift(newRound);
   save();
   renderHandicap();
   lrState.saved = true;
@@ -6698,7 +6699,7 @@ function lrShowScreen(id) {
   // Always hide end banner on screen change
   const b=document.getElementById('lrEndBanner');
   if(b) b.style.display='none';
-}
+}*/
 
 // ── Wire pill into renderHandicap ──────────────────────────────────────────
 
