@@ -371,3 +371,4 @@ Object.assign(window, {
   deleteTee, selectEditTee, updateHole, updateHoleTotals, saveCourse,
   addCourseFromRepo, onRepoSearch, _stripGeometry
 });
+Object.assign(window, { cancelAddTee, cancelCourseEdit, confirmAddTee, editCourse, onRepoSearch, saveCourse, showAddTeeRow });
