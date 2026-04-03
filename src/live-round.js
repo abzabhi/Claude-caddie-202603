@@ -982,3 +982,4 @@ Object.assign(window, {
   lrAdj, lrSetGir, lrToggleNote, lrSaveNote,
   lrSetPlayer, lrRenderHole, lrRenderTally, lrShowScreen,
 });
+Object.assign(window, { lrAddPlayer, lrBeginRound, lrCancelEndBanner, lrCancelSetup, lrConfirmEnd, lrDiscardRound, lrEndRound, lrExpand, lrExportPdf, lrGoHole, lrMinimize, lrOnCourseSelect, lrOnHoleCountChange, lrOnModeChange, lrSaveRound, lrSetPar, lrSetView, lrShowHole, lrShowTally, lrShowTallyFromSummary, lrStartSetup, lrTogParPicker });
