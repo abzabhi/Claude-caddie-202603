@@ -73,7 +73,7 @@ function updateCadTees() {
   if(course.selectedTee) sel.value = course.selectedTee;
 }
 
-function renderAIHelp() {
+export function renderAIHelp() {
   // Populate caddie course select + restore opt tier
   const cs = document.getElementById('cadCourse');
   if(cs) {
