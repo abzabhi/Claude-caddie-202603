@@ -97,7 +97,7 @@ function getFavCourseId() {
   return courses.find(c=>c.name===topName)?.id || null;
 }
 
-function renderCourseList() {
+export function renderCourseList() {
   document.getElementById('coursesBadge').textContent = courses.length;
   const dl = document.getElementById('homeClubList');
   if(dl) dl.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
