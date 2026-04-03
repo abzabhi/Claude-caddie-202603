@@ -1532,6 +1532,9 @@ body{
   import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange } from './src/clubs.js';
   import { renderCourseList } from './src/courses.js';
   import './src/live-round.js';
+  import './src/sync.js';
+  import { renderHandicap } from './src/rounds.js';
+  import { renderAIHelp, renderSessions } from './src/caddie.js';
   // ── Data ──────────────────────────────────────────────────────────────────────
 /*const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
@@ -1914,7 +1917,7 @@ async function addCourseFromRepo(courseId,statusElId) {
   save(); renderAll();
   if(st) st.textContent=`✅ "${course.name}" added to your courses.`;
 } */
-function getSkillText() {
+/*function getSkillText() {
   return localStorage.getItem('vc:skill') ||
     '[Skill unavailable — cache empty and Gist unreachable. Upload skill.md alongside this export file in your AI chat.]';
 }
@@ -1962,7 +1965,7 @@ Diff = round((Score - Rating) * 113 / Slope, 1). Leave blank if rating/slope unk
 GIR: Y if green reached in (par minus 2) strokes or fewer, N otherwise. Leave blank if unknown.
 SESSIONIDS: only include if user specifies which caddie plan they used — leave line out entirely if not mentioned.
 AI-agnostic: plain language only, no platform-specific features.`;
-}
+}*/
 // Fetch on load — silent, non-blocking; re-parse flight data after ref update
 Promise.allSettled([
   _fetchAndCache(GIST_SKILL_URL,      'vc:skill',      'SkillVersion'),
@@ -3861,7 +3864,7 @@ ${history.filter(h=>h.type==='manual'||h.type==='optimisation'||h.type==='caddie
 }*/
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
-function updateCourseSelects() { updateCourseDropdowns(); }
+/*function updateCourseSelects() { updateCourseDropdowns(); }
 
 function updateCadTees() {
   const courseId = document.getElementById('cadCourse')?.value;
@@ -3931,7 +3934,7 @@ function renderSessions() {
 }
 function toggleSession(id) { document.getElementById('si-' + id)?.classList.toggle('open'); }
 function deleteCaddieSession(id) {
-  /* history = history.filter(h => h.id !== id); */ removeHistory(id);
+   history = history.filter(h => h.id !== id);  removeHistory(id);
   save(); renderSessions();
 }
 // Keep renderHistory as alias so import logic still works
@@ -4306,7 +4309,7 @@ function importPastedRoundResult() { _pasteImport('pasteRoundResult','rounds'); 
 // Legacy aliases — keep so any stale references don't break
 function importSessionResult(e){ _fileImport(e,undefined,'pasteResult'); }
 function importPastedResult(){ _pasteImport('pasteResult',undefined); }
-
+*/
 // ── Phase 5.1 — Player Profile PDF ───────────────────────────────────────────
 /*function exportProfilePdf() {
   const hcp     = getHandicap();
@@ -4444,7 +4447,7 @@ ${rounds.length ? `
 }*/
 
 // ── Phase 5.1 — Session Scorecard PDF ────────────────────────────────────────
-function exportSessionPdf(id) {
+/*function exportSessionPdf(id) {
   const h = history.find(x=>x.id===id);
   if(!h) return;
   const lines = (h.text||'').split('\n');
@@ -4460,7 +4463,7 @@ function exportSessionPdf(id) {
     if(l.startsWith('YARDAGE GAPS:'))   { gaps=l.replace('YARDAGE GAPS:','').trim(); continue; }
     if(/^H\d+\s*\|/.test(l))           { holeLines.push(l); continue; }
     if(/^\d+\.\s+/.test(l))            { bagLines.push(l); continue; }
-    if(l.startsWith('+'))              { putterLine=l.replace(/^\+\s*/,''); continue; }
+    if(l.startsWith('+'))              { putterLine=l.replace(/^\+\s,''); continue; }
     if(/^\d+\.\s/.test(l) && holeLines.length===0 && bagLines.length>0) { stratLines.push(l); continue; }
     // Strategy lines appear after bag list and before holes
     if(bagLines.length>0 && holeLines.length===0 && /^\d+\./.test(l)) stratLines.push(l);
@@ -4699,7 +4702,7 @@ ${taskText}
 ${existingLine}${preLoadedBlock}`;
 
   downloadTask(`vc-course-task-${today()}.txt`, content);
-}
+}*/
 
 
 /*const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
