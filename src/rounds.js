@@ -2,7 +2,7 @@ import { calcHandicap, calcDiff, fmtDate, deriveStats, calcImplied } from './geo
 import { rounds, history, bag, courses, profile, removeRound, save, today } from './store.js';
 import { getTypeLabel } from './clubs.js';
 
-function renderHandicap() {
+export function renderHandicap() {
   const rDateEl=document.getElementById('rDate'); if(rDateEl) rDateEl.value=today();
   updateCourseDropdowns();
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
