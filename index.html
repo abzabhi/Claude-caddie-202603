@@ -3121,7 +3121,7 @@ function renderDropdown() {
     if(dot) dot.style.background='#888';
     if(syncSt) syncSt.textContent='⚪ No sync profile';
     if(syncBtns) syncBtns.innerHTML=`<button class="btn gold" style="font-size:.6rem;padding:3px 8px" onclick="closeProfileDropdown();showTabFromProfile('profile')">Set up →</button>`;
-  }*/
+  }
 
   // Sign out block
   const sob=el('ddSignOutBlock');
@@ -3129,7 +3129,7 @@ function renderDropdown() {
     ?`<button class="btn danger" style="width:100%;font-size:.68rem" onclick="signOutSync()">🔓 Sign out of sync</button>`
     :``;
 }window.renderDropdown = renderDropdown;
-
+*/
 /*function _clubRange(activeClubs) {
   // Return e.g. "4i – Driver"
   const order=['Driver','Fairway Wood','Hybrid','Iron','Wedge'];
