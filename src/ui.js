@@ -590,4 +590,4 @@ Object.assign(window, {
   updateCourseDropdowns, renderAll,
   showDisclaimer, acceptDisclaimer, confirmClearAll
 });
-    
+  Object.assign(window, { acceptDisclaimer, closeProfileDropdown, confirmClearAll, ddNav, importData, onHomeClubSelect, onMergeFile, saveData, saveProfile, showDisclaimer, toggleProfileDropdown });  
