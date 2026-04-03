@@ -643,3 +643,4 @@ Object.assign(window, {
   toggleRoundMode, rndGridView, rndGirCycle, toggleRndLinker,
   exportRoundTask, exportProfilePdf
 });
+Object.assign(window, { addRound, exportProfilePdf, exportRoundTask, onRoundCourseSelect, onRoundTeeSelect, toggleRndLinker, toggleRndSection, toggleRoundMode, updateDiffPreview });
