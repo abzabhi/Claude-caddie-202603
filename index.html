@@ -6724,6 +6724,29 @@ function confirmClearAll() {
   renderAll();
 }*/
 if(!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
+Object.assign(window, {
+  showTab, showTabFromProfile, ddNav,
+  acceptDisclaimer, addClub, addCourseFromRepo, addRound, addSession, addSessionSimple,
+  bannerLoadGist, cancelAddTee, cancelCourseEdit, confirmAddTee, confirmClearAll,
+  deleteCaddieSession, deleteClubSession, deleteCourse, deleteRound, deleteTee,
+  disconnectSync,
+  exportClubTask, exportCourseTask, exportForAI, exportRoundTask, exportStarterTxt,
+  finishSyncLoad, finishSyncSetup,
+  importPastedCaddieResult, importPastedClubResult, importPastedCourseResult, importPastedRoundResult,
+  kvPull, kvPush,
+  lrAddPlayer, lrAdj, lrBeginRound, lrCancelEndBanner, lrCancelSetup, lrConfirmEnd,
+  lrDiscardRound, lrEndRound, lrExpand, lrExportPdf, lrGoHole, lrMinimize,
+  lrRemovePlayer, lrRenderHole, lrRenderTally, lrSaveRound, lrSetGir, lrSetPar,
+  lrSetPlayer, lrSetView, lrShowHole, lrShowScreen, lrShowTally, lrShowTallyFromSummary,
+  lrStartSetup, lrTogParPicker, lrToggleMe, lrToggleNote,
+  onVizModeChange, renderProfileSync, renderViz, resetVizMaxRange,
+  rndDetailView, rndGirCycle, rndGridView, rndRegenPdf, rndSaveLinks, rndToggleDetail, rndToggleLink,
+  saveCourse, saveManualBag, saveManualPlan, selectEditTee, setHcpMode, setVizDisplay, setVizYard,
+  showAddTeeRow, showSyncLoad, startSyncSetup, syncHoleClubsFromSession,
+  toggleActive, toggleCard, toggleClub, toggleClubMode, toggleHomeCourse, toggleImplied,
+  toggleRndLinker, toggleRndSection, toggleRoundMode, toggleSession,
+  vizSelectHole, vizToggleClub, vizTogglePath, vizTogglePlanner,
+});
 </script>
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
