@@ -61,10 +61,17 @@ async function kvPush(statusElId) {
   }
   if(st) st.textContent='Encrypting\u2026';
   try {
-    const payload=await _encrypt(serialise(), pass);
-    const r=await fetch(GORDY_SYNC_URL+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:payload});
+    const blob=await _encrypt(serialise(), pass);
+    const blobRecovery=sessionStorage.getItem('vc:blobRecovery')||'';
+    const version=(parseInt(sessionStorage.getItem('vc:version')||'0',10)||0)+1;
+    const r=await fetch(_D1_BASE+'/sync/push/'+id, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({blob, blob_recovery:blobRecovery, version})
+    });
+    if(r.status===409){if(st) st.textContent='\u26A0 Version conflict \u2014 pull first to get latest data.'; return;}
     if(r.status===429){if(st) st.textContent='\u26A0 Rate limited \u2014 wait 30s and try again.'; return;}
     if(!r.ok){if(st) st.textContent='\u26A0 Push failed ('+r.status+')'; _kvQueuePush(); return;}
+    sessionStorage.setItem('vc:version', String(version));
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
@@ -358,6 +365,7 @@ async function dbPull(syncId, passphrase) {
     if (!r.ok)            return { ok: false, error: 'server_' + r.status };
     const j = await r.json().catch(() => ({}));
     let envelope = j.blob || '', version = j.version != null ? j.version : null;
+    if (j.blob_recovery) sessionStorage.setItem('vc:blobRecovery', j.blob_recovery);
     let plaintext;
     try { plaintext = await _decrypt(envelope, passphrase); }
     catch { return { ok: false, error: 'bad_passphrase' }; }
