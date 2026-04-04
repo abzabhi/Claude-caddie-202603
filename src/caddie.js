@@ -775,10 +775,10 @@ Object.assign(window, {
   updateCourseSelects, updateCadTees, renderAIHelp, renderSessions,
   toggleSession, deleteCaddieSession, renderHistory,
   exportForAI, toggleCard,
+  fmtDate, deriveStats,
   importCaddieResult, importClubResult, importCourseResult, importRoundResult,
   importPastedCaddieResult, importPastedClubResult, importPastedCourseResult, importPastedRoundResult,
   importSessionResult, importPastedResult,
   exportSessionPdf, exportStarterTxt, downloadTask, exportClubTask, exportCourseTask,
   getRoundTaskText
 });
-Object.assign(window, { exportClubTask, exportCourseTask, exportForAI, exportStarterTxt, importCaddieResult, importClubResult, importCourseResult, importPastedCaddieResult, importPastedClubResult, importPastedCourseResult, importPastedRoundResult, importRoundResult, toggleCard, updateCadTees });
