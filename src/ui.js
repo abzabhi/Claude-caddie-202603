@@ -587,7 +587,7 @@ Object.assign(window, {
   showTabFromProfile,
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
-  updateCourseDropdowns, renderAll,
+  updateCourseDropdowns, renderAll, serialise,
   showDisclaimer, acceptDisclaimer, confirmClearAll
 });
-  Object.assign(window, { acceptDisclaimer, closeProfileDropdown, confirmClearAll, ddNav, importData, onHomeClubSelect, onMergeFile, saveData, saveProfile, showDisclaimer, toggleProfileDropdown });  
+    
