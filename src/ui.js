@@ -254,6 +254,27 @@ function _parseDataText(text) {
   return {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines};
 }
 
+// Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
+// renderAll is called by gateUnlocked() after this returns.
+function dbLoadData(text) {
+  const {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
+  if(newBag.length) setBag(newBag);
+  if(newRounds.length) setRounds(newRounds);
+  if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
+  if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
+  if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
+  if(newCourses.length){
+    newCourses.forEach(ic=>{
+      const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
+      const existing=courses.find(c=>c.id===ic.id);
+      if(!existing) courses.push(ic);
+      else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
+    });
+  }
+  if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
+  save();
+}
+
 // mode: 'append' | 'merge' | 'overwrite'
 function mergeDataText(text, mode) {
   const {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
@@ -582,7 +603,7 @@ function confirmClearAll() {
 }
 
 Object.assign(window, {
-  saveData, exportData, processDataText, importData, onMergeFile,
+  saveData, exportData, processDataText, dbLoadData, importData, onMergeFile,
   showTab, saveProfile, renderProfileHero, renderProfile,
   showTabFromProfile,
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
@@ -590,4 +611,3 @@ Object.assign(window, {
   updateCourseDropdowns, renderAll, serialise,
   showDisclaimer, acceptDisclaimer, confirmClearAll
 });
-    
