@@ -667,7 +667,7 @@ body{
 
   <!-- CLUBS -->
   <!-- PROFILE -->
-  <div id="tab-profile" class="panel">
+  <div id="tab-profile" class="panel active">
 
     <!-- Data Sync — top of profile for visibility -->
     <div class="card" id="gistSettingsCard" style="margin-bottom:14px">
@@ -984,7 +984,7 @@ body{
   </div>
 
   <!-- AI HELP -->
-  <div id="tab-gordy" class="panel active">
+  <div id="tab-gordy" class="panel">
 
     <!-- Card 1: Caddie Session -->
     <div class="card">
@@ -1929,7 +1929,21 @@ function gateOnSyncIdInput() {
 function gateInit() {
   if (sessionStorage.getItem('vc:gateUnlocked')) {
     var active = rehydrateActiveSession ? rehydrateActiveSession() : null;
-    gateUnlocked(active);
+    var kvId = localStorage.getItem('vc:kvId');
+    var kvPass = sessionStorage.getItem('vc:kvPass');
+    if (kvId && kvPass && window.dbPull) {
+      // Re-pull data on refresh -- store is empty until data is reloaded
+      _gateLoading(true);
+      window.dbPull(kvId, kvPass).then(function() {
+        _gateLoading(false);
+        gateUnlocked(active);
+      }).catch(function() {
+        _gateLoading(false);
+        gateUnlocked(active); // still unlock even if pull fails (offline etc)
+      });
+    } else {
+      gateUnlocked(active);
+    }
     return;
   }
   var gate = document.getElementById('authGate');
@@ -2109,8 +2123,8 @@ function gateUnlocked(active) {
   if (gate) gate.style.display = 'none';
   var app = document.getElementById('appRoot');
   if (app) app.style.display = '';
-  renderAll();
-  // Route to active session if present; otherwise default to GORDy tab
+  try { renderAll(); } catch(e) { console.error('renderAll error:', e); }
+  // Route to active session if present; otherwise default to Profile tab
   if (active && active.type === 'round') {
     showTabFromProfile('rounds');
     if (window.lrExpand) window.lrExpand();
