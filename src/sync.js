@@ -329,7 +329,7 @@ function _doSignOut() {
 }
 
 Object.assign(window, {
-  kvId, kvMode, kvPush, kvPull, syncSave,
+  kvId, kvMode, kvPush, kvPull, syncSave, _fmtAgo,
   bannerLoadGist, startSyncSetup, finishSyncSetup,
   showSyncLoad, finishSyncLoad, disconnectSync,
   renderProfileSync, renderGistSettings, checkAppUpdate,
@@ -361,7 +361,8 @@ async function dbPull(syncId, passphrase) {
     let plaintext;
     try { plaintext = await _decrypt(envelope, passphrase); }
     catch { return { ok: false, error: 'bad_passphrase' }; }
-    try { processDataText(plaintext); } catch(e) { console.warn('processDataText error (non-fatal):', e); }
+    // Parse data into store without triggering renderAll -- gateUnlocked() renders after auth
+    try { window.processDataText && window.processDataText(plaintext); } catch(e) { console.error('dbPull parse error:', e); }
     localStorage.setItem('vc:kvId', id);
     sessionStorage.setItem('vc:kvPass', passphrase);
     if (version != null) sessionStorage.setItem('vc:version', String(version));
