@@ -541,14 +541,17 @@ const meta = [lrState.courseName, rt!==null?lrRelLabel(rt)+' vs par':''].filter(
 pill.classList.add('visible');
 document.getElementById('lrPillTxt').textContent = txt;
 document.getElementById('lrPillMeta').textContent = meta;
-// Floating pill (all tabs)
+/* lrFloatPill deprecated -- replaced by #sessionPill (Session C)
 if(floatPill) {
   floatPill.classList.add('visible');
   document.getElementById('lrFloatTxt').textContent = txt;
   document.getElementById('lrFloatMeta').textContent = meta;
 }
+*/
 // Header pulsing dot
 liveDot?.classList.add('visible');
+// Universal session pill (replaces deprecated lrFloatPill -- Session C)
+if(window.updateSessionPill) window.updateSessionPill();
 }
 
 // \u2500\u2500 Tally view \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -982,4 +985,3 @@ Object.assign(window, {
   lrAdj, lrSetGir, lrToggleNote, lrSaveNote,
   lrSetPlayer, lrRenderHole, lrRenderTally, lrShowScreen,
 });
-Object.assign(window, { lrAddPlayer, lrBeginRound, lrCancelEndBanner, lrCancelSetup, lrConfirmEnd, lrDiscardRound, lrEndRound, lrExpand, lrExportPdf, lrGoHole, lrMinimize, lrOnCourseSelect, lrOnHoleCountChange, lrOnModeChange, lrSaveRound, lrSetPar, lrSetView, lrShowHole, lrShowTally, lrShowTallyFromSummary, lrStartSetup, lrTogParPicker });
