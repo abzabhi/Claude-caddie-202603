@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gordy Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; font-size: 14px; background: #f4f4f4; color: #222; padding: 20px; }
+  h1 { font-size: 18px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  .config { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .config input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; width: 280px; font-size: 13px; }
+  button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; background: #3b82f6; color: #fff; }
+  button:hover { background: #2563eb; }
+  button.danger { background: #ef4444; }
+  button.danger:hover { background: #dc2626; }
+  button.small { padding: 3px 8px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  th { background: #e5e7eb; text-align: left; padding: 7px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 7px 10px; border-top: 1px solid #f0f0f0; vertical-align: middle; }
+  tr:hover td { background: #fafafa; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .msg { margin: 8px 0; padding: 7px 12px; border-radius: 4px; font-size: 13px; }
+  .msg.ok { background: #d1fae5; color: #065f46; }
+  .msg.err { background: #fee2e2; color: #991b1b; }
+  .locked { color: #ef4444; font-size: 12px; }
+  #histSection { margin-top: 24px; }
+  #histInput { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  #histInput input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
+  #histTable { margin-top: 8px; }
+  .status { font-size: 12px; color: #666; margin-left: 8px; }
+</style>
+</head>
+<body>
+<h1>⛳ Gordy Admin</h1>
+
+<div class="config">
+  <input id="workerUrl" type="text" placeholder="Worker URL (e.g. https://gordy.workers.dev)">
+  <input id="adminKey" type="password" placeholder="Admin Key">
+  <button onclick="saveConfig()">Save</button>
+  <span id="configStatus" class="status"></span>
+</div>
+
+<h2>Users <button onclick="loadUsers()">Refresh</button></h2>
+<div id="usersMsg"></div>
+<div id="usersWrap"><table><thead><tr>
+  <th>Sync ID</th><th>Version</th><th>Last Modified</th><th>Pushes Today</th><th>Failed Attempts</th><th>Locked Until</th><th>Actions</th>
+</tr></thead><tbody id="usersBody"><tr><td colspan="7" style="color:#999">Click Refresh to load.</td></tr></tbody></table></div>
+
+<div id="histSection">
+  <h2>History Viewer</h2>
+  <div id="histInput">
+    <input id="histId" type="text" placeholder="Sync ID (e.g. GRD-abc123)">
+    <button onclick="loadHistory()">Load History</button>
+  </div>
+  <div id="histMsg"></div>
+  <div id="histTable"></div>
+</div>
+
+<script>
+function getConfig() {
+  return {
+    url: sessionStorage.getItem('gordy_url') || '',
+    key: sessionStorage.getItem('gordy_key') || '',
+  };
+}
+
+function saveConfig() {
+  const url = document.getElementById('workerUrl').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('adminKey').value.trim();
+  sessionStorage.setItem('gordy_url', url);
+  sessionStorage.setItem('gordy_key', key);
+  document.getElementById('configStatus').textContent = 'Saved.';
+}
+
+function adminFetch(path, method = 'GET', body = null) {
+  const { url, key } = getConfig();
+  if (!url || !key) { alert('Set Worker URL and Admin Key first.'); return null; }
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url + path, opts);
+}
+
+function showMsg(el, text, isErr) {
+  el.innerHTML = `<div class="msg ${isErr ? 'err' : 'ok'}">${text}</div>`;
+}
+
+async function loadUsers() {
+  const msg = document.getElementById('usersMsg');
+  const tbody = document.getElementById('usersBody');
+  tbody.innerHTML = '<tr><td colspan="7">Loading…</td></tr>';
+  try {
+    const res = await adminFetch('/admin/users');
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) { showMsg(msg, data.error || 'Error loading users.', true); return; }
+    msg.innerHTML = '';
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" style="color:#999">No users.</td></tr>'; return; }
+    tbody.innerHTML = data.map(u => `
+      <tr>
+        <td>${esc(u.sync_id)}</td>
+        <td>${u.version ?? '—'}</td>
+        <td>${u.last_modified ? u.last_modified.replace('T', ' ').slice(0,19) : '—'}</td>
+        <td>${u.push_count_today ?? 0}</td>
+        <td>${u.failed_attempts ?? 0}</td>
+        <td>${u.locked_until ? `<span class="locked">${u.locked_until.replace('T',' ').slice(0,19)}</span>` : '—'}</td>
+        <td><div class="actions">
+          <button class="small" onclick="resetCounter('${esc(u.sync_id)}')">Reset Counter</button>
+          <button class="small" onclick="unlockUser('${esc(u.sync_id)}')">Unlock</button>
+          <button class="small danger" onclick="deleteUser('${esc(u.sync_id)}')">Delete</button>
+        </div></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    showMsg(msg, 'Fetch error: ' + e.message, true);
+  }
+}
+
+async function deleteUser(sid) {
+  if (!confirm(`Delete ${sid} and all their history? This cannot be undone.`)) return;
+  const msg = document.getElementById('usersMsg');
+  try {
+    const res = await adminFetch(`/admin/users/${encodeURIComponent(sid)}`, 'DELETE');
+    if (!res) return;
+    const data = await res.json();
+    if (res.ok) { showMsg(msg, `Deleted ${sid}.`, false); loadUsers(); }
+    else showMsg(msg, data.error || 'Error.', true);
+  } catch (e) { showMsg(msg, e.message, true); }
+}
+
+async function resetCounter(sid) {
+  const msg = document.getElementById('usersMsg');
+  try {
+    const res = await adminFetch(`/admin/reset-counter/${encodeURIComponent(sid)}`, 'POST');
+    if (!res) return;
+    const data = await res.json();
+    if (res.ok) { showMsg(msg, `Counter reset for ${sid}.`, false); loadUsers(); }
+    else showMsg(msg, data.error || 'Error.', true);
+  } catch (e) { showMsg(msg, e.message, true); }
+}
+
+async function unlockUser(sid) {
+  const msg = document.getElementById('usersMsg');
+  try {
+    const res = await adminFetch(`/admin/unlock/${encodeURIComponent(sid)}`, 'POST');
+    if (!res) return;
+    const data = await res.json();
+    if (res.ok) { showMsg(msg, `Unlocked ${sid}.`, false); loadUsers(); }
+    else showMsg(msg, data.error || 'Error.', true);
+  } catch (e) { showMsg(msg, e.message, true); }
+}
+
+async function loadHistory() {
+  const sid = document.getElementById('histId').value.trim();
+  const msg = document.getElementById('histMsg');
+  const wrap = document.getElementById('histTable');
+  if (!sid) { showMsg(msg, 'Enter a Sync ID.', true); return; }
+  wrap.innerHTML = 'Loading…';
+  try {
+    const res = await adminFetch(`/admin/history/${encodeURIComponent(sid)}`);
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) { showMsg(msg, data.error || 'Error.', true); wrap.innerHTML = ''; return; }
+    msg.innerHTML = '';
+    if (!data.length) { wrap.innerHTML = '<p style="color:#999;margin-top:4px">No history entries.</p>'; return; }
+    wrap.innerHTML = `<table><thead><tr><th>ID</th><th>Version</th><th>Written At</th></tr></thead><tbody>
+      ${data.map(h => `<tr><td>${h.id}</td><td>${h.version}</td><td>${(h.written_at||'').replace('T',' ').slice(0,19)}</td></tr>`).join('')}
+    </tbody></table>`;
+  } catch (e) {
+    showMsg(msg, e.message, true);
+    wrap.innerHTML = '';
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Restore config on load
+window.addEventListener('DOMContentLoaded', () => {
+  const { url, key } = getConfig();
+  if (url) document.getElementById('workerUrl').value = url;
+  if (key) document.getElementById('adminKey').value = key;
+});
+</script>
+</body>
+</html>
