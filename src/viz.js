@@ -221,7 +221,7 @@ export function renderViz(){
       const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
       clubs=entry?vizClubsFromEntry(entry):bag.filter(c=>c.tested&&c.type!=='Putter');
     }
-    const disps=clubs.map(c=>vizGetDisp(club,hcp,handed,profile.yardType||'Total',vizYardMode)).filter(Boolean);
+    const disps=clubs.map(c=>vizGetDisp(c,hcp,handed,profile.yardType||'Total',vizYardMode)).filter(Boolean);
     const title=vizClubSrc==='optimised'?'Optimised bag · HCP '+hcp:'Custom · HCP '+hcp;
     const maxRange=+document.getElementById('vizMaxRange')?.value||calcVizMaxRange();
     const interval=+document.getElementById('vizRangeInterval')?.value||25;
@@ -249,7 +249,7 @@ export function onVizModeChange(m){
   document.getElementById('vizHoleControls').style.display=m==='hole'?'block':'none';
   renderViz();
 }
-export function onVizClubSrcChange(){
+function onVizClubSrcChange(){
   vizClubSrc=document.getElementById('vizClubSrcSel').value;
   document.getElementById('vizOptSessionField').style.display=vizClubSrc==='optimised'?'flex':'none';
   document.getElementById('vizClubShelf').style.display='flex';
@@ -407,7 +407,7 @@ export function syncHoleClubsFromSession(){
 }
 /*let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
 let vizPlannerOpen=false;*/
-export function _buildBagMap(){
+function _buildBagMap(){
   return bag.filter(c=>vizSelectedClubs.has(c.id)&&c.type!=='Putter').map(c=>c.identifier||c.type);
 }
 export function _buildHoleMapFromEdits(){
