@@ -1887,10 +1887,10 @@ function showTabFromProfile(id) {
 
 
 // -- Live Round Tracker -- state (declared before renderAll) ------------------
-let lrState = null; // null = no active round
+window.lrState = null; // null = no active round
 
 // Active session hooks -- called by dbPush to snapshot state to localStorage
-window._getActiveRound = function() { return lrState; };
+window._getActiveRound = function() { return window.lrState; };
 window._getActiveRange = function() { return null; }; // range not built yet
 
 // -- Gate state ---------------------------------------------------------------
