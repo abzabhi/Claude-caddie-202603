@@ -369,8 +369,8 @@ async function dbPull(syncId, passphrase) {
     let plaintext;
     try { plaintext = await _decrypt(envelope, passphrase); }
     catch { return { ok: false, error: 'bad_passphrase' }; }
-    // Parse data into store without triggering renderAll -- gateUnlocked() renders after auth
-    try { window.processDataText && window.processDataText(plaintext); } catch(e) { console.error('dbPull parse error:', e); }
+    // Load data into store silently -- no confirm/alert/renderAll (gateUnlocked renders after)
+    try { window.dbLoadData && window.dbLoadData(plaintext); } catch(e) { console.error('dbPull parse error:', e); }
     localStorage.setItem('vc:kvId', id);
     sessionStorage.setItem('vc:kvPass', passphrase);
     if (version != null) sessionStorage.setItem('vc:version', String(version));
