@@ -361,7 +361,7 @@ async function dbPull(syncId, passphrase) {
     let plaintext;
     try { plaintext = await _decrypt(envelope, passphrase); }
     catch { return { ok: false, error: 'bad_passphrase' }; }
-    processDataText(plaintext);
+    try { processDataText(plaintext); } catch(e) { console.warn('processDataText error (non-fatal):', e); }
     localStorage.setItem('vc:kvId', id);
     sessionStorage.setItem('vc:kvPass', passphrase);
     if (version != null) sessionStorage.setItem('vc:version', String(version));
