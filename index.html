@@ -2089,9 +2089,9 @@ async function gateRecovery(step) {
     if (p1.length < 8) { _gateErr('gateRecovErr3', 'Passphrase must be at least 8 characters.'); return; }
     if (p1 !== p2)     { _gateErr('gateRecovErr3', 'Passphrases do not match.'); return; }
     _gateLoading(true);
-    var pushResult   = await dbPushFull(_gateRecovId, p1, _gateRecovPlaintext);
     var newBlobRecov = await dbEncrypt(_gateRecovAnswer, p1);
-    await dbUpdateRecovery(_gateRecovId, newBlobRecov);
+    var pushResult   = await dbPushFull(_gateRecovId, p1, _gateRecovPlaintext, newBlobRecov);
+    /* dbUpdateRecovery not needed -- blob_recovery travels with every push */
     _gateLoading(false);
     if (!pushResult.ok) { _gateErr('gateRecovErr3', 'Failed to save new passphrase. Try again.'); return; }
     localStorage.setItem('vc:kvId', _gateRecovId);
@@ -2178,17 +2178,19 @@ async function gateRekeyBlob(newPassphrase) {
   var oldPass = sessionStorage.getItem('vc:kvPass') || '';
   // Re-push blob with new passphrase
   var plaintext = window.serialise ? window.serialise() : '';
-  var pushResult = await dbPushFull(id, newPassphrase, plaintext);
-  if (!pushResult.ok) return false;
-  // Re-encrypt recovery blob with new passphrase
+  // Re-encrypt recovery blob with new passphrase first (required in every push)
   var recov = await dbGetRecovery(id);
+  var newBlobRecov = null;
   if (recov.ok && recov.blobRecovery && oldPass) {
     try {
-      var answer      = await dbDecrypt(recov.blobRecovery, oldPass);
-      var newBlobRecov = await dbEncrypt(answer, newPassphrase);
-      await dbUpdateRecovery(id, newBlobRecov);
+      var answer = await dbDecrypt(recov.blobRecovery, oldPass);
+      newBlobRecov = await dbEncrypt(answer, newPassphrase);
     } catch {}
   }
+  if (!newBlobRecov) return false; // cannot push without blob_recovery
+  var pushResult = await dbPushFull(id, newPassphrase, plaintext, newBlobRecov);
+  if (!pushResult.ok) return false;
+  /* dbUpdateRecovery not needed -- blob_recovery travels with push */
   sessionStorage.setItem('vc:kvPass', newPassphrase);
   dbEncrypt('gordy-verify', newPassphrase).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
   // Update biometric-stored passphrase if active
