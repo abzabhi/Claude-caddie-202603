@@ -107,7 +107,9 @@ export function renderClubs() {
   const mBtn = document.getElementById('clubModeBtn');
   if(mBtn) { mBtn.textContent = clubDetailMode()?'Detailed':'Simple'; mBtn.classList.toggle('on', clubDetailMode()); }
   document.getElementById('clubList').innerHTML = playing.map(c=>clubRowHTML(c,false)).join('');
-  document.getElementById('putterSlot').innerHTML = putter?clubRowHTML(putter,true):'';
+  document.getElementById('putterSlot').innerHTML = putter
+    ? clubRowHTML(putter, true)
+    : '<button class="add-club-btn" style="margin-top:6px" onclick="addPutter()">\uFF0B Add Putter</button>';
 }
 
 export function clubRowHTML(c, isPutter) {
@@ -206,7 +208,7 @@ export function clubRowHTML(c, isPutter) {
       <div class="cctrl">
         ${!isPutter?`<button class="activetog" title="Toggle Active/Retired" onclick="toggleActive('${c.id}')"><div class="activeicon ${inc?'on':'off'}">${inc?'Active':'Retired'}</div></button>`:''}
         <button class="expbtn" onclick="toggleClub('${c.id}')">&#9660;</button>
-        ${!isPutter?`<button class="delx" onclick="deleteClub('${c.id}')">&#x2715;</button>`:''}
+        <button class="delx" onclick="${isPutter?'replacePutter':'deleteClub'}('${c.id}')" title="${isPutter?'Remove putter':'Delete club'}">&#x2715;</button>
       </div>
     </div>
     <div class="cpanel" id="cpanel-${c.id}" style="display:none">
@@ -330,9 +332,19 @@ export function calcVizMaxRange() {
   return Math.ceil(Math.max(...maxes)*1.2/10)*10.0;
 }
 
+export function addPutter() {
+  bag.push({ id:uid(), brand:'', type:'Putter', identifier:'Putter', stiffness:'', shaftLength:'', tested:'PUTTER', confidence:4, bias:'Straight', yardType:'', loft:'', model:'', sessions:[] });
+  save(); renderClubs();
+}
+
+export function replacePutter(id) {
+  if(!confirm('Remove this putter? You can add a new one after.')) return;
+  setBag(bag.filter(c=>c.id!==id)); save(); renderClubs();
+}
+
 Object.assign(window, {
   toggleClub, toggleActive, updateClub, addSession, updateSession,
-  deleteClubSession, deleteClub, addClub, toggleClubMode,
+  deleteClubSession, deleteClub, addClub, addPutter, replacePutter, toggleClubMode,
   onTypeChange, onVariantChange, addSessionSimple, toggleImplied, renderClubs,
   _clubRange, calcVizMaxRange
 });
