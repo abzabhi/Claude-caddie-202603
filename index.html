@@ -399,10 +399,182 @@ body{
 .sbb-par{background:transparent;color:var(--tx2);}
 .sbb-bogey{background:var(--sand2);color:var(--gold);border:1px solid var(--sand);}
 .sbb-double{background:#fdf2f2;color:var(--danger);border:1px solid #e0b0b0;}
+/* -- Auth Gate -------------------------------------------------------------- */
+#authGate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;}
+.gate-card{background:var(--sf);border:1px solid var(--br);border-radius:10px;padding:28px 24px 22px;width:100%;max-width:400px;box-shadow:0 2px 16px rgba(0,0,0,.08);}
+.gate-logo{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--ac2);line-height:1;text-align:center;}
+.gate-sub{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3);text-align:center;margin-top:4px;margin-bottom:22px;}
+.gate-err{background:#fdf2f2;border:1px solid #e0b0b0;color:var(--danger);font-size:.68rem;border-radius:4px;padding:8px 10px;margin-top:8px;display:none;}
+.gate-collapsible{border:1px solid var(--br);border-radius:6px;margin-top:10px;overflow:hidden;}
+.gate-collapsible .collapsible-hdr{font-size:.62rem;letter-spacing:.05em;font-weight:600;color:var(--tx2);padding:9px 12px;}
+.gate-collapsible .collapsible-hdr:hover{background:var(--sf2);}
+.gate-step{padding:12px 0 4px;}
+/* -- Lock overlay (z-index below pill, above app content) ------------------- */
+#lockOverlay{display:none;position:fixed;inset:0;z-index:90;background:rgba(20,30,18,.55);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:16px;}
+#lockOverlay.visible{display:flex;}
+.lock-card{background:var(--sf);border:1px solid var(--br);border-radius:10px;padding:28px 24px 22px;width:100%;max-width:360px;box-shadow:0 4px 20px rgba(0,0,0,.15);}
+.lock-logo{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;color:var(--ac2);text-align:center;margin-bottom:4px;}
+.lock-context{font-size:.62rem;color:var(--tx3);text-align:center;margin-bottom:16px;}
+/* -- Session pill (z-index:95 -- above lockOverlay, below authGate) --------- */
+#sessionPill{display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);width:calc(min(820px,100vw) - 32px);background:var(--ac2);color:#fff;border-radius:10px;padding:11px 16px;cursor:pointer;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 4px 16px rgba(45,81,39,.35);z-index:95;transition:all .2s;}
+#sessionPill.visible{display:flex;}
+#sessionPill.pwa{bottom:auto;top:0;border-radius:0 0 10px 10px;}
+#sessionPill:hover{background:var(--gr);}
+.sp-left{display:flex;flex-direction:column;gap:2px;}
+.sp-title{font-family:'Playfair Display',serif;font-size:.85rem;font-weight:700;}
+.sp-meta{font-size:.58rem;opacity:.8;}
+.sp-right{display:flex;align-items:center;gap:8px;font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;opacity:.7;white-space:nowrap;}
+.sp-dot{width:8px;height:8px;border-radius:50%;background:#fff;flex-shrink:0;animation:livePulse 1.4s infinite;}
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- Auth gate -- shown on cold load, hidden after successful auth -->
+<div id="authGate">
+  <div class="gate-card">
+    <div class="gate-logo">Gordy</div>
+    <div class="gate-sub">the Virtual Caddy</div>
+
+    <!-- Returning user -->
+    <div id="gateReturn">
+      <div class="field">
+        <div class="flbl">Sync ID</div>
+        <input id="gateSyncId" type="text" autocomplete="username" placeholder="e.g. GRD-myname" oninput="gateOnSyncIdInput()">
+      </div>
+      <div class="field">
+        <div class="flbl">Passphrase</div>
+        <input id="gatePass" type="password" autocomplete="current-password" placeholder="Your passphrase" onkeydown="if(event.key==='Enter')gateLogin()">
+      </div>
+      <button id="gateBiometricBtn" class="btn sec" style="width:100%;margin-bottom:8px;display:none" onclick="gateBiometricLogin()">&#x1F4F1; Use biometric</button>
+      <button class="rbtn" onclick="gateLogin()">Enter</button>
+      <div id="gateReturnErr" class="gate-err"></div>
+    </div>
+
+    <!-- New here? collapsible -->
+    <div class="gate-collapsible">
+      <div class="collapsible-hdr" onclick="_gateToggle('gateNewBody')">&#9654; New here?</div>
+      <div id="gateNewBody" style="display:none;padding:0 12px 12px">
+        <div id="gateNewStep1" class="gate-step">
+          <div class="field">
+            <div class="flbl">Site password</div>
+            <input id="gateSitePass" type="password" placeholder="Enter site password" onkeydown="if(event.key==='Enter')gateNewUser(1)">
+          </div>
+          <button class="btn" onclick="gateNewUser(1)">Get Access</button>
+          <div id="gateNewErr1" class="gate-err"></div>
+        </div>
+        <div id="gateNewStep2" class="gate-step" style="display:none">
+          <div class="field">
+            <div class="flbl">Choose your Sync ID &mdash; 4&ndash;20 letters or numbers</div>
+            <div style="display:flex;gap:6px">
+              <input id="gateNewId" type="text" maxlength="20" placeholder="e.g. myname2026" oninput="gateIdFormatInput()" style="flex:1">
+              <button class="btn sec" style="white-space:nowrap" onclick="gateNewUser(2)">Check</button>
+            </div>
+            <div style="font-size:.58rem;color:var(--tx3);margin-top:4px">GRD- prefix added automatically</div>
+          </div>
+          <div id="gateNewErr2" class="gate-err"></div>
+        </div>
+        <div id="gateNewStep3" class="gate-step" style="display:none">
+          <div class="field">
+            <div class="flbl">Passphrase</div>
+            <input id="gateNewPass1" type="password" placeholder="At least 8 characters">
+          </div>
+          <div class="field">
+            <div class="flbl">Confirm passphrase</div>
+            <input id="gateNewPass2" type="password" placeholder="Repeat passphrase" onkeydown="if(event.key==='Enter')gateNewUser(3)">
+          </div>
+          <button class="btn" onclick="gateNewUser(3)">Continue</button>
+          <div id="gateNewErr3" class="gate-err"></div>
+        </div>
+        <div id="gateNewStep4" class="gate-step" style="display:none">
+          <div style="font-size:.68rem;color:var(--tx2);margin-bottom:10px;line-height:1.6">If you forget your passphrase, this is your only way back in. Choose something you&rsquo;ll always remember.</div>
+          <div class="field">
+            <div class="flbl">Security question</div>
+            <select id="gateRecovQ">
+              <option value="pet">What was your first pet&rsquo;s name?</option>
+              <option value="street">What street did you grow up on?</option>
+              <option value="car">What was your first car?</option>
+              <option value="maiden">What is your mother&rsquo;s maiden name?</option>
+              <option value="city">What city were you born in?</option>
+              <option value="school">What was the name of your primary school?</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="flbl">Your answer</div>
+            <input id="gateRecovA" type="text" placeholder="Your answer" onkeydown="if(event.key==='Enter')gateNewUser(4)">
+          </div>
+          <button class="btn" onclick="gateNewUser(4)">Create Account</button>
+          <div id="gateNewErr4" class="gate-err"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forgot passphrase? collapsible -->
+    <div class="gate-collapsible">
+      <div class="collapsible-hdr" onclick="_gateToggle('gateRecovBody')">&#9654; Forgot passphrase?</div>
+      <div id="gateRecovBody" style="display:none;padding:0 12px 12px">
+        <div id="gateRecovStep1" class="gate-step">
+          <div class="field">
+            <div class="flbl">Sync ID</div>
+            <input id="gateRecovId" type="text" placeholder="Your Sync ID" onkeydown="if(event.key==='Enter')gateRecovery(1)">
+          </div>
+          <button class="btn" onclick="gateRecovery(1)">Continue</button>
+          <div id="gateRecovErr1" class="gate-err"></div>
+        </div>
+        <div id="gateRecovStep2" class="gate-step" style="display:none">
+          <div id="gateRecovQuestion" style="font-size:.72rem;color:var(--tx2);margin-bottom:10px;font-style:italic"></div>
+          <div class="field">
+            <div class="flbl">Your answer</div>
+            <input id="gateRecovAnswer" type="text" placeholder="Your answer" onkeydown="if(event.key==='Enter')gateRecovery(2)">
+          </div>
+          <button class="btn" onclick="gateRecovery(2)">Unlock</button>
+          <div id="gateRecovErr2" class="gate-err"></div>
+        </div>
+        <div id="gateRecovStep3" class="gate-step" style="display:none">
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:10px">&#10003; Identity verified. Set a new passphrase.</div>
+          <div class="field">
+            <div class="flbl">New passphrase</div>
+            <input id="gateRecovNewPass1" type="password" placeholder="At least 8 characters">
+          </div>
+          <div class="field">
+            <div class="flbl">Confirm new passphrase</div>
+            <input id="gateRecovNewPass2" type="password" placeholder="Repeat passphrase" onkeydown="if(event.key==='Enter')gateRecovery(3)">
+          </div>
+          <button class="btn" onclick="gateRecovery(3)">Save &amp; Sign In</button>
+          <div id="gateRecovErr3" class="gate-err"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="gateLoading" style="display:none;text-align:center;padding:12px 0 4px">
+      <div class="loading"><div class="dots"><span></span><span></span><span></span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Inactivity lock overlay (z-index:90 -- pill at 95 remains tappable above this) -->
+<div id="lockOverlay">
+  <div class="lock-card">
+    <div class="lock-logo">Gordy</div>
+    <div class="lock-context" id="lockContext">Locked due to inactivity.</div>
+    <div class="field" style="margin-top:14px">
+      <div class="flbl">Passphrase</div>
+      <input id="lockPassInput" type="password" placeholder="Your passphrase" onkeydown="if(event.key==='Enter')unlockApp()">
+    </div>
+    <div id="lockErr" class="gate-err"></div>
+    <button class="rbtn" style="margin-top:10px" onclick="unlockApp()">Unlock</button>
+  </div>
+</div>
+
+<!-- Universal session pill (z-index:95 -- above lock overlay, tappable while locked) -->
+<div id="sessionPill">
+  <div class="sp-left">
+    <div class="sp-title" id="spTitle"></div>
+    <div class="sp-meta" id="spMeta"></div>
+  </div>
+  <div class="sp-right"><div class="sp-dot"></div>Tap to resume</div>
+</div>
+
+<div class="app" id="appRoot" style="display:none">
 
   <div style="position:relative">
   <div class="hdr">
@@ -464,7 +636,7 @@ body{
     <button class="btn gold" onclick="saveData()">⬇ Save Data</button>
     <label class="btn sec" style="cursor:pointer;">⬆ Import Data<input type="file" accept=".txt" style="display:none" onchange="importData(event)"></label>
     <button class="btn sec" onclick="document.getElementById('clearModal').style.display='flex'" style="color:var(--danger);border-color:var(--danger)">🗑 Clear All Data</button>
-    <span id="saveStatus" style="font-size:.62rem;align-self:center;transition:color .3s"></span>
+    <!-- saveStatus removed from toolbar (duplicate ID fix -- A1) -->
   </div>
 
   <span id="saveStatus" style="font-size:.62rem;display:block;text-align:right;min-height:1em;margin-bottom:4px;transition:color .3s"></span>
@@ -481,21 +653,21 @@ body{
     <button class="btn sec" onclick="document.getElementById('uploadBanner').style.display='none'" style="white-space:nowrap">Start fresh</button>
   </div>
 
-  <!-- Tabs -->
+  <!-- Tabs — order: GORDy · Rounds · AI Log · Viz · Clubs · Courses · Profile · Notes -->
   <div class="tabs">
-    <button class="tab active" onclick="showTab('profile')">Profile</button>
-    <button class="tab" onclick="showTab('gordy')">GORDy</button>
-    <button class="tab" onclick="showTab('sessions')">Sessions <span class="badge" id="sessionsBadge">0</span></button>
-    <button class="tab" onclick="showTab('viz')">Viz</button>
+    <button class="tab active" onclick="showTab('gordy')">GORDy</button>
     <button class="tab" onclick="showTab('rounds')">Rounds</button>
-    <button class="tab" onclick="showTab('courses')">Courses <span class="badge" id="coursesBadge">0</span></button>
+    <button class="tab" onclick="showTab('sessions')">AI Log <span class="badge" id="sessionsBadge">0</span></button>
+    <button class="tab" onclick="showTab('viz')">Viz</button>
     <button class="tab" onclick="showTab('clubs')">Clubs <span class="badge" id="clubsBadge">0</span></button>
+    <button class="tab" onclick="showTab('courses')">Courses <span class="badge" id="coursesBadge">0</span></button>
+    <button class="tab" onclick="showTab('profile')">Profile</button>
     <button class="tab" onclick="showTab('notes')">Notes</button>
   </div>
 
   <!-- CLUBS -->
   <!-- PROFILE -->
-  <div id="tab-profile" class="panel active">
+  <div id="tab-profile" class="panel">
 
     <!-- Data Sync — top of profile for visibility -->
     <div class="card" id="gistSettingsCard" style="margin-bottom:14px">
@@ -575,7 +747,7 @@ body{
       </div>
     </div>
 
-    <div class="card" id="gistSettingsCard2" style="display:none"><!-- sync card overflow target, unused --></div>
+    <!-- gistSettingsCard2 removed -- was unused sync card overflow target (A1 fix) -->
 
     <!-- Data Management — collapsible, closed by default -->
     <div class="card">
@@ -620,7 +792,7 @@ body{
     </div>
     <div id="courseEditView" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font:600 1rem 'Cormorant Garamond',serif;color:var(--ac)" id="courseEditTitle">New Course</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--ac2)" id="courseEditTitle">New Course</div>
         <div style="display:flex;gap:8px;">
           <button class="btn" onclick="saveCourse()">Save</button>
           <button class="btn sec" onclick="cancelCourseEdit()">Cancel</button>
@@ -640,10 +812,10 @@ body{
         <div class="flbl" style="margin-bottom:6px;">Tees</div>
         <div class="tee-btns" id="teeButtons"></div>
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;" id="teeEditRow" style="display:none">
-          <input id="teeNameInput" placeholder="Tee name (e.g. Blue)" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:100px;">
-          <input id="teeRatingInput" placeholder="Rating" inputmode="decimal" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:72px;">
-          <input id="teeSlopeInput" placeholder="Slope" inputmode="numeric" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:66px;">
-          <input id="teeYardageInput" placeholder="Yardage" inputmode="numeric" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:76px;">
+          <input id="teeNameInput" placeholder="Tee name (e.g. Blue)" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:100px;">
+          <input id="teeRatingInput" placeholder="Rating" inputmode="decimal" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:72px;">
+          <input id="teeSlopeInput" placeholder="Slope" inputmode="numeric" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:66px;">
+          <input id="teeYardageInput" placeholder="Yardage" inputmode="numeric" style="background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none;width:76px;">
           <button class="btn" onclick="confirmAddTee()">Add</button>
           <button class="btn sec" onclick="cancelAddTee()">Cancel</button>
         </div>
@@ -685,7 +857,7 @@ body{
       </div>
       <div id="manualHcpField" style="display:none;">
         <div class="flbl">Enter Handicap Index</div>
-        <input id="manualHcp" type="text" inputmode="decimal" placeholder="e.g. 25.4" oninput="onManualHcpChange()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'IBM Plex Mono',monospace;font-size:.74rem;padding:6px 9px;outline:none;margin-top:3px;">
+        <input id="manualHcp" type="text" inputmode="decimal" placeholder="e.g. 25.4" oninput="onManualHcpChange()" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:3px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.74rem;padding:6px 9px;outline:none;margin-top:3px;">
         <div style="font-size:.61rem;color:var(--tx3);margin-top:6px;font-style:italic;">Manual handicap will be used for Optimise and Caddie, and recorded in your data export.</div>
       </div>
       <div id="calcHcpField">
@@ -772,7 +944,7 @@ body{
       </div>
     </div>
     <div class="card" id="roundHistCard" style="display:none">
-      <div class="card-title">Round History <span id="roundCount" style="font-size:.62rem;font-family:'IBM Plex Mono';color:var(--tx3)"></span></div>
+      <div class="card-title">Round History <span id="roundCount" style="font-size:.62rem;font-family:'DM Mono',monospace;color:var(--tx3)"></span></div>
       <!-- Active rounds -->
       <div class="rnd-header">
         <span style="width:100px">Date</span>
@@ -812,7 +984,7 @@ body{
   </div>
 
   <!-- AI HELP -->
-  <div id="tab-gordy" class="panel">
+  <div id="tab-gordy" class="panel active">
 
     <!-- Card 1: Caddie Session -->
     <div class="card">
@@ -1249,14 +1421,14 @@ body{
 
 </div>
 
-<!-- Floating live round pill — visible from any tab -->
-<div id="lrFloatPill" onclick="lrExpand()">
+<!-- Floating live round pill replaced by universal #sessionPill (Session C) -->
+<!-- <div id="lrFloatPill" onclick="lrExpand()">
   <div>
-    <div class="lr-pill-txt" id="lrFloatTxt">⛳ Live Round in progress</div>
+    <div class="lr-pill-txt" id="lrFloatTxt">&#x26F3; Live Round in progress</div>
     <div class="lr-pill-meta" id="lrFloatMeta"></div>
   </div>
-  <div class="lr-pill-resume">⏸ Tap to resume →</div>
-</div>
+  <div class="lr-pill-resume">&#x23F8; Tap to resume &rarr;</div>
+</div> -->
 
 <!-- Clear All Data modal -->
 <div id="clearModal" class="disc-overlay" style="display:none">
@@ -1714,24 +1886,397 @@ function showTabFromProfile(id) {
 
 
 
-// ── Live Round Tracker — state (declared before renderAll) ────────────────
+// -- Live Round Tracker -- state (declared before renderAll) ------------------
 let lrState = null; // null = no active round
 
-load();
-applyRefDataCache(); // use cached ref data if available — before renderAll
-renderAll();
-// 2.4 — show upload prompt if no data present
-(function(){
-  const hasData = bag.length || courses.length || rounds.length;
-  if(!hasData) {
-    const b = document.getElementById('uploadBanner');
-    if(b) b.style.display = 'flex';
+// Active session hooks -- called by dbPush to snapshot state to localStorage
+window._getActiveRound = function() { return lrState; };
+window._getActiveRange = function() { return null; }; // range not built yet
+
+// -- Gate state ---------------------------------------------------------------
+let _gateNewSitePass = '', _gateNewId = '', _gateNewPass = '';
+let _gateRecovId = '', _gateRecovPlaintext = '', _gateRecovAnswer = '';
+let _inactivityTimer = null, _appLocked = false;
+
+// -- Gate helpers -------------------------------------------------------------
+function _gateErr(id, msg) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+function _gateLoading(on) {
+  var el = document.getElementById('gateLoading');
+  if (el) el.style.display = on ? 'block' : 'none';
+}
+function _gateToggle(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+function gateIdFormatInput() {
+  var el = document.getElementById('gateNewId');
+  if (el) el.value = el.value.replace(/[^a-zA-Z0-9]/g, '');
+}
+function gateOnSyncIdInput() {
+  var el = document.getElementById('gateSyncId');
+  if (!el) return;
+  var syncId = el.value.trim().replace(/^GRD-/i, '');
+  var btn = document.getElementById('gateBiometricBtn');
+  if (btn) btn.style.display = syncId && localStorage.getItem('gordy:biometric:GRD-' + syncId) ? 'block' : 'none';
+}
+
+// -- Gate init ----------------------------------------------------------------
+function gateInit() {
+  if (sessionStorage.getItem('vc:gateUnlocked')) {
+    var active = rehydrateActiveSession ? rehydrateActiveSession() : null;
+    gateUnlocked(active);
+    return;
   }
-})();
-// 2.5 — on load: check for pending session result in Gist + check for app update
+  var gate = document.getElementById('authGate');
+  if (gate) gate.style.display = 'flex';
+}
+
+// -- Gate login (returning user) ----------------------------------------------
+async function gateLogin() {
+  var rawId  = (document.getElementById('gateSyncId')?.value || '').trim();
+  var pass   = (document.getElementById('gatePass')?.value   || '');
+  _gateErr('gateReturnErr', '');
+  if (!rawId || !pass) { _gateErr('gateReturnErr', 'Enter your Sync ID and passphrase.'); return; }
+  var syncId = rawId.replace(/^GRD-/i, '');
+  if (!syncId) { _gateErr('gateReturnErr', 'Invalid Sync ID.'); return; }
+  var fullId = 'GRD-' + syncId;
+  _gateLoading(true);
+  var result = await dbPull(fullId, pass);
+  _gateLoading(false);
+  if (result.ok) {
+    _reportSuccess(fullId);
+    // Store passphrase verify token for inactivity unlock (no network needed)
+    dbEncrypt('gordy-verify', pass).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
+    sessionStorage.setItem('vc:gateUnlocked', '1');
+    var active = rehydrateActiveSession ? rehydrateActiveSession() : null;
+    gateUnlocked(active);
+    // Prompt biometric registration after first successful login
+    setTimeout(function() { gateRegisterBiometric(fullId, pass); }, 400);
+  } else if (result.lockedUntil) {
+    var until = new Date(result.lockedUntil);
+    _gateErr('gateReturnErr', 'Account locked until ' + until.toLocaleTimeString() + '. Too many failed attempts.');
+  } else if (result.error === 'not_found') {
+    _gateErr('gateReturnErr', 'Sync ID not found. Check your ID and try again.');
+  } else if (result.error === 'bad_passphrase') {
+    _reportFailure(fullId).then(function(r) {
+      if (r && r.lockedUntil) {
+        _gateErr('gateReturnErr', 'Account locked until ' + new Date(r.lockedUntil).toLocaleTimeString() + '.');
+      } else {
+        _gateErr('gateReturnErr', 'Wrong passphrase. Please try again.');
+      }
+    });
+  } else {
+    _gateErr('gateReturnErr', 'Connection error. Check your network and try again.');
+  }
+}
+
+// -- Gate new user (multi-step) -----------------------------------------------
+async function gateNewUser(step) {
+  if (step === 1) {
+    var sp = (document.getElementById('gateSitePass')?.value || '').trim();
+    _gateErr('gateNewErr1', '');
+    if (!sp) { _gateErr('gateNewErr1', 'Enter the site password.'); return; }
+    _gateLoading(true);
+    var r = await dbCheckSitePassword(sp);
+    _gateLoading(false);
+    if (!r.ok) {
+      var el = document.getElementById('gateSitePass');
+      if (el) el.value = '';
+      _gateErr('gateNewErr1', 'Incorrect site password.');
+      return;
+    }
+    _gateNewSitePass = sp;
+    document.getElementById('gateNewStep1').style.display = 'none';
+    document.getElementById('gateNewStep2').style.display = 'block';
+    document.getElementById('gateNewId')?.focus();
+  } else if (step === 2) {
+    var raw = (document.getElementById('gateNewId')?.value || '').replace(/[^a-zA-Z0-9]/g, '');
+    _gateErr('gateNewErr2', '');
+    if (!raw || raw.length < 4 || raw.length > 20) {
+      _gateErr('gateNewErr2', 'ID must be 4\u201320 letters or numbers.');
+      return;
+    }
+    _gateLoading(true);
+    var r2 = await dbCheckId('GRD-' + raw);
+    _gateLoading(false);
+    if (!r2.available) { _gateErr('gateNewErr2', 'That ID is taken, try another.'); return; }
+    _gateNewId = 'GRD-' + raw;
+    document.getElementById('gateNewStep2').style.display = 'none';
+    document.getElementById('gateNewStep3').style.display = 'block';
+    document.getElementById('gateNewPass1')?.focus();
+  } else if (step === 3) {
+    var p1 = document.getElementById('gateNewPass1')?.value || '';
+    var p2 = document.getElementById('gateNewPass2')?.value || '';
+    _gateErr('gateNewErr3', '');
+    if (p1.length < 8) { _gateErr('gateNewErr3', 'Passphrase must be at least 8 characters.'); return; }
+    if (p1 !== p2)     { _gateErr('gateNewErr3', 'Passphrases do not match.'); return; }
+    _gateNewPass = p1;
+    document.getElementById('gateNewStep3').style.display = 'none';
+    document.getElementById('gateNewStep4').style.display = 'block';
+    document.getElementById('gateRecovA')?.focus();
+  } else if (step === 4) {
+    var qSel    = document.getElementById('gateRecovQ');
+    var question = qSel ? qSel.options[qSel.selectedIndex]?.text || '' : '';
+    var answer  = (document.getElementById('gateRecovA')?.value || '').trim();
+    _gateErr('gateNewErr4', '');
+    if (!answer) { _gateErr('gateNewErr4', 'Enter your security answer.'); return; }
+    _gateLoading(true);
+    // Initial blob is empty app state (new user has no data yet)
+    var blob         = await dbEncrypt('', _gateNewPass);
+    var blobRecovery = await dbEncrypt(answer, _gateNewPass);
+    var r3 = await dbRegister(_gateNewId, _gateNewSitePass, blob, blobRecovery, question);
+    _gateLoading(false);
+    if (!r3.ok) {
+      if (r3.error === 'id_taken')           { _gateErr('gateNewErr4', 'That ID was just taken. Go back and choose another.'); return; }
+      if (r3.error === 'bad_site_password')   { _gateErr('gateNewErr4', 'Site password rejected. Contact the owner.'); return; }
+      _gateErr('gateNewErr4', 'Registration failed. Check your connection and try again.');
+      return;
+    }
+    sessionStorage.setItem('vc:kvPass', _gateNewPass);
+    sessionStorage.setItem('vc:version', '1');
+    dbEncrypt('gordy-verify', _gateNewPass).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
+    sessionStorage.setItem('vc:gateUnlocked', '1');
+    gateUnlocked(null);
+  }
+}
+
+// -- Gate recovery (forgot passphrase, multi-step) ----------------------------
+async function gateRecovery(step) {
+  if (step === 1) {
+    var raw = (document.getElementById('gateRecovId')?.value || '').trim();
+    _gateErr('gateRecovErr1', '');
+    var syncId = raw.replace(/^GRD-/i, '');
+    if (!syncId) { _gateErr('gateRecovErr1', 'Enter your Sync ID.'); return; }
+    _gateRecovId = 'GRD-' + syncId;
+    _gateLoading(true);
+    var r = await dbGetQuestion(_gateRecovId);
+    _gateLoading(false);
+    if (r.error || !r.question) { _gateErr('gateRecovErr1', 'Sync ID not found.'); return; }
+    var qEl = document.getElementById('gateRecovQuestion');
+    if (qEl) qEl.textContent = r.question;
+    document.getElementById('gateRecovStep1').style.display = 'none';
+    document.getElementById('gateRecovStep2').style.display = 'block';
+    document.getElementById('gateRecovAnswer')?.focus();
+  } else if (step === 2) {
+    var answer = (document.getElementById('gateRecovAnswer')?.value || '').trim();
+    _gateErr('gateRecovErr2', '');
+    if (!answer) { _gateErr('gateRecovErr2', 'Enter your answer.'); return; }
+    _gateLoading(true);
+    var r2 = await dbGetRecovery(_gateRecovId);
+    _gateLoading(false);
+    if (!r2.ok || !r2.blobRecovery) { _gateErr('gateRecovErr2', 'Could not fetch recovery data. Try again.'); return; }
+    var plaintext;
+    try { plaintext = await dbDecrypt(r2.blobRecovery, answer); }
+    catch {
+      _reportFailure(_gateRecovId);
+      _gateErr('gateRecovErr2', 'Wrong answer. Please try again.');
+      return;
+    }
+    _gateRecovPlaintext = plaintext;
+    _gateRecovAnswer    = answer;
+    document.getElementById('gateRecovStep2').style.display = 'none';
+    document.getElementById('gateRecovStep3').style.display = 'block';
+    document.getElementById('gateRecovNewPass1')?.focus();
+  } else if (step === 3) {
+    var p1 = document.getElementById('gateRecovNewPass1')?.value || '';
+    var p2 = document.getElementById('gateRecovNewPass2')?.value || '';
+    _gateErr('gateRecovErr3', '');
+    if (p1.length < 8) { _gateErr('gateRecovErr3', 'Passphrase must be at least 8 characters.'); return; }
+    if (p1 !== p2)     { _gateErr('gateRecovErr3', 'Passphrases do not match.'); return; }
+    _gateLoading(true);
+    var pushResult   = await dbPushFull(_gateRecovId, p1, _gateRecovPlaintext);
+    var newBlobRecov = await dbEncrypt(_gateRecovAnswer, p1);
+    await dbUpdateRecovery(_gateRecovId, newBlobRecov);
+    _gateLoading(false);
+    if (!pushResult.ok) { _gateErr('gateRecovErr3', 'Failed to save new passphrase. Try again.'); return; }
+    localStorage.setItem('vc:kvId', _gateRecovId);
+    sessionStorage.setItem('vc:kvPass', p1);
+    dbEncrypt('gordy-verify', p1).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
+    sessionStorage.setItem('vc:gateUnlocked', '1');
+    processDataText(_gateRecovPlaintext);
+    gateUnlocked(null);
+  }
+}
+
+// -- Gate unlocked (all success paths converge here) -------------------------
+function gateUnlocked(active) {
+  var gate = document.getElementById('authGate');
+  if (gate) gate.style.display = 'none';
+  var app = document.getElementById('appRoot');
+  if (app) app.style.display = '';
+  renderAll();
+  // Route to active session if present; otherwise default to GORDy tab
+  if (active && active.type === 'round') {
+    showTabFromProfile('rounds');
+    if (window.lrExpand) window.lrExpand();
+  } else {
+    showTabFromProfile('gordy');
+  }
+  updateSessionPill();
+  resetInactivityTimer();
+  // Register document-level interaction listeners for inactivity timer
+  ['touchstart', 'mousedown', 'keydown'].forEach(function(ev) {
+    document.addEventListener(ev, resetInactivityTimer, { passive: true });
+  });
+}
+
+// -- Biometric (WebAuthn) -----------------------------------------------------
+function gateRegisterBiometric(syncId, passphrase) {
+  if (!window.PublicKeyCredential) return;
+  if (!confirm('Save this device for faster login?\n\nYou\'ll be able to sign in with biometrics next time.')) return;
+  var uid = crypto.getRandomValues(new Uint8Array(16));
+  navigator.credentials.create({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    rp: { name: 'Gordy' },
+    user: { id: uid, name: syncId, displayName: syncId },
+    pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+    authenticatorSelection: { userVerification: 'required' },
+    timeout: 60000
+  }}).then(function(cred) {
+    localStorage.setItem('gordy:biometric:' + syncId, cred.id);
+    sessionStorage.setItem('gordy:bp:' + syncId, passphrase);
+  }).catch(function() {});
+}
+
+async function gateBiometricLogin() {
+  var rawId  = (document.getElementById('gateSyncId')?.value || '').trim();
+  var syncId = rawId.replace(/^GRD-/i, '');
+  if (!syncId) return;
+  var fullId = 'GRD-' + syncId;
+  var credId = localStorage.getItem('gordy:biometric:' + fullId);
+  if (!credId) return;
+  try {
+    var assertion = await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ id: Uint8Array.from(atob(credId), function(c) { return c.charCodeAt(0); }), type: 'public-key' }],
+      userVerification: 'required',
+      timeout: 60000
+    }});
+    if (!assertion) return;
+    var storedPass = sessionStorage.getItem('gordy:bp:' + fullId);
+    if (!storedPass) {
+      _gateErr('gateReturnErr', 'Biometric session expired. Enter passphrase manually.');
+      return;
+    }
+    document.getElementById('gatePass').value = storedPass;
+    await gateLogin();
+  } catch {
+    _gateErr('gateReturnErr', 'Biometric login failed. Enter passphrase manually.');
+  }
+}
+
+// -- Passphrase re-key (called when user changes passphrase in-app) -----------
+// Note: UI for passphrase change is a Session D / future task.
+async function gateRekeyBlob(newPassphrase) {
+  var id = localStorage.getItem('vc:kvId') || '';
+  if (!id) return false;
+  var oldPass = sessionStorage.getItem('vc:kvPass') || '';
+  // Re-push blob with new passphrase
+  var plaintext = window.serialise ? window.serialise() : '';
+  var pushResult = await dbPushFull(id, newPassphrase, plaintext);
+  if (!pushResult.ok) return false;
+  // Re-encrypt recovery blob with new passphrase
+  var recov = await dbGetRecovery(id);
+  if (recov.ok && recov.blobRecovery && oldPass) {
+    try {
+      var answer      = await dbDecrypt(recov.blobRecovery, oldPass);
+      var newBlobRecov = await dbEncrypt(answer, newPassphrase);
+      await dbUpdateRecovery(id, newBlobRecov);
+    } catch {}
+  }
+  sessionStorage.setItem('vc:kvPass', newPassphrase);
+  dbEncrypt('gordy-verify', newPassphrase).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
+  // Update biometric-stored passphrase if active
+  var bpKey = 'gordy:bp:' + id;
+  if (sessionStorage.getItem(bpKey)) sessionStorage.setItem(bpKey, newPassphrase);
+  return true;
+}
+
+// -- Inactivity timeout -------------------------------------------------------
+function resetInactivityTimer() {
+  if (_appLocked) return;
+  clearTimeout(_inactivityTimer);
+  _inactivityTimer = setTimeout(lockApp, 15 * 60 * 1000);
+}
+
+function lockApp() {
+  _appLocked = true;
+  var ol = document.getElementById('lockOverlay');
+  if (ol) ol.classList.add('visible');
+  var inp = document.getElementById('lockPassInput');
+  if (inp) inp.value = '';
+  _gateErr('lockErr', '');
+  // Disable app interaction; pill (z-index:95) and overlay remain accessible above
+  var app = document.getElementById('appRoot');
+  if (app) app.style.pointerEvents = 'none';
+}
+
+async function unlockApp() {
+  var pass = (document.getElementById('lockPassInput')?.value || '').trim();
+  _gateErr('lockErr', '');
+  if (!pass) { _gateErr('lockErr', 'Enter your passphrase.'); return; }
+  // Verify against stored token (set at login -- no network call needed)
+  var vt = sessionStorage.getItem('vc:verify');
+  if (vt) {
+    try { await dbDecrypt(vt, pass); }
+    catch { _gateErr('lockErr', 'Wrong passphrase.'); return; }
+  }
+  sessionStorage.setItem('vc:kvPass', pass);
+  _appLocked = false;
+  var ol = document.getElementById('lockOverlay');
+  if (ol) ol.classList.remove('visible');
+  var app = document.getElementById('appRoot');
+  if (app) app.style.pointerEvents = '';
+  resetInactivityTimer();
+}
+
+// -- Universal session pill ---------------------------------------------------
+function updateSessionPill() {
+  var pill = document.getElementById('sessionPill');
+  if (!pill) return;
+  var roundRaw = localStorage.getItem('gordy:activeRound');
+  var rangeRaw = localStorage.getItem('gordy:activeRange');
+  if (!roundRaw && !rangeRaw) { pill.classList.remove('visible'); return; }
+  var isPWA = !!(window.navigator.standalone || window.matchMedia('(display-mode:standalone)').matches);
+  if (isPWA) pill.classList.add('pwa'); else pill.classList.remove('pwa');
+  var title = '', meta = '', handler = null;
+  if (roundRaw) {
+    try {
+      var s = JSON.parse(roundRaw);
+      title   = '\u26F3 Round in progress';
+      meta    = s.courseName || '';
+      handler = function() { if (window.lrExpand) window.lrExpand(); };
+    } catch { title = '\u26F3 Round in progress'; }
+  } else {
+    title   = '\uD83C\uDFAF Range session in progress';
+    handler = null; // range tab not yet built
+  }
+  document.getElementById('spTitle').textContent = title;
+  document.getElementById('spMeta').textContent  = meta;
+  pill.onclick = handler || null;
+  pill.classList.add('visible');
+}
+
+load();
+applyRefDataCache(); // use cached ref data if available -- before renderAll
+/*renderAll();*/ // replaced by gateInit() -- app stays hidden until auth
+gateInit();
+// 2.4 -- show upload prompt if no data present (deferred to gateUnlocked path)
+// 2.5 -- check for app update
 checkAppUpdate();
-Object.assign(window, { showTab, showTabFromProfile, setHcpMode, onManualHcpChange });
-if(!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
+Object.assign(window, {
+  showTab, showTabFromProfile, setHcpMode, onManualHcpChange,
+  gateLogin, gateNewUser, gateRecovery, gateUnlocked,
+  gateBiometricLogin, gateRegisterBiometric, gateRekeyBlob,
+  gateIdFormatInput, gateOnSyncIdInput, _gateToggle,
+  unlockApp, updateSessionPill
+});
+if (!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
 /*Object.assign(window, {
   showTab, showTabFromProfile, ddNav,
   acceptDisclaimer, addClub, addCourseFromRepo, addRound, addSession, addSessionSimple,
