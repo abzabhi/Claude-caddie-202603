@@ -349,19 +349,15 @@ async function dbDecrypt(envelope, passphrase)  { return _decrypt(envelope, pass
 async function dbPull(syncId, passphrase) {
   const id = _normId(syncId);
   try {
-    const r = await fetch(GORDY_SYNC_URL + id);
+    const r = await fetch(_D1_BASE + '/sync/pull/' + id);
     if (r.status === 423) {
       const j = await r.json().catch(() => ({}));
       return { ok: false, lockedUntil: j.locked_until || null };
     }
     if (r.status === 404) return { ok: false, error: 'not_found' };
     if (!r.ok)            return { ok: false, error: 'server_' + r.status };
-    const text = await r.text();
-    let envelope = text, version = null;
-    try {
-      const parsed = JSON.parse(text);
-      if (parsed && parsed.blob) { envelope = parsed.blob; version = parsed.version != null ? parsed.version : null; }
-    } catch {}
+    const j = await r.json().catch(() => ({}));
+    let envelope = j.blob || '', version = j.version != null ? j.version : null;
     let plaintext;
     try { plaintext = await _decrypt(envelope, passphrase); }
     catch { return { ok: false, error: 'bad_passphrase' }; }
@@ -377,13 +373,13 @@ async function dbPull(syncId, passphrase) {
 
 // Report successful auth to Worker (resets failed_attempts in D1)
 async function _reportSuccess(syncId) {
-  try { await fetch(_D1_BASE + '/sync/success/' + _normId(syncId), { method: 'POST' }); } catch {}
+  try { await fetch(_D1_BASE + '/sync/report-success/' + _normId(syncId), { method: 'POST' }); } catch {}
 }
 
 // Report failed auth to Worker (increments failed_attempts). Returns {lockedUntil?}
 async function _reportFailure(syncId) {
   try {
-    const r = await fetch(_D1_BASE + '/sync/failure/' + _normId(syncId), { method: 'POST' });
+    const r = await fetch(_D1_BASE + '/sync/report-failure/' + _normId(syncId), { method: 'POST' });
     if (r.ok) { const j = await r.json().catch(() => ({})); return { lockedUntil: j.locked_until || null }; }
   } catch {}
   return {};
@@ -415,13 +411,18 @@ async function dbCheckId(syncId) {
   } catch { return { available: false, error: 'network' }; }
 }
 
-// Verify site password against D1 config table. Returns {ok}
+// Verify site password — no standalone route; probe /sync/register with an invalid sync_id.
+// Worker checks site password first (401 = wrong), then body format (400 = correct password).
 async function dbCheckSitePassword(sitePassword) {
   try {
-    const r = await fetch(_D1_BASE + '/sync/site-auth', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ site_password: sitePassword })
+    const r = await fetch(_D1_BASE + '/sync/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Site-Password': sitePassword },
+      body: JSON.stringify({ sync_id: 'PROBE-CHECK', blob: 'x', blob_recovery: 'x', recovery_question: 'x' })
     });
+    // 401 = wrong password; 400 or 409 = password accepted (body rejected for other reason)
+    if (r.status === 401) return { ok: false };
+    if (r.status === 400 || r.status === 409) return { ok: true };
     return { ok: r.ok };
   } catch { return { ok: false, error: 'network' }; }
 }
@@ -437,34 +438,28 @@ async function dbGetQuestion(syncId) {
 }
 
 // Fetch encrypted recovery blob for a sync ID. Returns {ok, blobRecovery?}
+// Worker has no standalone recover route — blob_recovery is returned by the pull endpoint.
 async function dbGetRecovery(syncId) {
   try {
-    const r = await fetch(_D1_BASE + '/sync/recover/' + _normId(syncId));
+    const r = await fetch(_D1_BASE + '/sync/pull/' + _normId(syncId));
     if (!r.ok) return { ok: false };
-    const j = await r.json();
+    const j = await r.json().catch(() => ({}));
     return { ok: true, blobRecovery: j.blob_recovery || null };
   } catch { return { ok: false, error: 'network' }; }
 }
 
-// Update only the recovery blob in D1 (after passphrase change / recovery flow). Returns {ok}
-async function dbUpdateRecovery(syncId, blobRecovery) {
-  try {
-    const r = await fetch(_D1_BASE + '/sync/recovery/' + _normId(syncId), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blob_recovery: blobRecovery })
-    });
-    return { ok: r.ok };
-  } catch { return { ok: false }; }
-}
+// dbUpdateRecovery is a no-op stub — Worker has no standalone recovery-update route.
+// blob_recovery is sent with every dbPushFull call instead.
+async function dbUpdateRecovery(_syncId, _blobRecovery) { return { ok: true }; }
 
 // Register a new user in D1. Returns {ok, error?}
 async function dbRegister(syncId, sitePassword, blob, blobRecovery, recoveryQuestion) {
   const id = _normId(syncId);
   try {
     const r = await fetch(_D1_BASE + '/sync/register', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Site-Password': sitePassword },
       body: JSON.stringify({
-        sync_id: id, site_password: sitePassword,
+        sync_id: id,
         blob, blob_recovery: blobRecovery, recovery_question: recoveryQuestion, version: 1
       })
     });
@@ -476,15 +471,15 @@ async function dbRegister(syncId, sitePassword, blob, blobRecovery, recoveryQues
   } catch { return { ok: false, error: 'network' }; }
 }
 
-// Push a blob with version tracking (used by passphrase-change and recovery re-key flows)
-async function dbPushFull(syncId, passphrase, plaintext) {
+// Push a blob with version tracking. blobRecovery required by Worker on every push.
+async function dbPushFull(syncId, passphrase, plaintext, blobRecovery) {
   const id = _normId(syncId);
   const version = (parseInt(sessionStorage.getItem('vc:version') || '0', 10) || 0) + 1;
   try {
     const blob = await _encrypt(plaintext, passphrase);
-    const r = await fetch(GORDY_SYNC_URL + id, {
+    const r = await fetch(_D1_BASE + '/sync/push/' + id, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blob, version })
+      body: JSON.stringify({ blob, blob_recovery: blobRecovery || '', version })
     });
     if (r.status === 409) return { ok: false, error: 'conflict' };
     if (r.status === 429) return { ok: false, error: 'rate_limit' };
@@ -499,8 +494,9 @@ async function dbFetchHistory(syncId) {
   try {
     const r = await fetch(_D1_BASE + '/sync/history/' + _normId(syncId));
     if (!r.ok) return { ok: false };
-    const j = await r.json();
-    return { ok: true, versions: j.versions || [] };
+    const j = await r.json().catch(() => []);
+    const versions = Array.isArray(j) ? j : (j.versions || []);
+    return { ok: true, versions };
   } catch { return { ok: false }; }
 }
 
