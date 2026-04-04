@@ -333,5 +333,6 @@ export function calcVizMaxRange() {
 Object.assign(window, {
   toggleClub, toggleActive, updateClub, addSession, updateSession,
   deleteClubSession, deleteClub, addClub, toggleClubMode,
-  onTypeChange, onVariantChange, addSessionSimple, toggleImplied, renderClubs
+  onTypeChange, onVariantChange, addSessionSimple, toggleImplied, renderClubs,
+  _clubRange, calcVizMaxRange
 });
