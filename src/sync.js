@@ -3,10 +3,8 @@ import { serialise, save, bag, courses, rounds, history } from './store.js';
 const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
 const APP_LATEST_FILE = 'golf-caddie-latest.html';
 
-// -- Gordy Sync -- encrypted D1 via Cloudflare Worker
+// -- Gordy Sync -- encrypted KV via Cloudflare Worker
 const GORDY_SYNC_URL = 'https://gordy-sync.gordythevirtualcaddie.workers.dev/sync/';
-
-let lastAutoPushTime = 0;
 
 function kvId()  { return localStorage.getItem('vc:kvId')||''; }
 function kvMode(){ return !!kvId(); }
@@ -50,34 +48,14 @@ function _genSyncId() {
   return s;
 }
 
-// Format lockout message with unlock time
-function _fmtLockout(locked_until) {
-  if(!locked_until) return '\uD83D\uDD12 Account locked. Try again later.';
-  return '\uD83D\uDD12 Locked until '+new Date(locked_until).toLocaleTimeString()+'. Too many failed attempts.';
-}
-
-// Report successful auth to Worker (resets failed_attempts) -- fire and forget
-async function _reportSuccess(id) {
-  try { await fetch(GORDY_SYNC_URL+'report-success/'+id, {method:'POST'}); } catch {}
-}
-
-// Report failed decryption to Worker -- returns locked_until string if locked, else null
-async function _reportFailure(id) {
-  try {
-    const r=await fetch(GORDY_SYNC_URL+'report-failure/'+id, {method:'POST'});
-    if(r.ok){ const j=await r.json(); return j.locked_until||null; }
-  } catch {}
-  return null;
-}
-
-/* -- OLD kvPush (KV era) -- commented out, not deleted
+// Push encrypted data to Worker KV
 async function kvPush(statusElId) {
   const id=kvId(); if(!id) return;
   const pass=sessionStorage.getItem('vc:kvPass');
   if(!pass){alert('Session expired \u2014 please re-enter your passphrase to sync.'); renderProfileSync(); return;}
   const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
   if(!navigator.onLine){
-    _dbQueuePush();
+    _kvQueuePush();
     if(st) st.textContent='\uD83D\uDCF5 Offline \u2014 push queued, will retry when back online.';
     return;
   }
@@ -86,57 +64,19 @@ async function kvPush(statusElId) {
     const payload=await _encrypt(serialise(), pass);
     const r=await fetch(GORDY_SYNC_URL+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:payload});
     if(r.status===429){if(st) st.textContent='\u26A0 Rate limited \u2014 wait 30s and try again.'; return;}
-    if(!r.ok){if(st) st.textContent='\u26A0 Push failed ('+r.status+')'; _dbQueuePush(); return;}
+    if(!r.ok){if(st) st.textContent='\u26A0 Push failed ('+r.status+')'; _kvQueuePush(); return;}
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
     localStorage.removeItem('vc:kvPendingPush');
     if(st) st.textContent='\u2713 Synced: '+new Date(now).toLocaleTimeString();
   } catch(e){
-    _dbQueuePush();
-    if(st) st.textContent='\u26A0 Network error \u2014 push queued.';
-  }
-}
-*/
-
-// Push encrypted data to Worker D1
-async function dbPush(statusElId) {
-  const id=kvId(); if(!id) return;
-  const pass=sessionStorage.getItem('vc:kvPass');
-  if(!pass){alert('Session expired \u2014 please re-enter your passphrase to sync.'); renderProfileSync(); return;}
-  const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
-  if(!navigator.onLine){
-    _dbQueuePush();
-    if(st) st.textContent='\uD83D\uDCF5 Offline \u2014 push queued, will retry when back online.';
-    return;
-  }
-  if(st) st.textContent='Encrypting\u2026';
-  try {
-    const blob=await _encrypt(serialise(), pass);
-    const currentVersion=parseInt(sessionStorage.getItem('gordy:version')||'0');
-    const body=JSON.stringify({blob, blob_recovery:null, version:currentVersion+1});
-    const r=await fetch(GORDY_SYNC_URL+'push/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body});
-    if(r.status===409){if(st) st.textContent='Out of sync \u2014 pull latest before pushing.'; return;}
-    if(r.status===429){if(st) st.textContent='Daily push limit reached. Try again tomorrow.'; return;}
-    if(r.status===423){const j=await r.json().catch(()=>({})); if(st) st.textContent=_fmtLockout(j.locked_until); return;}
-    if(!r.ok){if(st) st.textContent='\u26A0 Push failed ('+r.status+')'; _dbQueuePush(); return;}
-    const res=await r.json();
-    sessionStorage.setItem('gordy:version', String(res.version));
-    const now=Date.now();
-    localStorage.setItem('vc:kvLastSyncTs', String(now));
-    localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
-    localStorage.removeItem('vc:kvPendingPush');
-    // Session persistence -- hooks wired by Session C via window._getActiveRound / window._getActiveRange
-    const ar=window._getActiveRound?.(); if(ar!=null) localStorage.setItem('gordy:activeRound', JSON.stringify(ar));
-    const ag=window._getActiveRange?.(); if(ag!=null) localStorage.setItem('gordy:activeRange', JSON.stringify(ag));
-    if(st) st.textContent='\u2713 Synced: '+new Date(now).toLocaleTimeString();
-  } catch(e){
-    _dbQueuePush();
+    _kvQueuePush();
     if(st) st.textContent='\u26A0 Network error \u2014 push queued.';
   }
 }
 
-/* -- OLD kvPull (KV era) -- commented out, not deleted
+// Pull and decrypt data from Worker KV
 async function kvPull(statusElId) {
   const id=kvId(); if(!id) return;
   const pass=sessionStorage.getItem('vc:kvPass');
@@ -158,37 +98,6 @@ async function kvPull(statusElId) {
     if(st) st.textContent='\u2713 Loaded: '+ts;
   } catch(e){if(st) st.textContent='\u26A0 Pull error: '+e.message;}
 }
-*/
-
-// Pull and decrypt data from Worker D1
-async function dbPull(statusElId) {
-  const id=kvId(); if(!id) return;
-  const pass=sessionStorage.getItem('vc:kvPass');
-  if(!pass){alert('Session expired \u2014 please re-enter your passphrase to sync.'); renderProfileSync(); return;}
-  const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
-  if(st) st.textContent='Fetching\u2026';
-  try {
-    const r=await fetch(GORDY_SYNC_URL+'pull/'+id);
-    if(r.status===404){if(st) st.textContent='\u26A0 No data found for this ID.'; return;}
-    if(r.status===423){const j=await r.json().catch(()=>({})); if(st) st.textContent=_fmtLockout(j.locked_until); return;}
-    if(!r.ok){if(st) st.textContent='\u26A0 Pull failed ('+r.status+')'; return;}
-    const res=await r.json();
-    if(st) st.textContent='Decrypting\u2026';
-    let plaintext;
-    try { plaintext=await _decrypt(res.blob, pass); }
-    catch {
-      const lu=await _reportFailure(id);
-      if(st) st.textContent=lu?_fmtLockout(lu):'\u26A0 Wrong passphrase or corrupted data.';
-      return;
-    }
-    await _reportSuccess(id);
-    sessionStorage.setItem('gordy:version', String(res.version));
-    processDataText(plaintext);
-    const ts=new Date().toLocaleTimeString();
-    localStorage.setItem('vc:kvLastSync', ts);
-    if(st) st.textContent='\u2713 Loaded: '+ts;
-  } catch(e){if(st) st.textContent='\u26A0 Pull error: '+e.message;}
-}
 
 // Banner load -- pull if connected, else prompt
 async function bannerLoadGist() {
@@ -196,19 +105,16 @@ async function bannerLoadGist() {
     alert('No sync profile connected.\n\nSet up a sync profile in the Profile tab, or import your data file manually.');
     return;
   }
-  await dbPull('kvSyncStatus');
+  await kvPull('kvSyncStatus');
   const hasData=bag.length||courses.length||rounds.length||history.length;
   if(hasData) document.getElementById('uploadBanner').style.display='none';
 }
 
-// Auto-push after every save -- throttled to 1 min minimum between auto-pushes
-// Manual push (dbPush called directly) always bypasses this
+// Auto-push after every save when sync profile is connected and passphrase in session
 async function syncSave() {
   if(!kvMode()) return;
   if(!sessionStorage.getItem('vc:kvPass')) return;
-  if(Date.now()-lastAutoPushTime<60000) return; // throttle: skip silently if under 1 min
-  await dbPush('kvSyncStatus');
-  lastAutoPushTime=Date.now();
+  await kvPush('kvSyncStatus');
 }
 
 // -- Offline resilience
@@ -221,60 +127,22 @@ function _fmtAgo(tsMs) {
   return Math.floor(s/86400)+'d ago';
 }
 
-function _dbQueuePush() { localStorage.setItem('vc:kvPendingPush','1'); }
+function _kvQueuePush() { localStorage.setItem('vc:kvPendingPush','1'); }
 
-async function _dbRetryPending() {
+async function _kvRetryPending() {
   if(!localStorage.getItem('vc:kvPendingPush')) return;
   if(!kvMode()||!sessionStorage.getItem('vc:kvPass')) return;
   localStorage.removeItem('vc:kvPendingPush');
-  await dbPush('kvSyncStatus');
+  await kvPush('kvSyncStatus');
 }
 
-window.addEventListener('online', _dbRetryPending);
+window.addEventListener('online', _kvRetryPending);
 
 // Refresh "X ago" text every 60s without re-rendering the full card
 setInterval(()=>{
   const el=document.getElementById('kvSyncAgo');
   if(el) el.textContent=_fmtAgo(localStorage.getItem('vc:kvLastSyncTs'));
 }, 60000);
-
-// -- Session persistence helpers
-// type: 'round' | 'range'
-function clearActiveSession(type) {
-  if(type==='round')      localStorage.removeItem('gordy:activeRound');
-  else if(type==='range') localStorage.removeItem('gordy:activeRange');
-}
-
-// Returns { type, state } for the first active session found, or null
-function rehydrateActiveSession() {
-  const r=localStorage.getItem('gordy:activeRound');
-  const g=localStorage.getItem('gordy:activeRange');
-  if(r){ try{ return {type:'round', state:JSON.parse(r)}; } catch {} }
-  if(g){ try{ return {type:'range', state:JSON.parse(g)}; } catch {} }
-  return null;
-}
-
-// -- Restore flow
-// Returns array of { id, version, written_at }
-async function dbFetchHistory(syncId) {
-  const r=await fetch(GORDY_SYNC_URL+'history/'+syncId);
-  if(!r.ok) throw new Error('History fetch failed ('+r.status+')');
-  return r.json();
-}
-
-// Fetches, decrypts, and loads a specific history version into app state
-async function dbRestoreVersion(syncId, version, passphrase) {
-  const r=await fetch(GORDY_SYNC_URL+'history/'+syncId+'/'+version);
-  if(!r.ok) throw new Error('Restore fetch failed ('+r.status+')');
-  const {blob}=await r.json();
-  let plaintext;
-  try { plaintext=await _decrypt(blob, passphrase); }
-  catch {
-    const lu=await _reportFailure(syncId);
-    throw new Error(lu?_fmtLockout(lu):'\u26A0 Wrong passphrase or corrupted data.');
-  }
-  processDataText(plaintext);
-}
 
 // -- Profile sync card setup/load flow
 function startSyncSetup() {
@@ -314,7 +182,7 @@ async function finishSyncSetup(newId) {
   if(st) st.textContent='Creating profile\u2026';
   sessionStorage.setItem('vc:kvPass', a);
   localStorage.setItem('vc:kvId', newId);
-  await dbPush('kvSetupStatus');
+  await kvPush('kvSetupStatus');
   renderProfileSync();
 }
 
@@ -349,7 +217,7 @@ async function finishSyncLoad() {
   if(st) st.textContent='Connecting\u2026';
   sessionStorage.setItem('vc:kvPass', pass);
   localStorage.setItem('vc:kvId', id);
-  await dbPull('kvLoadStatus');
+  await kvPull('kvLoadStatus');
   renderProfileSync();
 }
 
@@ -387,8 +255,8 @@ function renderProfileSync() {
         </div>
         <button class="btn" style="margin-bottom:10px" onclick="const p=document.getElementById('kvSessionPass')?.value;if(p){sessionStorage.setItem('vc:kvPass',p);renderProfileSync();}">Unlock</button>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" onclick="dbPush('kvSyncStatus')" ${!hasPass?'disabled':''}>\u2191 Push</button>
-        <button class="btn sec" onclick="dbPull('kvSyncStatus')" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
+        <button class="btn" onclick="kvPush('kvSyncStatus')" ${!hasPass?'disabled':''}>\u2191 Push</button>
+        <button class="btn sec" onclick="kvPull('kvSyncStatus')" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
         <button class="btn sec" onclick="saveData()">\u2B07 Export backup</button>
         <button class="btn danger" onclick="disconnectSync()">Disconnect</button>
       </div>
@@ -438,7 +306,7 @@ async function signOutSync() {
       if(!p) return;
       sessionStorage.setItem('vc:kvPass',p);
     }
-    await dbPush(null);
+    await kvPush(null);
     _doSignOut();
   } else {
     const dl=confirm('Download a local backup TXT first, then sign out?');
@@ -461,14 +329,199 @@ function _doSignOut() {
 }
 
 Object.assign(window, {
-  kvId, kvMode,
-  dbPush, dbPull,
-  kvPush: dbPush, kvPull: dbPull, // backwards-compat aliases -- Session C removes these
-  syncSave, bannerLoadGist,
-  startSyncSetup, finishSyncSetup,
+  kvId, kvMode, kvPush, kvPull, syncSave,
+  bannerLoadGist, startSyncSetup, finishSyncSetup,
   showSyncLoad, finishSyncLoad, disconnectSync,
   renderProfileSync, renderGistSettings, checkAppUpdate,
-  signOutSync,
-  clearActiveSession, rehydrateActiveSession,
-  dbFetchHistory, dbRestoreVersion
+  signOutSync
+});
+
+// -- D1 API (Session C) -------------------------------------------------------
+const _D1_BASE = 'https://gordy-sync.gordythevirtualcaddie.workers.dev';
+function _normId(s) { return /^GRD-/i.test(s) ? s : 'GRD-' + s; }
+
+// Public wrappers so gate functions in index.html can encrypt/decrypt
+async function dbEncrypt(plaintext, passphrase) { return _encrypt(plaintext, passphrase); }
+async function dbDecrypt(envelope, passphrase)  { return _decrypt(envelope, passphrase); }
+
+// Pull from D1, decrypt, load into app. Returns {ok, lockedUntil?, error?}
+// Handles both legacy raw-blob and new D1 JSON {blob, version} response shapes.
+async function dbPull(syncId, passphrase) {
+  const id = _normId(syncId);
+  try {
+    const r = await fetch(GORDY_SYNC_URL + id);
+    if (r.status === 423) {
+      const j = await r.json().catch(() => ({}));
+      return { ok: false, lockedUntil: j.locked_until || null };
+    }
+    if (r.status === 404) return { ok: false, error: 'not_found' };
+    if (!r.ok)            return { ok: false, error: 'server_' + r.status };
+    const text = await r.text();
+    let envelope = text, version = null;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && parsed.blob) { envelope = parsed.blob; version = parsed.version != null ? parsed.version : null; }
+    } catch {}
+    let plaintext;
+    try { plaintext = await _decrypt(envelope, passphrase); }
+    catch { return { ok: false, error: 'bad_passphrase' }; }
+    processDataText(plaintext);
+    localStorage.setItem('vc:kvId', id);
+    sessionStorage.setItem('vc:kvPass', passphrase);
+    if (version != null) sessionStorage.setItem('vc:version', String(version));
+    localStorage.setItem('vc:kvLastSync', new Date().toLocaleTimeString());
+    localStorage.setItem('vc:kvLastSyncTs', String(Date.now()));
+    return { ok: true };
+  } catch { return { ok: false, error: 'network' }; }
+}
+
+// Report successful auth to Worker (resets failed_attempts in D1)
+async function _reportSuccess(syncId) {
+  try { await fetch(_D1_BASE + '/sync/success/' + _normId(syncId), { method: 'POST' }); } catch {}
+}
+
+// Report failed auth to Worker (increments failed_attempts). Returns {lockedUntil?}
+async function _reportFailure(syncId) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/failure/' + _normId(syncId), { method: 'POST' });
+    if (r.ok) { const j = await r.json().catch(() => ({})); return { lockedUntil: j.locked_until || null }; }
+  } catch {}
+  return {};
+}
+
+// Check localStorage for active round or range session
+function rehydrateActiveSession() {
+  const checks = [['gordy:activeRound', 'round'], ['gordy:activeRange', 'range']];
+  for (const [key, type] of checks) {
+    const raw = localStorage.getItem(key);
+    if (raw) { try { return { type, state: JSON.parse(raw) }; } catch {} }
+  }
+  return null;
+}
+
+// Remove one active session snapshot from localStorage
+function clearActiveSession(type) {
+  if (type === 'round') localStorage.removeItem('gordy:activeRound');
+  else if (type === 'range') localStorage.removeItem('gordy:activeRange');
+}
+
+// Check ID availability. Returns {available, error?}
+async function dbCheckId(syncId) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/check-id/' + _normId(syncId));
+    if (r.status === 409) return { available: false };
+    if (r.ok)             return { available: true };
+    return { available: false, error: 'server_' + r.status };
+  } catch { return { available: false, error: 'network' }; }
+}
+
+// Verify site password against D1 config table. Returns {ok}
+async function dbCheckSitePassword(sitePassword) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/site-auth', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site_password: sitePassword })
+    });
+    return { ok: r.ok };
+  } catch { return { ok: false, error: 'network' }; }
+}
+
+// Get security question for a sync ID. Returns {question?, error?}
+async function dbGetQuestion(syncId) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/question/' + _normId(syncId));
+    if (!r.ok) return { error: 'not_found' };
+    const j = await r.json();
+    return { question: j.recovery_question || '' };
+  } catch { return { error: 'network' }; }
+}
+
+// Fetch encrypted recovery blob for a sync ID. Returns {ok, blobRecovery?}
+async function dbGetRecovery(syncId) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/recover/' + _normId(syncId));
+    if (!r.ok) return { ok: false };
+    const j = await r.json();
+    return { ok: true, blobRecovery: j.blob_recovery || null };
+  } catch { return { ok: false, error: 'network' }; }
+}
+
+// Update only the recovery blob in D1 (after passphrase change / recovery flow). Returns {ok}
+async function dbUpdateRecovery(syncId, blobRecovery) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/recovery/' + _normId(syncId), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blob_recovery: blobRecovery })
+    });
+    return { ok: r.ok };
+  } catch { return { ok: false }; }
+}
+
+// Register a new user in D1. Returns {ok, error?}
+async function dbRegister(syncId, sitePassword, blob, blobRecovery, recoveryQuestion) {
+  const id = _normId(syncId);
+  try {
+    const r = await fetch(_D1_BASE + '/sync/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sync_id: id, site_password: sitePassword,
+        blob, blob_recovery: blobRecovery, recovery_question: recoveryQuestion, version: 1
+      })
+    });
+    if (r.status === 401) return { ok: false, error: 'bad_site_password' };
+    if (r.status === 409) return { ok: false, error: 'id_taken' };
+    if (!r.ok)            return { ok: false, error: 'server_' + r.status };
+    localStorage.setItem('vc:kvId', id);
+    return { ok: true };
+  } catch { return { ok: false, error: 'network' }; }
+}
+
+// Push a blob with version tracking (used by passphrase-change and recovery re-key flows)
+async function dbPushFull(syncId, passphrase, plaintext) {
+  const id = _normId(syncId);
+  const version = (parseInt(sessionStorage.getItem('vc:version') || '0', 10) || 0) + 1;
+  try {
+    const blob = await _encrypt(plaintext, passphrase);
+    const r = await fetch(GORDY_SYNC_URL + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blob, version })
+    });
+    if (r.status === 409) return { ok: false, error: 'conflict' };
+    if (r.status === 429) return { ok: false, error: 'rate_limit' };
+    if (!r.ok)            return { ok: false, error: 'server_' + r.status };
+    sessionStorage.setItem('vc:version', String(version));
+    return { ok: true };
+  } catch { return { ok: false, error: 'network' }; }
+}
+
+// Fetch version history list for a sync ID. Returns {ok, versions?}
+async function dbFetchHistory(syncId) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/history/' + _normId(syncId));
+    if (!r.ok) return { ok: false };
+    const j = await r.json();
+    return { ok: true, versions: j.versions || [] };
+  } catch { return { ok: false }; }
+}
+
+// Decrypt and return a specific historical version. Returns {ok, plaintext?, error?}
+async function dbRestoreVersion(syncId, version, passphrase) {
+  try {
+    const r = await fetch(_D1_BASE + '/sync/history/' + _normId(syncId) + '/' + version);
+    if (!r.ok) return { ok: false };
+    const j = await r.json();
+    let plaintext;
+    try { plaintext = await _decrypt(j.blob, passphrase); }
+    catch { return { ok: false, error: 'bad_passphrase' }; }
+    return { ok: true, plaintext };
+  } catch { return { ok: false, error: 'network' }; }
+}
+
+Object.assign(window, {
+  dbEncrypt, dbDecrypt, dbPull,
+  _reportSuccess, _reportFailure,
+  rehydrateActiveSession, clearActiveSession,
+  dbCheckId, dbCheckSitePassword, dbGetQuestion,
+  dbGetRecovery, dbUpdateRecovery, dbRegister,
+  dbPushFull, dbFetchHistory, dbRestoreVersion
 });
