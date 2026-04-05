@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GORDy the Virtual Caddie</title>
+<title>GOrdy the Virtual Caddy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -425,6 +425,12 @@ body{
 .sp-meta{font-size:.58rem;opacity:.8;}
 .sp-right{display:flex;align-items:center;gap:8px;font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;opacity:.7;white-space:nowrap;}
 .sp-dot{width:8px;height:8px;border-radius:50%;background:#fff;flex-shrink:0;animation:livePulse 1.4s infinite;}
+.checklist-step{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--br);font-size:.74rem;color:var(--tx2);}
+.checklist-step:last-child{border-bottom:none;}
+.checklist-step.done .checklist-icon{color:var(--gr2);}
+.checklist-step.done > span:nth-child(2){text-decoration:line-through;color:var(--tx3);}
+.checklist-icon{font-size:.9rem;color:var(--tx3);min-width:16px;}
+.ai-step-row{font-size:.68rem;color:var(--tx2);padding:3px 0;}
 </style>
 </head>
 <body>
@@ -432,7 +438,7 @@ body{
 <!-- Auth gate -- shown on cold load, hidden after successful auth -->
 <div id="authGate">
   <div class="gate-card">
-    <img src="./main.png" class="gate-logo-img" alt="GORDy the Virtual Caddie" style="display:block;margin:0 auto 18px;max-width:180px;height:auto">
+    <img src="./main.png" class="gate-logo-img" alt="Gordy the Virtual Caddy" style="display:block;margin:0 auto 18px;max-width:180px;height:auto">
 
     <!-- Returning user -->
     <div id="gateReturn">
@@ -544,6 +550,20 @@ body{
       </div>
     </div>
 
+    <!-- Guest mode -->
+    <div style="text-align:center;margin-top:18px" id="guestBtn">
+      <button class="btn sec" style="font-size:.62rem" onclick="gateGuest()">Continue without account</button>
+      <div style="font-size:.58rem;color:var(--tx3);margin-top:6px">Data is stored on this device only. Clearing browser data will erase it.</div>
+    </div>
+    <div id="guestConfirm" style="display:none;margin-top:14px;background:var(--gr3);border:1px solid var(--br);border-radius:6px;padding:12px">
+      <div style="font-size:.68rem;color:var(--ac2);margin-bottom:8px">\u26A0 Guest mode: your data will not be backed up.</div>
+      <div style="font-size:.65rem;color:var(--tx2);margin-bottom:10px;line-height:1.5">If you clear browser data or switch devices, all data is permanently lost.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="gateGuestConfirm()">Continue as guest</button>
+        <button class="btn sec" onclick="gateGuestCancel()">Cancel</button>
+      </div>
+    </div>
+
     <div id="gateLoading" style="display:none;text-align:center;padding:12px 0 4px">
       <div class="loading"><div class="dots"><span></span><span></span><span></span></div></div>
     </div>
@@ -553,7 +573,7 @@ body{
 <!-- Inactivity lock overlay (z-index:90 -- pill at 95 remains tappable above this) -->
 <div id="lockOverlay">
   <div class="lock-card">
-    <div class="lock-logo">GORDy</div>
+    <div class="lock-logo">Gordy</div>
     <div class="lock-context" id="lockContext">Locked due to inactivity.</div>
     <div class="field" style="margin-top:14px">
       <div class="flbl">Passphrase</div>
@@ -580,7 +600,7 @@ body{
     <div style="display:flex;align-items:center;gap:10px">
       <img src="./icon.png" class="hdr-icon" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0">
       <div>
-        <div class="hdr-title">GORDy the Virtual Caddie</div>
+        <div class="hdr-title">Gordy the Virtual Caddy</div>
         <div class="hdr-sub">Golf Optimization Research &amp; Decisions</div>
       </div>
     </div>
@@ -649,7 +669,7 @@ body{
   <!-- Upload prompt banner -->
   <div id="uploadBanner">
     <div class="ub-text">
-      <strong>Welcome to GORDy the Virtual Caddie</strong>
+      <strong>Welcome to GORDy the Virtual Caddy</strong>
       Import an existing data file, load from sync, or start fresh and set up your clubs and courses with AI.
     </div>
     <label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);document.getElementById('uploadBanner').style.display='none'"></label>
@@ -673,6 +693,29 @@ body{
   <!-- CLUBS -->
   <!-- PROFILE -->
   <div id="tab-profile" class="panel active">
+
+    <!-- First-run checklist -->
+    <div id="firstRunCard" class="card" style="display:none;margin-bottom:12px;border-left:3px solid var(--gr2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="card-title" style="margin:0">Getting started</div>
+        <button class="btn sec" style="font-size:.58rem;padding:3px 8px" onclick="dismissChecklist()">Dismiss</button>
+      </div>
+      <div id="checklistStep1" class="checklist-step">
+        <span class="checklist-icon">\u25CB</span>
+        <span>Add your clubs</span>
+        <button class="btn sec" onclick="showTab('clubs')">Go to Clubs \u2192</button>
+      </div>
+      <div id="checklistStep2" class="checklist-step">
+        <span class="checklist-icon">\u25CB</span>
+        <span>Add a course</span>
+        <button class="btn sec" onclick="showTab('courses')">Go to Courses \u2192</button>
+      </div>
+      <div id="checklistStep3" class="checklist-step">
+        <span class="checklist-icon">\u25CB</span>
+        <span>Run your first caddie session</span>
+        <button class="btn sec" onclick="showTab('gordy')">Open GORDy \u2192</button>
+      </div>
+    </div>
 
     <!-- Data Sync — top of profile for visibility -->
     <div class="card" id="gistSettingsCard" style="margin-bottom:14px">
@@ -779,7 +822,7 @@ body{
         <button id="impliedTogBtn" class="implied-tog" onclick="toggleImplied()" title="Show or hide confidence-adjusted yardage ranges">Implied Yds: <span id="impliedTogLbl">Off</span></button>
       </div>
       <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px">
-        <div class="slbl" style="margin:0;text-align:right">Simple: max distance only. Detailed: full specs.</div>
+        <div class="slbl" style="margin:0;text-align:right">Simple: enter max distance only. Detailed: full specs + min/max. Implied Yds: adjusts ranges by confidence score.</div>
       </div>
     </div>
     <div id="clubList"></div>
@@ -1054,6 +1097,16 @@ body{
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importCaddieResult(event)"></label>
         </div>
         <div id="cadStatus" style="font-size:.62rem;color:var(--tx3);margin-top:6px;min-height:1em">Set your session parameters, then export for AI. Import the session result when done.</div>
+        <div id="aiStepsForAI" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-top:10px">
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
+          <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn sec" onclick="exportForAI()">Export again</button>
+          </div>
+        </div>
         <div style="margin-top:10px">
           <div class="flbl" style="margin-bottom:4px">Or paste session result text</div>
           <textarea id="pasteResult" rows="4" placeholder="Paste the AI's session result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
@@ -1082,6 +1135,16 @@ body{
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <button class="btn gold" onclick="exportRoundTask()">&#8679; Export Round Task</button>
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importRoundResult(event)"></label>
+        </div>
+        <div id="aiStepsRound" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-bottom:10px">
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
+          <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn sec" onclick="exportRoundTask()">Export again</button>
+          </div>
         </div>
         <div style="margin-top:6px">
           <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
@@ -1114,6 +1177,16 @@ body{
           <button class="btn gold" onclick="exportCourseTask()">&#8679; Export Course Task</button>
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importCourseResult(event)"></label>
         </div>
+        <div id="aiStepsCourse" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-bottom:10px">
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
+          <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn sec" onclick="exportCourseTask()">Export again</button>
+          </div>
+        </div>
         <div style="margin-top:6px">
           <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
           <textarea id="pasteCourseResult" rows="3" placeholder="Paste the AI's course result here…" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.68rem;padding:6px 9px;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--gr2)'" onblur="this.style.borderColor='var(--br)'"></textarea>
@@ -1132,6 +1205,16 @@ body{
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <button class="btn gold" onclick="exportClubTask()">&#8679; Export Club Task</button>
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importClubResult(event)"></label>
+        </div>
+        <div id="aiStepsClub" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-bottom:10px">
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
+          <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn sec" onclick="exportClubTask()">Export again</button>
+          </div>
         </div>
         <div style="margin-top:6px">
           <div class="flbl" style="margin-bottom:4px">Or paste result text</div>
@@ -1292,7 +1375,7 @@ body{
     </div>
     <div class="card">
       <div class="card-title">Genesis</div>
-      <img src="./main.png" alt="GORDy the Virtual Caddie" style="display:block;margin:0 auto 14px;max-width:160px;height:auto">
+      <img src="./main.png" alt="Gordy the Virtual Caddy" style="display:block;margin:0 auto 14px;max-width:160px;height:auto">
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
         Thought experiment. Vibe coded using Claude AI (almost) fully. Started with a simple query — optimise my golf bag for a course — and here we are. Philosophically 100% free. I hope this helps my game...<br><br>
         <strong>GORDy</strong> stands for <strong>G</strong>olf <strong>O</strong>ptimization <strong>R</strong>esearch &amp; <strong>D</strong>ecisions — with a lowercase <em>y</em> added to make it sound like an actual caddie.
@@ -1482,7 +1565,7 @@ body{
 
     <div class="disc-section">
       <div class="disc-section-title">Informational Use Only</div>
-      <div class="disc-body">Gordy the Virtual Caddie is provided for informational and entertainment purposes only. Nothing in this app constitutes professional golf instruction, coaching, or certified course advice. Club recommendations, yardage calculations, dispersion estimates, and course strategies are outputs based solely on user-entered data and should be treated as a starting point for your own judgment, not a substitute for it.</div>
+      <div class="disc-body">Gordy the Virtual Caddy is provided for informational and entertainment purposes only. Nothing in this app constitutes professional golf instruction, coaching, or certified course advice. Club recommendations, yardage calculations, dispersion estimates, and course strategies are outputs based solely on user-entered data and should be treated as a starting point for your own judgment, not a substitute for it.</div>
     </div>
 
     <div class="disc-section">
@@ -2159,6 +2242,29 @@ function gateUnlocked(active) {
   ['touchstart', 'mousedown', 'keydown'].forEach(function(ev) {
     document.addEventListener(ev, resetInactivityTimer, { passive: true });
   });
+  // First-run checklist -- show for new users with no data
+  if (!localStorage.getItem('vc:kvId') && window.bag && window.bag.length === 0 && window.courses && window.courses.length === 0) {
+    if (window.showFirstRunCard) window.showFirstRunCard();
+  }
+  // Guest mode: replace sync card with sign-in prompt
+  if (sessionStorage.getItem('vc:gateUnlocked') === 'guest') {
+    var sc = document.getElementById('gistSettingsCard');
+    if (sc) sc.innerHTML = '<div style="font-size:.72rem;color:var(--tx2);padding:4px 0">\uD83D\uDD12 You are in guest mode. <a href="#" style="color:var(--ac)" onclick="location.reload();return false">Sign in</a> to enable sync and back up your data.</div>';
+  } else {
+    // Passphrase change button — injected after sync card renders
+    setTimeout(function() {
+      var sc = document.getElementById('gistSettingsCard');
+      if (sc && sc.children.length && !document.getElementById('passphraseChangeBtn')) {
+        var btn = document.createElement('button');
+        btn.id = 'passphraseChangeBtn';
+        btn.className = 'btn sec';
+        btn.style.cssText = 'margin-top:8px;width:100%';
+        btn.textContent = 'Change passphrase';
+        btn.onclick = showPassphraseChange;
+        sc.appendChild(btn);
+      }
+    }, 400);
+  }
 }
 
 // -- Biometric (WebAuthn) -----------------------------------------------------
@@ -2313,6 +2419,190 @@ function updateSessionPill() {
   pill.classList.add('visible');
 }
 
+// =============================================================================
+// POLISH B — NEW FUNCTIONS
+// =============================================================================
+
+// -- Guest mode ---------------------------------------------------------------
+function gateGuest() {
+  document.getElementById('guestBtn').style.display = 'none';
+  document.getElementById('guestConfirm').style.display = 'block';
+}
+function gateGuestConfirm() {
+  sessionStorage.setItem('vc:gateUnlocked', 'guest');
+  gateUnlocked(null);
+}
+function gateGuestCancel() {
+  document.getElementById('guestConfirm').style.display = 'none';
+  document.getElementById('guestBtn').style.display = 'block';
+}
+
+// -- First-run checklist ------------------------------------------------------
+function updateChecklist() {
+  var card = document.getElementById('firstRunCard');
+  if (!card) return;
+  var raw = localStorage.getItem('gordy:checklist');
+  var state = raw ? JSON.parse(raw) : null;
+  if (state && state.dismissed) { card.style.display = 'none'; return; }
+  var b = window.bag || [];
+  var c = window.courses || [];
+  var h = window.history || [];
+  var s1done = b.filter(function(cl){ return cl.active && cl.sessions && cl.sessions.length > 0; }).length >= 1;
+  var s2done = c.length >= 1;
+  var s3done = h.length >= 1;
+  function setStep(id, done) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var icon = el.querySelector('.checklist-icon');
+    if (icon) icon.textContent = done ? '\u2713' : '\u25CB';
+    if (done) el.classList.add('done'); else el.classList.remove('done');
+  }
+  setStep('checklistStep1', s1done);
+  setStep('checklistStep2', s2done);
+  setStep('checklistStep3', s3done);
+  card.style.display = 'block';
+  if (s1done && s2done && s3done) {
+    setTimeout(function() {
+      localStorage.setItem('gordy:checklist', JSON.stringify({dismissed:true}));
+      card.style.display = 'none';
+    }, 2000);
+  }
+}
+function dismissChecklist() {
+  localStorage.setItem('gordy:checklist', JSON.stringify({dismissed:true}));
+  var card = document.getElementById('firstRunCard');
+  if (card) card.style.display = 'none';
+}
+function showFirstRunCard() {
+  var existing = localStorage.getItem('gordy:checklist');
+  if (existing) { try { var s = JSON.parse(existing); if (s.dismissed) return; } catch(e) {} }
+  localStorage.setItem('gordy:checklist', JSON.stringify({dismissed:false}));
+  var card = document.getElementById('firstRunCard');
+  if (card) card.style.display = 'block';
+  updateChecklist();
+}
+
+// -- Upload banner state-aware render -----------------------------------------
+function renderBanner() {
+  var el = document.getElementById('uploadBanner');
+  if (!el) return;
+  if (sessionStorage.getItem('gordy:bannerDismissed')) { el.style.display = 'none'; return; }
+  var kvId = localStorage.getItem('vc:kvId');
+  var isGuest = sessionStorage.getItem('vc:gateUnlocked') === 'guest';
+  var b = window.bag || [];
+  var co = window.courses || [];
+  var ro = window.rounds || [];
+  var hi = window.history || [];
+  var hasData = b.length || co.length || ro.length || hi.length;
+  // New user: no kvId, no data — checklist handles onboarding; hide banner
+  if (!kvId && !hasData && !isGuest) { el.style.display = 'none'; return; }
+  // Guest: no banner needed
+  if (isGuest) { el.style.display = 'none'; return; }
+  // Returning user, new device: has kvId but no local data
+  if (kvId && !hasData) {
+    el.style.display = 'block';
+    el.innerHTML = '<div class="card" style="margin:0;border-left:3px solid var(--gr2);width:100%"><div class="card-title">Welcome back</div><p style="font-size:.74rem;color:var(--tx2);margin-bottom:10px">No local data on this device.</p><div style="display:flex;gap:8px"><button class="btn" onclick="manualPull()">\u2193 Pull from sync</button><button class="btn sec" onclick="dismissBanner()">Start fresh</button></div></div>';
+    return;
+  }
+  // Legacy user: has local data but no kvId — show original 4-button banner
+  if (!kvId && hasData) {
+    el.innerHTML = '<div class="ub-text"><strong>Welcome to GORDy the Virtual Caddy</strong>Import an existing data file, load from sync, or start fresh and set up your clubs and courses with AI.</div><label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);dismissBanner()"></label><button class="btn gold" onclick="bannerLoadGist()" style="white-space:nowrap" id="bannerGistBtn">&#8681; Load from sync</button><button class="btn sec" onclick="exportStarterTxt()" style="white-space:nowrap">\uD83E\uDD16 Set Up with AI</button><button class="btn sec" onclick="dismissBanner()" style="white-space:nowrap">Start fresh</button>';
+    el.style.display = 'flex';
+    return;
+  }
+  // Cloud newer check
+  if (kvId && hasData && sessionStorage.getItem('gordy:cloudNewer') === '1') {
+    el.style.display = 'block';
+    el.innerHTML = '<div class="card" style="margin:0;border-left:3px solid var(--sand);width:100%"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:.74rem;color:var(--tx2)">\u26A0 Your sync profile has newer data.</span><div style="display:flex;gap:6px"><button class="btn sec" onclick="manualPull()">\u2193 Pull</button><button class="btn sec" onclick="dismissBanner()">Dismiss</button></div></div></div>';
+    return;
+  }
+  // Returning user, data present, all good — hide
+  el.style.display = 'none';
+}
+function dismissBanner() {
+  sessionStorage.setItem('gordy:bannerDismissed', '1');
+  var el = document.getElementById('uploadBanner');
+  if (el) el.style.display = 'none';
+}
+function manualPull() {
+  if (window.dbPull) window.dbPull();
+}
+
+// -- AI steps card show/hide --------------------------------------------------
+var _aiStepsMap = {
+  'pasteResult':       'aiStepsForAI',
+  'pasteRoundResult':  'aiStepsRound',
+  'pasteClubResult':   'aiStepsClub',
+  'pasteCourseResult': 'aiStepsCourse'
+};
+function showAIStepsCard(cardId) {
+  var el = document.getElementById(cardId);
+  if (el) el.style.display = 'block';
+}
+function hideAIStepsCard(pasteId) {
+  var cardId = _aiStepsMap[pasteId];
+  if (!cardId) return;
+  var el = document.getElementById(cardId);
+  if (el) el.style.display = 'none';
+}
+// exportRoundTask wrapper -- shows AI steps after export
+(function() {
+  var _orig = window.exportRoundTask;
+  window.exportRoundTask = function() {
+    if (_orig) _orig.apply(this, arguments);
+    showAIStepsCard('aiStepsRound');
+  };
+})();
+
+// -- Session linker auto-open -------------------------------------------------
+function updateSessionLinker() {
+  var todayStr = new Date().toISOString().slice(0, 10);
+  var hist = window.history || [];
+  var unlinked = hist.filter(function(s) {
+    return (!s.roundId) && s.date && s.date.slice(0, 10) === todayStr;
+  });
+  var linkerBody = document.getElementById('rSessLinker');
+  if (linkerBody) linkerBody.style.display = unlinked.length > 0 ? 'block' : 'none';
+}
+
+// -- Passphrase change UI -----------------------------------------------------
+function showPassphraseChange() {
+  var sc = document.getElementById('gistSettingsCard');
+  if (!sc || document.getElementById('passphraseChangeForm')) return;
+  var form = document.createElement('div');
+  form.id = 'passphraseChangeForm';
+  form.style.cssText = 'margin-top:12px;border-top:1px solid var(--br);padding-top:12px';
+  form.innerHTML = '<div class="field"><div class="flbl">New passphrase</div><input id="pcNewPass1" type="password" placeholder="At least 8 characters" style="width:100%"></div><div class="field"><div class="flbl">Confirm passphrase</div><input id="pcNewPass2" type="password" placeholder="Repeat passphrase" style="width:100%"></div><div id="pcErr" class="gate-err"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn" onclick="savePassphraseChange()">Save</button><button class="btn sec" onclick="cancelPassphraseChange()">Cancel</button></div>';
+  sc.appendChild(form);
+}
+function cancelPassphraseChange() {
+  var form = document.getElementById('passphraseChangeForm');
+  if (form) form.remove();
+}
+async function savePassphraseChange() {
+  var p1 = (document.getElementById('pcNewPass1') || {}).value || '';
+  var p2 = (document.getElementById('pcNewPass2') || {}).value || '';
+  var errEl = document.getElementById('pcErr');
+  if (p1.length < 8) { if (errEl) errEl.textContent = 'Passphrase must be at least 8 characters.'; return; }
+  if (p1 !== p2) { if (errEl) errEl.textContent = 'Passphrases do not match.'; return; }
+  if (errEl) errEl.textContent = '';
+  try {
+    var ok = await gateRekeyBlob(p1);
+    if (ok) {
+      var id = localStorage.getItem('vc:kvId') || '';
+      sessionStorage.setItem('vc:kvPass', p1);
+      if (id && sessionStorage.getItem('gordy:bp:' + id)) sessionStorage.setItem('gordy:bp:' + id, p1);
+      var form = document.getElementById('passphraseChangeForm');
+      if (form) form.innerHTML = '<div style="font-size:.72rem;color:var(--ac);padding:4px 0">\u2713 Passphrase updated successfully.</div>';
+      setTimeout(cancelPassphraseChange, 2000);
+    } else {
+      if (errEl) errEl.textContent = 'Rekey failed. Try signing out and back in.';
+    }
+  } catch(e) {
+    if (errEl) errEl.textContent = 'Error: ' + e.message;
+  }
+}
+
 load();
 applyRefDataCache(); // use cached ref data if available -- before renderAll
 /*renderAll();*/ // replaced by gateInit() -- app stays hidden until auth
@@ -2326,7 +2616,14 @@ Object.assign(window, {
   gateLogin, gateNewUser, gateRecovery, gateUnlocked,
   gateBiometricLogin, gateRegisterBiometric, gateRekeyBlob,
   gateIdFormatInput, gateOnSyncIdInput, _gateToggle,
-  unlockApp, updateSessionPill
+  unlockApp, updateSessionPill,
+  // Polish B
+  gateGuest, gateGuestConfirm, gateGuestCancel,
+  updateChecklist, dismissChecklist, showFirstRunCard,
+  renderBanner, dismissBanner, manualPull,
+  showAIStepsCard, hideAIStepsCard,
+  updateSessionLinker,
+  showPassphraseChange, cancelPassphraseChange, savePassphraseChange
 });
 if (!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
 /*Object.assign(window, {
