@@ -392,7 +392,12 @@ async function dbPull(syncId, passphrase) {
     try { window.dbLoadData && window.dbLoadData(plaintext); } catch(e) { console.error('dbPull parse error:', e); }
     localStorage.setItem('vc:kvId', id);
     sessionStorage.setItem('vc:kvPass', passphrase);
-    if (version != null) sessionStorage.setItem('vc:version', String(version));
+    if (version != null) {
+      const localVersion = parseInt(sessionStorage.getItem('vc:version') || '0', 10) || 0;
+      if (version > localVersion) sessionStorage.setItem('gordy:cloudNewer', '1');
+      else sessionStorage.removeItem('gordy:cloudNewer');
+      sessionStorage.setItem('vc:version', String(version));
+    }
     localStorage.setItem('vc:kvLastSync', new Date().toLocaleTimeString());
     localStorage.setItem('vc:kvLastSyncTs', String(Date.now()));
     return { ok: true };
