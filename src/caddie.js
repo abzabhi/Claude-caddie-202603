@@ -59,7 +59,12 @@ AI-agnostic: plain language only, no platform-specific features.`;
 }
 
 // -- Sessions -----------------------------------------------------------------
-function updateCourseSelects() { updateCourseDropdowns(); }
+function updateCourseSelects() {
+  updateCourseDropdowns();
+  /* CF2 -- show/hide no-course message in Viz tab */
+  const ncm = document.getElementById('vizNoCourseMsg');
+  if(ncm) ncm.style.display = courses.length ? 'none' : 'block';
+}
 
 function updateCadTees() {
   const courseId = document.getElementById('cadCourse')?.value;
@@ -314,6 +319,7 @@ function exportForAI() {
     st.innerHTML = `Exported \u00B7 Tier ${optTier} (${tierName}) \u00B7 ${cached}`
       + `<br><span style="color:var(--tx2)">Upload the export file to your AI chat. When done, save the AI's session result as a .txt file and import it below.</span>`;
   }
+  if(window.showAIStepsCard) window.showAIStepsCard('aiStepsForAI');
 }
 
 // -- Import Session Result ----------------------------------------------------
@@ -486,7 +492,7 @@ function toggleCard(id){
 function _fileImport(e, expectedType, pasteId) {
   const file=e.target.files[0]; if(!file) return;
   const reader=new FileReader();
-  reader.onload=ev=>{ const r=processSessionResult(ev.target.result, expectedType); alert(r.summary); };
+  reader.onload=ev=>{ const r=processSessionResult(ev.target.result, expectedType); alert(r.summary); if(r.ok && window.hideAIStepsCard) window.hideAIStepsCard(pasteId); };
   reader.readAsText(file);
   e.target.value='';
 }
@@ -498,6 +504,7 @@ function _pasteImport(pasteId, expectedType) {
   const r=processSessionResult(text, expectedType);
   alert(r.summary);
   if(r.ok&&ta) ta.value='';
+  if(r.ok && window.hideAIStepsCard) window.hideAIStepsCard(pasteId);
 }
 
 // Per-card file importers
@@ -728,6 +735,7 @@ ${taskText}
 ${clubLines.join('\n')}`;
 
   downloadTask(`vc-club-task-${today()}.txt`, content);
+  if(window.showAIStepsCard) window.showAIStepsCard('aiStepsClub');
 }
 
 function exportCourseTask() {
@@ -769,6 +777,7 @@ ${taskText}
 ${existingLine}${preLoadedBlock}`;
 
   downloadTask(`vc-course-task-${today()}.txt`, content);
+  if(window.showAIStepsCard) window.showAIStepsCard('aiStepsCourse');
 }
 
 Object.assign(window, {
