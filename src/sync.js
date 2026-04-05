@@ -263,7 +263,7 @@ function renderProfileSync() {
         <button class="btn" style="margin-bottom:10px" onclick="const p=document.getElementById('kvSessionPass')?.value;if(p){sessionStorage.setItem('vc:kvPass',p);renderProfileSync();}">Unlock</button>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="kvPush('kvSyncStatus')" ${!hasPass?'disabled':''}>\u2191 Push</button>
-        <button class="btn sec" onclick="kvPull('kvSyncStatus')" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
+        <button class="btn sec" onclick="_profilePull()" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
         <button class="btn sec" onclick="saveData()">\u2B07 Export backup</button>
         <button class="btn danger" onclick="disconnectSync()">Disconnect</button>
         ${window.PublicKeyCredential
@@ -345,8 +345,22 @@ Object.assign(window, {
   bannerLoadGist, startSyncSetup, finishSyncSetup,
   showSyncLoad, finishSyncLoad, disconnectSync,
   renderProfileSync, renderGistSettings, checkAppUpdate,
-  signOutSync
+  signOutSync, _profilePull
 });
+
+// Profile Pull button — routes to D1 pull, shows inline error if not signed in
+async function _profilePull() {
+  const syncId = localStorage.getItem('vc:kvId');
+  const passphrase = sessionStorage.getItem('vc:kvPass');
+  const st = document.getElementById('kvSyncStatus');
+  if (!syncId || !passphrase) {
+    if (st) st.textContent = '\u26A0 Sign in first to pull data.';
+    return;
+  }
+  if (st) st.textContent = 'Pulling\u2026';
+  const result = await dbPull(syncId, passphrase);
+  if (st) st.textContent = result.ok ? '\u2713 Pull complete.' : '\u26A0 Pull failed' + (result.error ? ': ' + result.error : '.');
+}
 
 // -- D1 API (Session C) -------------------------------------------------------
 const _D1_BASE = 'https://gordy-sync.gordythevirtualcaddie.workers.dev';
