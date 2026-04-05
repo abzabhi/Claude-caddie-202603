@@ -1969,8 +1969,6 @@ async function gateLogin() {
     sessionStorage.setItem('vc:gateUnlocked', '1');
     var active = rehydrateActiveSession ? rehydrateActiveSession() : null;
     gateUnlocked(active);
-    // Prompt biometric registration after first successful login
-    setTimeout(function() { gateRegisterBiometric(fullId, pass); }, 400);
   } else if (result.lockedUntil) {
     var until = new Date(result.lockedUntil);
     _gateErr('gateReturnErr', 'Account locked until ' + until.toLocaleTimeString() + '. Too many failed attempts.');
@@ -2141,9 +2139,11 @@ function gateUnlocked(active) {
 }
 
 // -- Biometric (WebAuthn) -----------------------------------------------------
-function gateRegisterBiometric(syncId, passphrase) {
-  if (!window.PublicKeyCredential) return;
-  if (!confirm('Save this device for faster login?\n\nYou\'ll be able to sign in with biometrics next time.')) return;
+function gateRegisterBiometric() {
+  if (!window.PublicKeyCredential) { alert('Biometric login is not supported on this device.'); return; }
+  var syncId = localStorage.getItem('vc:kvId') || '';
+  var passphrase = sessionStorage.getItem('vc:kvPass') || '';
+  if (!syncId || !passphrase) { alert('Sign in first to enable biometric.'); return; }
   var uid = crypto.getRandomValues(new Uint8Array(16));
   navigator.credentials.create({ publicKey: {
     challenge: crypto.getRandomValues(new Uint8Array(32)),
@@ -2156,9 +2156,10 @@ function gateRegisterBiometric(syncId, passphrase) {
     localStorage.setItem('gordy:biometric:' + syncId, cred.id);
     sessionStorage.setItem('gordy:bp:' + syncId, passphrase);
     alert('Biometric saved \u2014 tap the biometric button next time to sign in faster.');
+    if (window.renderProfileSync) window.renderProfileSync();
   }).catch(function(err) {
     console.error('[Gordy] Biometric registration error:', err);
-    alert('Biometric setup failed. You can try again next time.');
+    alert('Biometric setup failed. Please try again.');
   });
 }
 
