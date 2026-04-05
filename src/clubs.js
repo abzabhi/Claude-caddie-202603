@@ -214,6 +214,7 @@ export function clubRowHTML(c, isPutter) {
       </div>
     </div>
     <div class="cpanel" id="cpanel-${c.id}" style="display:none">
+      <div id="dup-err-${c.id}" class="gate-err" style="display:none;margin-bottom:6px"></div>
       ${simple ? simplePanel : detailedPanel}
     </div>
   </div>`;
@@ -238,6 +239,18 @@ export function toggleActive(id) {
 
 export function updateClub(id, field, val) {
   const c = bag.find(x=>x.id===id); if(!c) return;
+  /* CF1 -- duplicate club check: compare proposed new value against rest of bag */
+  const errEl = document.getElementById('dup-err-'+id);
+  const proposed = Object.assign({}, c, {[field]: val});
+  if(proposed.brand && proposed.type && proposed.identifier) {
+    const dup = bag.find(x => x.id !== id && x.brand === proposed.brand && x.type === proposed.type && x.identifier === proposed.identifier);
+    if(dup) {
+      if(errEl) { errEl.textContent = 'This club is already in your bag.'; errEl.style.display = 'block'; }
+      return;
+    }
+  }
+  if(errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  /* end CF1 */
   c[field] = (field==='confidence') ? (parseInt(val)||4) : val;
   save();
   const {type:tl,loft} = getTypeLabel(c);
