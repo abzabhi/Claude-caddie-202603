@@ -2126,6 +2126,7 @@ function gateUnlocked(active) {
   try { renderAll(); } catch(e) { console.error('renderAll error:', e); }
   // Route to active session if present; otherwise default to Profile tab
   if (active && active.type === 'round') {
+    window.lrState = active.state;
     showTabFromProfile('rounds');
     if (window.lrExpand) window.lrExpand();
   } else {
@@ -2154,7 +2155,11 @@ function gateRegisterBiometric(syncId, passphrase) {
   }}).then(function(cred) {
     localStorage.setItem('gordy:biometric:' + syncId, cred.id);
     sessionStorage.setItem('gordy:bp:' + syncId, passphrase);
-  }).catch(function() {});
+    alert('Biometric saved \u2014 tap the biometric button next time to sign in faster.');
+  }).catch(function(err) {
+    console.error('[Gordy] Biometric registration error:', err);
+    alert('Biometric setup failed. You can try again next time.');
+  });
 }
 
 async function gateBiometricLogin() {
@@ -2167,7 +2172,7 @@ async function gateBiometricLogin() {
   try {
     var assertion = await navigator.credentials.get({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      allowCredentials: [{ id: Uint8Array.from(atob(credId), function(c) { return c.charCodeAt(0); }), type: 'public-key' }],
+      allowCredentials: [{ id: Uint8Array.from(atob(credId.replace(/-/g,'+').replace(/_/g,'/')), function(c) { return c.charCodeAt(0); }), type: 'public-key' }],
       userVerification: 'required',
       timeout: 60000
     }});
@@ -2259,6 +2264,8 @@ async function unlockApp() {
 function updateSessionPill() {
   var pill = document.getElementById('sessionPill');
   if (!pill) return;
+  var overlay = document.getElementById('lrOverlay');
+  if (overlay && overlay.classList.contains('active')) { pill.classList.remove('visible'); return; }
   var roundRaw = localStorage.getItem('gordy:activeRound');
   var rangeRaw = localStorage.getItem('gordy:activeRange');
   if (!roundRaw && !rangeRaw) { pill.classList.remove('visible'); return; }
