@@ -371,7 +371,7 @@ function showTab(id) {
   if(id==='profile')  renderProfile();
   if(id==='clubs')    renderClubs();
   if(id==='courses')  renderCourseList();
-  if(id==='rounds')   renderHandicap();
+  if(id==='rounds')   { renderHandicap(); if(window.updateSessionLinker) window.updateSessionLinker(); }
   if(id==='gordy')    window.renderAIHelp();
   if(id==='sessions') window.renderSessions();
   if(id==='viz')      window.initViz();
@@ -584,6 +584,9 @@ export function renderAll() {
     const c=courses.find(x=>x.name===this.value);
     if(c){const r=document.getElementById('rRating'),s=document.getElementById('rSlope'),p=document.getElementById('rPar');if(r)r.value=c.rating;if(s)s.value=c.slope;if(p)p.value=c.par;window.updateDiffPreview();}
   });}
+  if(window.updateChecklist) window.updateChecklist();
+  if(window.updateSessionLinker) window.updateSessionLinker();
+  if(window.renderBanner) window.renderBanner();
 }
 
 // -- Modals -------------------------------------------------------------------
@@ -598,7 +601,7 @@ function confirmClearAll() {
   ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version'].forEach(k=>localStorage.removeItem(k));
   clearAll();
   document.getElementById('clearModal').style.display='none';
-  document.getElementById('uploadBanner').style.display='flex';
+  if(window.renderBanner) window.renderBanner(); else document.getElementById('uploadBanner').style.display='flex';
   renderAll();
 }
 
