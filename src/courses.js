@@ -6,6 +6,8 @@ const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy
 
 let editCourseData = null;
 let currentEditTeeId = null;
+let _deleteConfirmId = null;
+let _deleteConfirmTimer = null;
 
 async function _fetchCourseIndex() {
   const CACHE_KEY='gordy:courseIndex', CACHE_TS='gordy:courseIndex:ts', TTL=24*60*60*1000;
@@ -79,11 +81,25 @@ async function addCourseFromRepo(courseId,statusElId) {
   if(selTee) course.holes=selTee.holes;
   const existing=courses.find(c=>c.id===course.id);
   if(existing){
+    if(statusElId){
+      const st2=document.getElementById(statusElId);
+      if(st2) st2.textContent='\u26A0 "'+course.name+'" is already in your courses.';
+    }
+    /* Mark the Add button as already saved if reachable */
+    document.querySelectorAll('[onclick*="addCourseFromRepo(\''+courseId+'\'"]').forEach(function(btn){
+      btn.textContent='\u2705 Already saved'; btn.disabled=true;
+    });
+    return;
+  }
+  /* Old behaviour: confirm() + replaceCourse — removed, repo re-add now blocked silently
+  if(existing){
     if(!confirm(`"${course.name}" is already in your courses. Replace with the repo version?`)) return;
     replaceCourse(course);
   } else {
     courses.push(course);
   }
+  */
+  courses.push(course);
   save(); renderAll();
   if(st) st.textContent=`\u2705 "${course.name}" added to your courses.`;
 }
@@ -131,7 +147,10 @@ function getFavCourseId() {
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
             <button class="${togCls}" onclick="event.stopPropagation();toggleHomeCourse('${c.id}')">${togLbl}</button>
-            <button class="btn danger" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button>
+            <div style="text-align:right">
+              <button id="delBtn-${c.id}" class="btn danger" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button>
+              <div id="delWarn-${c.id}" style="font-size:.62rem;color:var(--danger);font-family:'DM Mono',monospace;margin-top:3px;display:none;max-width:160px;line-height:1.4"></div>
+            </div>
           </div>
         </div>
       </div>`;
@@ -141,6 +160,42 @@ function getFavCourseId() {
   updateCourseSelects();
 }
 
+function _resetDeleteConfirm() {
+  if (_deleteConfirmTimer) { clearTimeout(_deleteConfirmTimer); _deleteConfirmTimer = null; }
+  if (_deleteConfirmId) {
+    const btn  = document.getElementById('delBtn-'  + _deleteConfirmId);
+    const warn = document.getElementById('delWarn-' + _deleteConfirmId);
+    if (btn)  { btn.textContent = 'Delete'; btn.classList.remove('danger-active'); }
+    if (warn) { warn.style.display = 'none'; warn.textContent = ''; }
+    _deleteConfirmId = null;
+  }
+}
+
+function deleteCourse(id) {
+  if (_deleteConfirmId === id) {
+    /* Second tap — confirmed */
+    _resetDeleteConfirm();
+    removeCourse(id);
+    if (profile.homeCourseId === id) { profile.homeCourseId = ''; save(); }
+    save();
+    setVizInitDone(false);
+    renderCourseList();
+    return;
+  }
+  /* First tap — show confirmation state */
+  _resetDeleteConfirm(); /* clear any prior pending confirm */
+  _deleteConfirmId = id;
+  const btn  = document.getElementById('delBtn-'  + id);
+  const warn = document.getElementById('delWarn-' + id);
+  if (btn)  { btn.textContent = 'Confirm delete?'; }
+  if (warn) {
+    warn.textContent = 'Rounds and sessions linked to this course will show a broken link. This cannot be undone.';
+    warn.style.display = 'block';
+  }
+  _deleteConfirmTimer = setTimeout(_resetDeleteConfirm, 4000);
+}
+
+/* Old deleteCourse (single-tap, no confirmation):
 function deleteCourse(id) {
   removeCourse(id);
   if(profile.homeCourseId===id){profile.homeCourseId='';save();}
@@ -148,6 +203,7 @@ function deleteCourse(id) {
   setVizInitDone(false);
   renderCourseList();
 }
+*/
 
 function toggleHomeCourse(id) {
   profile.homeCourseId = profile.homeCourseId===id ? '' : id;
@@ -304,6 +360,18 @@ function saveCourse() {
   editCourseData.slope=document.getElementById('cSlope').value;
   editCourseData.par=document.getElementById('cPar').value;
   editCourseData.yardage=document.getElementById('cYardage').value;
+  /* Duplicate check — skip self (same id = editing existing) */
+  const errEl = document.getElementById('courseSaveErr');
+  const normName = (editCourseData.name||'').trim().toLowerCase();
+  const normCity = (editCourseData.city||'').trim().toLowerCase();
+  const others = courses.filter(c=>c.id!==editCourseData.id);
+  const nameCityMatch = others.find(c=>(c.name||'').trim().toLowerCase()===normName && (c.city||'').trim().toLowerCase()===normCity);
+  const nameOnlyMatch = !nameCityMatch && others.find(c=>(c.name||'').trim().toLowerCase()===normName);
+  if(nameCityMatch) {
+    if(errEl){ errEl.textContent='A course with this name and location already exists.'; errEl.style.cssText='display:block;font-size:.68rem;padding:6px 10px;border-radius:4px;margin-bottom:10px;background:#fdf2f2;border:1px solid #e0b0b0;color:var(--danger)'; }
+    return;
+  }
+  if(errEl) errEl.style.display='none';
   if(currentEditTeeId){const t=editCourseData.tees.find(x=>x.id===currentEditTeeId);if(t)t.holes=editCourseData.holes.map(h=>({...h}));}
   if(!editCourseData.tees.length) {
     const defaultTee = {
@@ -320,6 +388,7 @@ function saveCourse() {
   editCourseData.updatedAt = new Date().toISOString().slice(0,10);
   const idx=courses.findIndex(c=>c.id===editCourseData.id);
   if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
+  if(nameOnlyMatch && errEl){ errEl.textContent='A course with this name is already saved. Saved anyway.'; errEl.style.cssText='display:block;font-size:.68rem;padding:6px 10px;border-radius:4px;margin-bottom:10px;background:var(--gr3);border:1px solid var(--gr2);color:var(--ac)'; }
   save(); setVizInitDone(false); cancelCourseEdit(); renderCourseList();
 }
 
