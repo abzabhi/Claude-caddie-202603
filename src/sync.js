@@ -266,6 +266,11 @@ function renderProfileSync() {
         <button class="btn sec" onclick="kvPull('kvSyncStatus')" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
         <button class="btn sec" onclick="saveData()">\u2B07 Export backup</button>
         <button class="btn danger" onclick="disconnectSync()">Disconnect</button>
+        ${window.PublicKeyCredential
+          ? (localStorage.getItem('gordy:biometric:' + kvId())
+              ? `<span style="font-size:.6rem;color:var(--ac);align-self:center">\uD83D\uDCF1 Biometric \u2713</span>`
+              : `<button class="btn sec" onclick="gateRegisterBiometric()">\uD83D\uDCF1 Enable biometric</button>`)
+          : ''}
       </div>
     ` : `
       <div style="font-size:.68rem;color:var(--tx2);margin-bottom:12px;line-height:1.7">
