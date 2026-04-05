@@ -605,6 +605,104 @@ function confirmClearAll() {
   renderAll();
 }
 
+// -- Polish B: checklist, banner, AI steps, session linker --------------------
+
+function updateChecklist() {
+  var card = document.getElementById('firstRunCard');
+  if (!card) return;
+  var raw = localStorage.getItem('gordy:checklist');
+  var state = raw ? JSON.parse(raw) : null;
+  if (state && state.dismissed) { card.style.display = 'none'; return; }
+  var b = bag; var c = courses; var h = history;
+  var s1done = b.filter(function(cl){ return cl.active && cl.sessions && cl.sessions.length > 0; }).length >= 1;
+  var s2done = c.length >= 1;
+  var s3done = h.length >= 1;
+  function setStep(id, done) {
+    var el = document.getElementById(id); if (!el) return;
+    var icon = el.querySelector('.checklist-icon');
+    if (icon) icon.textContent = done ? '\u2713' : '\u25CB';
+    if (done) el.classList.add('done'); else el.classList.remove('done');
+  }
+  setStep('checklistStep1', s1done);
+  setStep('checklistStep2', s2done);
+  setStep('checklistStep3', s3done);
+  card.style.display = 'block';
+  if (s1done && s2done && s3done) {
+    setTimeout(function() {
+      localStorage.setItem('gordy:checklist', JSON.stringify({dismissed:true}));
+      card.style.display = 'none';
+    }, 2000);
+  }
+}
+function dismissChecklist() {
+  localStorage.setItem('gordy:checklist', JSON.stringify({dismissed:true}));
+  var card = document.getElementById('firstRunCard');
+  if (card) card.style.display = 'none';
+}
+function showFirstRunCard() {
+  var existing = localStorage.getItem('gordy:checklist');
+  if (existing) { try { var s = JSON.parse(existing); if (s.dismissed) return; } catch(e) {} }
+  localStorage.setItem('gordy:checklist', JSON.stringify({dismissed:false}));
+  var card = document.getElementById('firstRunCard');
+  if (card) card.style.display = 'block';
+  updateChecklist();
+}
+
+function renderBanner() {
+  var el = document.getElementById('uploadBanner'); if (!el) return;
+  if (sessionStorage.getItem('gordy:bannerDismissed')) { el.style.display = 'none'; return; }
+  var kvId = localStorage.getItem('vc:kvId');
+  var isGuest = sessionStorage.getItem('vc:gateUnlocked') === 'guest';
+  var hasData = bag.length || courses.length || rounds.length || history.length;
+  if (!kvId && !hasData && !isGuest) { el.style.display = 'none'; return; }
+  if (isGuest) { el.style.display = 'none'; return; }
+  if (kvId && !hasData) {
+    el.style.display = 'block';
+    el.innerHTML = '<div class="card" style="margin:0;border-left:3px solid var(--gr2);width:100%"><div class="card-title">Welcome back</div><p style="font-size:.74rem;color:var(--tx2);margin-bottom:10px">No local data on this device.</p><div style="display:flex;gap:8px"><button class="btn" onclick="manualPull()">\u2193 Pull from sync</button><button class="btn sec" onclick="dismissBanner()">Start fresh</button></div></div>';
+    return;
+  }
+  if (!kvId && hasData) {
+    el.innerHTML = '<div class="ub-text"><strong>Welcome to GORDy the Virtual Caddy</strong>Import an existing data file, load from sync, or start fresh and set up your clubs and courses with AI.</div><label class="btn gold" style="cursor:pointer;white-space:nowrap">&#8679; Import Data File<input type="file" accept=".txt" style="display:none" onchange="importData(event);dismissBanner()"></label><button class="btn gold" onclick="bannerLoadGist()" style="white-space:nowrap" id="bannerGistBtn">&#8681; Load from sync</button><button class="btn sec" onclick="exportStarterTxt()" style="white-space:nowrap">\uD83E\uDD16 Set Up with AI</button><button class="btn sec" onclick="dismissBanner()" style="white-space:nowrap">Start fresh</button>';
+    el.style.display = 'flex';
+    return;
+  }
+  if (kvId && hasData && sessionStorage.getItem('gordy:cloudNewer') === '1') {
+    el.style.display = 'block';
+    el.innerHTML = '<div class="card" style="margin:0;border-left:3px solid var(--sand);width:100%"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:.74rem;color:var(--tx2)">\u26A0 Your sync profile has newer data.</span><div style="display:flex;gap:6px"><button class="btn sec" onclick="manualPull()">\u2193 Pull</button><button class="btn sec" onclick="dismissBanner()">Dismiss</button></div></div></div>';
+    return;
+  }
+  el.style.display = 'none';
+}
+function dismissBanner() {
+  sessionStorage.setItem('gordy:bannerDismissed', '1');
+  var el = document.getElementById('uploadBanner');
+  if (el) el.style.display = 'none';
+}
+function manualPull() { if (window.dbPull) window.dbPull(); }
+
+const _aiStepsMap = {
+  pasteResult:       'aiStepsForAI',
+  pasteRoundResult:  'aiStepsRound',
+  pasteClubResult:   'aiStepsClub',
+  pasteCourseResult: 'aiStepsCourse'
+};
+function showAIStepsCard(cardId) {
+  const el = document.getElementById(cardId);
+  if (el) el.style.display = 'block';
+}
+function hideAIStepsCard(pasteId) {
+  const cardId = _aiStepsMap[pasteId]; if (!cardId) return;
+  const el = document.getElementById(cardId);
+  if (el) el.style.display = 'none';
+}
+
+function updateSessionLinker() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const unlinked = history.filter(s => (!s.roundId) && s.date && s.date.slice(0, 10) === todayStr);
+  const linkerBody = document.getElementById('rSessLinker');
+  if (linkerBody) linkerBody.style.display = unlinked.length > 0 ? 'block' : 'none';
+}
+
 Object.assign(window, {
   saveData, exportData, processDataText, dbLoadData, importData, onMergeFile,
   showTab, saveProfile, renderProfileHero, renderProfile,
@@ -612,5 +710,9 @@ Object.assign(window, {
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
   updateCourseDropdowns, renderAll, serialise,
-  showDisclaimer, acceptDisclaimer, confirmClearAll
+  showDisclaimer, acceptDisclaimer, confirmClearAll,
+  updateChecklist, dismissChecklist, showFirstRunCard,
+  renderBanner, dismissBanner, manualPull,
+  showAIStepsCard, hideAIStepsCard,
+  updateSessionLinker
 });
