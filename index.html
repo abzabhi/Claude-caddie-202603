@@ -2033,11 +2033,12 @@ function gateOnSyncIdInput() {
 
 // -- Gate init ----------------------------------------------------------------
 function gateInit() {
-  if (sessionStorage.getItem('vc:gateUnlocked') === 'guest') {
-  gateUnlocked(null);
-  return;
-}
   if (sessionStorage.getItem('vc:gateUnlocked')) {
+     if (sessionStorage.getItem('vc:gateUnlocked') === 'guest') {
+    if (typeof load === 'function') load();
+    gateUnlocked(null);
+    return;
+  }
     var active = rehydrateActiveSession ? rehydrateActiveSession() : null;
     var kvId = localStorage.getItem('vc:kvId');
     var kvPass = sessionStorage.getItem('vc:kvPass');
