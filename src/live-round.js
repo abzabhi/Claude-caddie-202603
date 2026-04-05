@@ -225,6 +225,7 @@ lrState = {
 
 lrShowScreen('lrHoleScreen');
 lrRenderHole();
+_lrPersist();
 }
 
 function lrCancelSetup() {
@@ -241,6 +242,7 @@ function lrSetPar(par) {
 if(!lrState) return;
 lrState.holes[lrState.curHole].par = par;
 lrRenderHole();
+_lrPersist();
 }
 function lrRelTopar(score,par){ return score!==null?score-par:null; }
 function lrRelLabel(d){ if(d===null)return'\u2014';if(d<=-2)return'\u2212'+Math.abs(d);if(d===-1)return'\u22121';if(d===0)return'E';return'+'+d; }
@@ -463,6 +465,7 @@ targets.forEach(p=>{
   }
 });
 lrRenderHole();
+_lrPersist();
 }
 
 function lrSetGir(pi, holeIdx, val, shared) {
@@ -472,6 +475,7 @@ targets.forEach(p=>{
   s.gir = s.gir===val ? null : val;
 });
 lrRenderHole();
+_lrPersist();
 }
 
 function lrToggleNote(pi, holeIdx) {
@@ -483,6 +487,7 @@ if(lrState._noteOpen) setTimeout(()=>document.getElementById('lrNoteInput')?.foc
 function lrSaveNote(pi, holeIdx, val, shared) {
 const targets = shared ? lrState.players : [lrState.players[pi]];
 targets.forEach(p=>{ p.scores[holeIdx].notes = val; });
+_lrPersist();
 }
 
 function lrSetPlayer(idx) {
@@ -508,6 +513,7 @@ lrState.curHole = next;
 lrState.curPlayer = 0;
 lrState._noteOpen = false;
 lrRenderHole();
+_lrPersist();
 }
 
 // \u2500\u2500 Minimize / expand \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -811,6 +817,7 @@ const newRound = {
 save();
 renderHandicap();
 lrState.saved = true;
+if (window.clearActiveSession) window.clearActiveSession('round');
 const st = document.getElementById('lrSaveStatus');
 st.style.color = 'var(--ac)';
 st.textContent = '\u2713 Round saved.'+(capped?' Max score (net double bogey) applied to differential.':'');
@@ -956,6 +963,7 @@ if(banner) banner.style.display='none';
 const confirmBtn = banner?.querySelector('.btn.danger');
 if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
 lrState = null;
+if (window.clearActiveSession) window.clearActiveSession('round');
 document.getElementById('lrOverlay').classList.remove('active');
 lrUpdatePill();
 }
@@ -969,6 +977,12 @@ function lrShowScreen(id) {
 // Always hide end banner on screen change
 const b=document.getElementById('lrEndBanner');
 if(b) b.style.display='none';
+}
+
+// -- Persist active round to localStorage on every meaningful state change --
+function _lrPersist() {
+  if (window.lrState) localStorage.setItem('gordy:activeRound', JSON.stringify(window.lrState));
+  if (window.updateSessionPill) window.updateSessionPill();
 }
 
 // -- Expose to window (required for HTML onclick handlers) --
