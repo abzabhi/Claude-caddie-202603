@@ -432,8 +432,7 @@ body{
 <!-- Auth gate -- shown on cold load, hidden after successful auth -->
 <div id="authGate">
   <div class="gate-card">
-    <div class="gate-logo">Gordy</div>
-    <div class="gate-sub">the Virtual Caddy</div>
+    <img src="./main.png" class="gate-logo-img" alt="Gordy the Virtual Caddy" style="display:block;margin:0 auto 18px;max-width:180px;height:auto">
 
     <!-- Returning user -->
     <div id="gateReturn">
@@ -578,9 +577,12 @@ body{
 
   <div style="position:relative">
   <div class="hdr">
-    <div>
-      <div class="hdr-title">Gordy the Virtual Caddy</div>
-      <div class="hdr-sub">Golf Optimization Research &amp; Decisions</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="./icon.png" class="hdr-icon" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0">
+      <div>
+        <div class="hdr-title">Gordy the Virtual Caddy</div>
+        <div class="hdr-sub">Golf Optimization Research &amp; Decisions</div>
+      </div>
     </div>
     <div class="hdr-right">
       <button class="hdr-save" onclick="saveData()" title="Save &amp; sync data">💾</button>
@@ -595,9 +597,12 @@ body{
   <!-- Profile dropdown -->
   <div class="prof-dropdown" id="profDropdown">
     <div class="prof-dd-hdr">
-      <div>
-        <div class="prof-dd-name" id="ddName">Welcome, Golfer</div>
-        <div class="prof-dd-hcp" id="ddHcp">Handicap Index: —</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <img src="./icon.png" alt="" style="width:32px;height:32px;object-fit:contain;flex-shrink:0">
+        <div>
+          <div class="prof-dd-name" id="ddName">Welcome, Golfer</div>
+          <div class="prof-dd-hcp" id="ddHcp">Handicap Index: —</div>
+        </div>
       </div>
       <button class="prof-dd-close" onclick="closeProfileDropdown()">✕</button>
     </div>
@@ -773,6 +778,9 @@ body{
         <button id="clubModeBtn" class="implied-tog" onclick="toggleClubMode()" title="Switch between simple and detailed club entry">Simple</button>
         <button id="impliedTogBtn" class="implied-tog" onclick="toggleImplied()" title="Show or hide confidence-adjusted yardage ranges">Implied Yds: <span id="impliedTogLbl">Off</span></button>
       </div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px">
+        <div class="slbl" style="margin:0;text-align:right">Simple: max distance only. Detailed: full specs.</div>
+      </div>
     </div>
     <div id="clubList"></div>
     <button class="add-club-btn" onclick="addClub()">＋ Add Club</button>
@@ -798,6 +806,7 @@ body{
           <button class="btn sec" onclick="cancelCourseEdit()">Cancel</button>
         </div>
       </div>
+      <div id="courseSaveErr" style="display:none;font-size:.68rem;padding:6px 10px;border-radius:4px;margin-bottom:10px"></div>
       <div class="card">
         <div class="g2">
           <div class="field"><div class="flbl">Course Name</div><input id="cName" placeholder="e.g. Pebble Beach"></div>
@@ -991,7 +1000,7 @@ body{
       <div class="collapsible-hdr" onclick="toggleCard('ah-caddie')" id="ah-caddie-hdr">
         <span>🤖 Caddie Session</span><span class="chev">▼</span>
       </div>
-      <div id="ah-caddie-body" style="display:none;padding-top:10px">
+      <div id="ah-caddie-body" style="display:block;padding-top:10px">
         <div class="g2" style="margin-bottom:10px">
           <div class="field">
             <div class="flbl">Session Type</div>
@@ -1157,15 +1166,19 @@ body{
 
   <!-- CADDIE SESSIONS -->
   <div id="tab-sessions" class="panel">
-    <div id="sessionsList"></div>
+    <div id="sessionsList"><div class="hist-empty">No caddie sessions yet. Go to the GORDy tab to run your first session.</div></div>
   </div>
 
   <!-- VIZ -->
   <div id="tab-viz" class="panel">
     <div class="card" style="margin-bottom:10px">
-      <div style="display:flex;gap:6px;margin-bottom:12px">
+      <div style="display:flex;gap:6px;margin-bottom:4px">
         <button class="implied-tog on" id="vmode-coverage" onclick="onVizModeChange('coverage')" style="flex:1;padding:7px 4px;font-size:.68rem">📊 Bag coverage</button>
         <button class="implied-tog"    id="vmode-hole"     onclick="onVizModeChange('hole')"     style="flex:1;padding:7px 4px;font-size:.68rem">⛳ Hole planning</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <div class="slbl" style="flex:1;text-align:center;margin:0">Compare all clubs</div>
+        <div class="slbl" style="flex:1;text-align:center;margin:0">Plan a specific hole</div>
       </div>
 
       <!-- MODE 1: Bag coverage controls -->
@@ -1189,6 +1202,7 @@ body{
 
       <!-- MODE 2: Hole planning controls -->
       <div id="vizHoleControls" style="display:none">
+        <div id="vizNoCourseMsg" class="hist-empty" style="display:none;padding:20px 0">No courses saved. Add a course in the Courses tab first.</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:8px">
           <div class="field">
             <div class="flbl">Course</div>
@@ -1268,8 +1282,17 @@ body{
 
   <!-- NOTES -->
   <div id="tab-notes" class="panel">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      <a href="#notes-about"  class="implied-tog">About</a>
+      <a href="#notes-hcp"    class="implied-tog">Handicap</a>
+      <a href="#notes-dist"   class="implied-tog">Distances</a>
+      <a href="#notes-tiers"  class="implied-tog">Optimisation</a>
+      <a href="#notes-flight" class="implied-tog">Ball Flight</a>
+      <a href="#notes-viz"    class="implied-tog">Viz</a>
+    </div>
     <div class="card">
       <div class="card-title">Genesis</div>
+      <img src="./main.png" alt="Gordy the Virtual Caddy" style="display:block;margin:0 auto 14px;max-width:160px;height:auto">
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
         Thought experiment. Vibe coded using Claude AI (almost) fully. Started with a simple query — optimise my golf bag for a course — and here we are. Philosophically 100% free. I hope this helps my game...<br><br>
         <strong>GORDy</strong> stands for <strong>G</strong>olf <strong>O</strong>ptimization <strong>R</strong>esearch &amp; <strong>D</strong>ecisions — with a lowercase <em>y</em> added to make it sound like an actual caddie.
@@ -1277,14 +1300,14 @@ body{
     </div>
 
     <div class="card">
-      <div class="card-title">About This App</div>
+      <div class="card-title" id="notes-about">About This App</div>
       <div style="font-size:.72rem;color:var(--tx2);line-height:1.85">
         Virtual Caddie is a personal bag management and course strategy tool. All Optimizations are done by Claude AI or some other AI and can vary based on model and model provider. Use at your own risk. All in browser calculations are deterministic — the same inputs always produce the same outputs. This tab documents some of the key assumptions baked into those calculations.
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Handicap &amp; Scoring</div>
+      <div class="card-title" id="notes-hcp">Handicap &amp; Scoring</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">WHS Differential</div>
         Formula: <code>(Gross Score − Course Rating) × 113 ÷ Slope Rating</code>, rounded to one decimal. This matches the World Handicap System standard.
@@ -1298,7 +1321,7 @@ body{
     </div>
 
     <div class="card">
-      <div class="card-title">Club Distance &amp; Implied Yardage</div>
+      <div class="card-title" id="notes-dist">Club Distance &amp; Implied Yardage</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">Session Averages</div>
         <code>avgMin</code> and <code>avgMax</code> are simple means of all logged session values for that club. Each session contributes equally regardless of date.
@@ -1323,7 +1346,7 @@ body{
     </div>
 
     <div class="card">
-      <div class="card-title">Optimisation Tiers</div>
+      <div class="card-title" id="notes-tiers">Optimisation Tiers</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         When you export a session file, you choose an optimisation tier. This tells the AI how much depth to apply. The tier is embedded in the export and the AI reads it on load.
         <div class="slbl" style="margin-top:10px">Tier 1 — Basic</div>
@@ -1340,7 +1363,7 @@ body{
     </div>
 
     <div class="card">
-      <div class="card-title">Ball Flight &amp; Dispersion</div>
+      <div class="card-title" id="notes-flight">Ball Flight &amp; Dispersion</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">Sources</div>
         Spin RPM and launch angle benchmarks from TrackMan published amateur data. Lateral dispersion calibrated against GOLFTEC launch monitor study and DECADE / Practical Golf. Longitudinal miss distances from HackMotion research. Roll percentages from Arccos GPS analytics and MyGolfSpy ball speed studies. Arccos GPS data used for cross-validation.
@@ -1358,7 +1381,7 @@ body{
     </div>
 
     <div class="card">
-      <div class="card-title">Visualisation</div>
+      <div class="card-title" id="notes-viz">Visualisation</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
         <div class="slbl">Bag Coverage Mode</div>
         Shows stacked dispersion ellipses for the selected club set, sorted by carry distance descending. Gap markers appear between clubs where the gap exceeds 12 yards. Fairway hit % chips are colour-coded: green ≥ 60%, amber 35–59%, red &lt; 35%. Clubs can be sourced from an AI optimisation session (auto-preselects the recommended bag) or a custom selection of up to 13 clubs (excluding Putter).
