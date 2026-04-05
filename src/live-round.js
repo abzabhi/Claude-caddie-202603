@@ -526,6 +526,7 @@ function lrExpand() {
 document.getElementById('lrOverlay').classList.add('active');
 lrShowScreen('lrHoleScreen');
 lrRenderHole();
+if (window.updateSessionPill) window.updateSessionPill();
 }
 
 function lrUpdatePill() {
