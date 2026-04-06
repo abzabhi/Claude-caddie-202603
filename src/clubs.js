@@ -280,9 +280,7 @@ export function addSession(id) {
   const mx    = document.getElementById('smax-'+id)?.value||'';
   const note  = document.getElementById('snote-'+id)?.value||'';
   if(!mn&&!mx) return;
-  c.sessions = [{id:uid(),date:dt,min:mn,max:mx,notes:note},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
- const _dupT = bag.find(x => x.id !== id && x.type === c.type && x.identifier === c.identifier && (x.brand||'') === (c.brand||''));
-  if(_dupT) { alert('A club with this type and variant is already in your bag.'); setBag(bag.filter(x=>x.id!==id)); save(); renderClubs(); return; }
+c.sessions = [{id:uid(),date:dt,min:mn,max:mx,notes:note},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
   save(); renderClubs();
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='\u25B2';}},50);
 }
