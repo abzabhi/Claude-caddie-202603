@@ -79,19 +79,12 @@ async function addCourseFromRepo(courseId,statusElId) {
   };
   const selTee=course.tees.find(t=>t.id===course.selectedTee);
   if(selTee) course.holes=selTee.holes;
- /* Mark the Add button as already saved if reachable 
-    document.querySelectorAll('[onclick*="addCourseFromRepo(\''+courseId+'\'"]').forEach(function(btn){
-      btn.textContent='\u2705 Already saved'; btn.disabled=true;
-    });*/
+  const existing=courses.find(c=>c.id===course.id||(c.name&&c.name===course.name&&c.city===course.city));
   if(existing){
     if(statusElId){
       const st2=document.getElementById(statusElId);
       if(st2) st2.textContent='\u26A0 "'+course.name+'" is already in your courses.';
     }
-    /* Mark the Add button as already saved if reachable */
-    document.querySelectorAll('[onclick*="addCourseFromRepo(\''+courseId+'\'"]').forEach(function(btn){
-      btn.textContent='\u2705 Already saved'; btn.disabled=true;
-    });
     return;
   }
   /* Old behaviour: confirm() + replaceCourse — removed, repo re-add now blocked silently
