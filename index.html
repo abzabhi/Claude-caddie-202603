@@ -464,7 +464,10 @@ body{
             <div class="flbl">Site password</div>
             <input id="gateSitePass" type="password" placeholder="Enter site password" onkeydown="if(event.key==='Enter')gateNewUser(1)">
           </div>
-          <button class="btn" onclick="gateNewUser(1)">Get Access</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn" onclick="gateNewUser(1)">Get Access</button>
+            <button class="btn sec" style="font-size:.62rem" onclick="gateNewUser('guest')">Continue as guest</button>
+          </div>
           <div id="gateNewErr1" class="gate-err"></div>
         </div>
         <div id="gateNewStep2" class="gate-step" style="display:none">
@@ -551,18 +554,7 @@ body{
     </div>
 
     <!-- Guest mode -->
-    <div style="text-align:center;margin-top:18px" id="guestBtn">
-      <button class="btn sec" style="font-size:.62rem" onclick="gateGuest()">Continue without account</button>
-      <div style="font-size:.58rem;color:var(--tx3);margin-top:6px">Data is stored on this device only. Clearing browser data will erase it.</div>
-    </div>
-    <div id="guestConfirm" style="display:none;margin-top:14px;background:var(--gr3);border:1px solid var(--br);border-radius:6px;padding:12px">
-      <div style="font-size:.68rem;color:var(--ac2);margin-bottom:8px">\u26A0 Guest mode: your data will not be backed up.</div>
-      <div style="font-size:.65rem;color:var(--tx2);margin-bottom:10px;line-height:1.5">If you clear browser data or switch devices, all data is permanently lost.</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn" onclick="gateGuestConfirm()">Continue as guest</button>
-        <button class="btn sec" onclick="gateGuestCancel()">Cancel</button>
-      </div>
-    </div>
+   
 
     <div id="gateLoading" style="display:none;text-align:center;padding:12px 0 4px">
       <div class="loading"><div class="dots"><span></span><span></span><span></span></div></div>
@@ -815,7 +807,7 @@ body{
   </div>
   <div id="tab-clubs" class="panel">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <div class="slbl" style="margin:0;flex:1">Active clubs are included in bag optimisation</div>
+    <div class="slbl" style="margin:0;text-align:right">Type and variant save automatically. Simple: enter max distance only. Detailed: full specs + min/max. Implied Yds: adjusts ranges by confidence score.</div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn sec" style="font-size:.62rem;padding:4px 10px" onclick="exportClubTask()" title="Export a file to drop into an AI chat to add clubs by name">🤖 Get AI Help</button>
         <button id="clubModeBtn" class="implied-tog" onclick="toggleClubMode()" title="Switch between simple and detailed club entry">Simple</button>
@@ -2112,7 +2104,12 @@ async function gateNewUser(step) {
       _gateErr('gateNewErr1', 'Incorrect site password.');
       return;
     }
-    _gateNewSitePass = sp;
+_gateNewSitePass = sp;
+    if (step === 'guest') {
+      sessionStorage.setItem('vc:gateUnlocked', 'guest');
+      setTimeout(function() { gateUnlocked(null); }, 0);
+      return;
+    }
     document.getElementById('gateNewStep1').style.display = 'none';
     document.getElementById('gateNewStep2').style.display = 'block';
     document.getElementById('gateNewId')?.focus();
@@ -2503,7 +2500,7 @@ Object.assign(window, {
   gateIdFormatInput, gateOnSyncIdInput, _gateToggle,
   unlockApp, updateSessionPill,
   // Polish B (gate-dependent — stay in index.html)
-  gateGuest, gateGuestConfirm, gateGuestCancel,
+  /*gateGuest, gateGuestConfirm, gateGuestCancel,*/
   showPassphraseChange, cancelPassphraseChange, savePassphraseChange
 });
 if (!localStorage.getItem('vc:disc') && window.self === window.top) window.showDisclaimer();
