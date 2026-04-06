@@ -47,6 +47,8 @@ export function onTypeChange(id, val) {
     if(!c.shaftLength) c.shaftLength = String(variants[0].shaft);
     if(!c.stiffness || c.stiffness==='Regular') c.stiffness = variants[0].stiffness;
   }
+  const _dupT = bag.find(x => x.id !== id && x.type === c.type && x.identifier === c.identifier && (x.brand||'') === (c.brand||''));
+  if(_dupT) { alert('A club with this type and variant is already in your bag.'); setBag(bag.filter(x=>x.id!==id)); save(); renderClubs(); return; }
   save(); renderClubs();
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='\u25B2';}},50);
 }
@@ -59,7 +61,7 @@ export function onVariantChange(id, val) {
     c.shaftLength = String(def.shaft);
     c.stiffness = def.stiffness;
   }
-const _dupV = bag.find(x => x.id !== id && x.type === c.type && x.identifier === c.identifier && (x.brand||'') === (c.brand||''));
+  const _dupV = bag.find(x => x.id !== id && x.type === c.type && x.identifier === c.identifier && (x.brand||'') === (c.brand||''));
   if(_dupV) { alert('A club with this type and variant is already in your bag.'); setBag(bag.filter(x=>x.id!==id)); save(); renderClubs(); return; }
   save();
   const {type:tl,loft} = getTypeLabel(c);
@@ -241,10 +243,11 @@ export function toggleActive(id) {
 
 export function updateClub(id, field, val) {
   const c = bag.find(x=>x.id===id); if(!c) return;
-  /* CF1 -- duplicate club check: compare proposed new value against rest of bag */
+  /* CF1 -- duplicate club check */
   const errEl = document.getElementById('dup-err-'+id);
   const proposed = Object.assign({}, c, {[field]: val});
- proposed.type && 
+  if(proposed.type && proposed.identifier) {
+    const dup = bag.find(x => x.id !== id && x.type === proposed.type && x.identifier === proposed.identifier && (x.brand||'') === (proposed.brand||''));
     if(dup) {
       if(errEl) { errEl.textContent = 'This club is already in your bag.'; errEl.style.display = 'block'; }
       return;
@@ -280,12 +283,10 @@ export function addSession(id) {
   const mx    = document.getElementById('smax-'+id)?.value||'';
   const note  = document.getElementById('snote-'+id)?.value||'';
   if(!mn&&!mx) return;
-c.sessions = [{id:uid(),date:dt,min:mn,max:mx,notes:note},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  c.sessions = [{id:uid(),date:dt,min:mn,max:mx,notes:note},...(c.sessions||[])].sort((a,b)=>b.date.localeCompare(a.date));
   save(); renderClubs();
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+id); if(p){p.style.display='block';const r=document.getElementById('crow-'+id);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='\u25B2';}},50);
 }
-
-export function onVariantChange
 
 export function updateSession(cid, sid, field, val) {
   const c = bag.find(x=>x.id===cid); if(!c) return;
