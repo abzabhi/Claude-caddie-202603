@@ -4,8 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GOrdy the Virtual Caddy</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#3d6b35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Gordy">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+@font-face{font-family:'DM Mono';font-style:normal;font-weight:300;font-display:swap;src:url('/fonts/dm-mono-300.woff2') format('woff2');}
+@font-face{font-family:'DM Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/dm-mono-400.woff2') format('woff2');}
+@font-face{font-family:'DM Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/dm-mono-500.woff2') format('woff2');}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/playfair-400.woff2') format('woff2');}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/playfair-600.woff2') format('woff2');}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/playfair-700.woff2') format('woff2');}
+</style>
 <style>
 :root{
   --bg:#f4efe6;
@@ -434,6 +446,19 @@ body{
 </style>
 </head>
 <body>
+<div id="offlineBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:var(--sand);color:var(--gold);text-align:center;font-family:'DM Mono',monospace;font-size:.62rem;padding:5px;letter-spacing:.08em">
+  ⚠ Offline — sync unavailable. Your round data is saved locally.
+</div>
+<div id="updateBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:199;background:var(--gr3);color:var(--ac);text-align:center;font-family:'DM Mono',monospace;font-size:.62rem;padding:5px;letter-spacing:.08em">
+  Gordy has been updated. <button class="btn sec" style="font-size:.58rem;padding:2px 8px;margin-left:8px" onclick="_applyUpdate()">Refresh</button>
+</div>
+<div id="iosInstallBar" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:calc(min(820px,100vw) - 32px);z-index:198;background:var(--sf);border:1px solid var(--br2);border-radius:10px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.12);align-items:center;gap:10px">
+  <span style="font-size:1.2rem">⛳</span>
+  <span style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--tx2);flex:1">
+    Install Gordy: tap <strong>Share</strong> then <strong>Add to Home Screen</strong>
+  </span>
+  <button class="btn sec" style="font-size:.58rem;padding:2px 8px" onclick="document.getElementById('iosInstallBar').style.display='none';localStorage.setItem('gordy:iosPrompt','1')">✕</button>
+</div>
 
 <!-- Auth gate -- shown on cold load, hidden after successful auth -->
 <div id="authGate">
@@ -2247,6 +2272,15 @@ function gateUnlocked(active) {
   if (!localStorage.getItem('vc:kvId') && window.bag && window.bag.length === 0 && window.courses && window.courses.length === 0) {
     if (window.showFirstRunCard) window.showFirstRunCard();
   }
+  // iOS install prompt — show once after login, not before
+  (function() {
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isInStandaloneMode = window.navigator.standalone;
+    var iosPromptSeen = localStorage.getItem('gordy:iosPrompt');
+    if (isIOS && !isInStandaloneMode && !iosPromptSeen) {
+      document.getElementById('iosInstallBar').style.display = 'flex';
+    }
+  })();
   // Guest mode: replace sync card with sign-in prompt
   if (sessionStorage.getItem('vc:gateUnlocked') === 'guest') {
     var sc = document.getElementById('gistSettingsCard');
@@ -2528,6 +2562,60 @@ if (!localStorage.getItem('vc:disc') && window.self === window.top) window.showD
   vizSelectHole, vizToggleClub, vizTogglePath, vizTogglePlanner,
 });
 */
+
+// --- PWA: Offline status bar ---
+function _updateOnlineStatus() {
+  var bar = document.getElementById('offlineBar');
+  if (!bar) return;
+  bar.style.display = navigator.onLine ? 'none' : 'block';
+}
+window.addEventListener('online', _updateOnlineStatus);
+window.addEventListener('offline', _updateOnlineStatus);
+_updateOnlineStatus();
+
+// --- PWA: Background sync registration ---
+function _queueBackgroundSync() {
+  if ('serviceWorker' in navigator && 'SyncManager' in window) {
+    navigator.serviceWorker.ready.then(function(reg) {
+      return reg.sync.register('gordy-sync');
+    }).catch(function() {});
+  }
+}
+window._queueBackgroundSync = _queueBackgroundSync;
+
+// --- PWA: Receive background sync trigger from service worker ---
+navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'BACKGROUND_SYNC') {
+    if (window.dbPush && sessionStorage.getItem('vc:kvId')) {
+      window.dbPush();
+    }
+  }
+});
+
+// --- PWA: Update available banner ---
+navigator.serviceWorker && navigator.serviceWorker.ready.then(function(reg) {
+  reg.addEventListener('updatefound', function() {
+    var newSW = reg.installing;
+    newSW.addEventListener('statechange', function() {
+      if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+        document.getElementById('updateBar').style.display = 'block';
+      }
+    });
+  });
+});
+
+function _applyUpdate() {
+  navigator.serviceWorker.controller &&
+    navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+  window.location.reload();
+}
+
+// --- PWA: Service worker registration ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/service-worker.js');
+  });
+}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
