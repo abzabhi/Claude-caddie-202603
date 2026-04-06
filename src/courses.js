@@ -79,7 +79,10 @@ async function addCourseFromRepo(courseId,statusElId) {
   };
   const selTee=course.tees.find(t=>t.id===course.selectedTee);
   if(selTee) course.holes=selTee.holes;
-  const existing=courses.find(c=>c.id===course.id);
+ /* Mark the Add button as already saved if reachable 
+    document.querySelectorAll('[onclick*="addCourseFromRepo(\''+courseId+'\'"]').forEach(function(btn){
+      btn.textContent='\u2705 Already saved'; btn.disabled=true;
+    });*/
   if(existing){
     if(statusElId){
       const st2=document.getElementById(statusElId);
