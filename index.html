@@ -2091,7 +2091,7 @@ async function gateLogin() {
 
 // -- Gate new user (multi-step) -----------------------------------------------
 async function gateNewUser(step) {
-  if (step === 1) {
+  if (step === 1 || step === 'guest') {
     var sp = (document.getElementById('gateSitePass')?.value || '').trim();
     _gateErr('gateNewErr1', '');
     if (!sp) { _gateErr('gateNewErr1', 'Enter the site password.'); return; }
