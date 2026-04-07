@@ -2311,10 +2311,10 @@ function gateRegisterBiometric() {
   var uid = crypto.getRandomValues(new Uint8Array(16));
   navigator.credentials.create({ publicKey: {
     challenge: crypto.getRandomValues(new Uint8Array(32)),
-    rp: { name: 'Gordy' },
+    rp: { name: 'Gordy', id: 'gordythevirtualcaddie.workers.dev' },
     user: { id: uid, name: syncId, displayName: syncId },
     pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-    authenticatorSelection: { userVerification: 'required' },
+    authenticatorSelection: { userVerification: 'preferred' },
     timeout: 60000
   }}).then(function(cred) {
     localStorage.setItem('gordy:biometric:' + syncId, cred.id);
