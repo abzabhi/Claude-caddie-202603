@@ -74,23 +74,31 @@ function _buildRadialSVG(selRing, selSeg, isStatic, heatCounts, heatMax) {
   var cx = 150, cy = 150;
   var rB = ZONE_RING_RADII.bull, rI = ZONE_RING_RADII.inner, rO = ZONE_RING_RADII.outer;
 
-  // Fairway strip width in px: at 35yd default, halfWidth = rInner (90px)
+  // Fairway strip — interactive mode only; omitted from static/dispersion view
   var fwHalf = (_fwYds / 2) * (rI / 17.5);
   var fwL    = (cx - fwHalf).toFixed(1);
   var fwW    = (fwHalf * 2).toFixed(1);
-
-  var bg = '<rect width="300" height="300" fill="#6a9a50"/>' +
-    '<rect x="' + fwL + '" y="0" width="' + fwW + '" height="300" fill="#9ec880"/>';
+  var bg = isStatic
+    ? '<rect width="300" height="300" fill="#6a9a50"/>'
+    : '<rect width="300" height="300" fill="#6a9a50"/>' +
+      '<rect x="' + fwL + '" y="0" width="' + fwW + '" height="300" fill="#9ec880"/>';
 
   var paths = '';
+
+  // Heat fill: red-based, darker = more shots
+  function _heatR(count) {
+    if (!heatMax || !count) return 'rgba(255,255,255,0.12)';
+    var a = (0.18 + (count / heatMax) * 0.72).toFixed(2);
+    return 'rgba(160,30,30,' + a + ')';
+  }
 
   // 8 inner segments
   for (var i = 0; i < 8; i++) {
     var isSel = (!heatCounts && selRing === 'inner' && selSeg === i);
-    var fill  = heatCounts ? _heatFill(heatCounts['inner-' + i] || 0, heatMax)
-                           : isSel ? 'rgba(61,107,53,0.60)' : 'rgba(255,255,255,0.18)';
-    var strk  = isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.30)';
-    var sw    = isSel ? '2' : '1';
+    var fill  = heatCounts ? _heatR(heatCounts['inner-' + i] || 0)
+                           : isSel ? 'rgba(180,30,30,0.45)' : 'rgba(255,255,255,0.18)';
+    var strk  = isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+    var sw    = isSel ? '2.5' : '1.5';
     var d     = _arcPath(cx, cy, rB, rI, (i * 45) - 22.5, (i * 45) + 22.5);
     var h     = isStatic ? '' : ' onclick="rangeZoneTap(\'inner\',' + i + ')" style="cursor:pointer;touch-action:manipulation"';
     paths += '<path id="zone-' + i + '-inner" d="' + d + '" fill="' + fill + '" stroke="' + strk + '" stroke-width="' + sw + '"' + h + '></path>';
@@ -99,26 +107,23 @@ function _buildRadialSVG(selRing, selSeg, isStatic, heatCounts, heatMax) {
   // 8 outer segments
   for (var j = 0; j < 8; j++) {
     var isSel2 = (!heatCounts && selRing === 'outer' && selSeg === j);
-    var fill2  = heatCounts ? _heatFill(heatCounts['outer-' + j] || 0, heatMax)
-                            : isSel2 ? 'rgba(61,107,53,0.60)' : 'rgba(255,255,255,0.18)';
-    var strk2  = isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.30)';
-    var sw2    = isSel2 ? '2' : '1';
+    var fill2  = heatCounts ? _heatR(heatCounts['outer-' + j] || 0)
+                            : isSel2 ? 'rgba(180,30,30,0.25)' : 'rgba(255,255,255,0.18)';
+    var strk2  = isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+    var sw2    = isSel2 ? '2.5' : '1.5';
     var d2     = _arcPath(cx, cy, rI, rO, (j * 45) - 22.5, (j * 45) + 22.5);
     var h2     = isStatic ? '' : ' onclick="rangeZoneTap(\'outer\',' + j + ')" style="cursor:pointer;touch-action:manipulation"';
     paths += '<path id="zone-' + j + '-outer" d="' + d2 + '" fill="' + fill2 + '" stroke="' + strk2 + '" stroke-width="' + sw2 + '"' + h2 + '></path>';
   }
 
-  // Bullseye
+  // Bullseye — full red when selected, heat-red when summary
   var bullSel  = (!heatCounts && selRing === 'bull');
-  var bullFill = heatCounts ? _heatFill(heatCounts['bull'] || 0, heatMax)
-                            : bullSel ? 'rgba(45,81,39,0.80)' : 'rgba(255,255,255,0.18)';
-  var bullStrk = bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.30)';
-  var bullSW   = bullSel ? '2' : '1';
+  var bullFill = heatCounts ? _heatR(heatCounts['bull'] || 0)
+                            : bullSel ? 'rgba(180,30,30,0.85)' : 'rgba(255,255,255,0.18)';
+  var bullStrk = bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+  var bullSW   = bullSel ? '2.5' : '1.5';
   var bullH    = isStatic ? '' : ' onclick="rangeZoneTap(\'bull\',null)" style="cursor:pointer;touch-action:manipulation"';
   paths += '<circle id="zone-bull" cx="150" cy="150" r="' + rB + '" fill="' + bullFill + '" stroke="' + bullStrk + '" stroke-width="' + bullSW + '"' + bullH + '></circle>';
-
-  // Fairway label inside SVG (matches Viz pattern)
-  var fwLbl = '<text x="150" y="293" font-family="monospace" font-size="9" fill="rgba(50,90,30,0.9)" text-anchor="middle">\u2190 fairway ' + _fwYds + 'yd \u2192</text>';
 
   // Zone selection label (interactive only)
   var zoneDiv = '';
@@ -133,7 +138,7 @@ function _buildRadialSVG(selRing, selSeg, isStatic, heatCounts, heatMax) {
 
   return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"' +
     ' style="width:100%;max-width:300px;display:block;margin:0 auto">' +
-    bg + paths + fwLbl + '</svg>' + zoneDiv;
+    bg + paths + '</svg>' + zoneDiv;
 }
 
 // -----------------------------------------------------------------------------
@@ -275,10 +280,6 @@ function _renderShotScreen() {
       ' id="rangeFp-' + fp.value + '" onclick="rangeFlightSelect(\'' + fp.value + '\')">' + fp.label + '</button>';
   }).join('');
 
-  var commitBtn = shotCount
-    ? '<button class="rbtn" onclick="rangeCommit()" style="margin-top:12px">Commit Session</button>'
-    : '';
-
   return (
     // Club shelf (collapsible)
     '<div class="collapsible-hdr" onclick="_rangeToggleClubs()" id="rangeClubHdr">Clubs \u25BC</div>' +
@@ -298,6 +299,9 @@ function _renderShotScreen() {
     // Shot result
     '<div class="card" style="margin-bottom:10px">' +
       '<div class="card-title">Shot Result</div>' +
+      '<div style="text-align:center;font-size:1.6rem;font-weight:600;color:var(--ac2);line-height:1;margin-bottom:6px">' +
+        (_rangeState.targetYardage ? _rangeState.targetYardage + '<span style="font-size:.75rem;font-weight:400;color:var(--tx3)"> yds</span>' : '\u2014') +
+      '</div>' +
       '<div id="rangeSvgWrap">' + _buildRadialSVG(_pendingRing, _pendingSegment, false) + '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;margin:6px 0 10px;justify-content:center">' +
         '<span style="font-size:.62rem;color:var(--tx3)">Fairway</span>' +
@@ -314,13 +318,13 @@ function _renderShotScreen() {
     '<div class="collapsible-hdr" onclick="_rangeToggleLog()" id="rangeLogHdr">Session Log (' + shotCount + ') \u25BC</div>' +
     '<div id="rangeLogBody">' +
       '<div id="rangeShotLog">' + _renderShotLog(null) + '</div>' +
-      '<button class="btn" style="color:var(--danger);border-color:var(--danger);width:100%;margin-top:10px" onclick="rangeDiscard()">Discard Session</button>' +
     '</div>' +
 
     // Shot distribution summary radial
     _renderSummarySection() +
 
-    commitBtn
+    (shotCount ? '<button class="rbtn" onclick="rangeCommit()" style="margin-top:12px">Commit Session</button>' : '') +
+    '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);width:100%;margin-top:8px" onclick="rangeDiscard()">Discard Session</button>'
   );
 }
 
