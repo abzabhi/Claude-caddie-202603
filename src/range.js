@@ -1,4 +1,4 @@
-/**
+/** 
  * range.js — Range Session tab for Gordy the Virtual Caddy.
  * Rules: no Unicode literals (\uXXXX only), all onclick fns on window,
  * old code commented not deleted, strict mode via type="module".
