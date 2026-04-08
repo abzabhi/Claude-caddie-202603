@@ -700,6 +700,7 @@ body{
     <button class="tab active" onclick="showTab('profile')">Profile</button>
     <button class="tab" onclick="showTab('gordy')">GORDy</button>
     <button class="tab" onclick="showTab('rounds')">Rounds</button>
+    <button class="tab" onclick="showTab('range')" id="tab-btn-range">Range</button>
     <button class="tab" onclick="showTab('sessions')">AI Log <span class="badge" id="sessionsBadge">0</span></button>
     <button class="tab" onclick="showTab('viz')">Viz</button>
     <button class="tab" onclick="showTab('clubs')">Clubs <span class="badge" id="clubsBadge">0</span></button>
@@ -1262,6 +1263,11 @@ body{
       </div>
     </div>
 
+  </div>
+
+  <!-- RANGE -->
+  <div class="panel" id="tab-range" style="display:none">
+    <div id="rangeRoot"></div>
   </div>
 
   <!-- CADDIE SESSIONS -->
@@ -1831,6 +1837,7 @@ body{
   import { renderHandicap } from './src/rounds.js';
   import './src/caddie.js';
   import { renderAll } from './src/ui.js';
+  import './src/range.js';
   
   // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -1991,6 +1998,7 @@ function showTab(id) {
   if(id==='gordy') renderAIHelp();
   if(id==='sessions') renderSessions();
   if(id==='viz') initViz();
+  if(id==='range') { if(window.rangeInit) window.rangeInit(); }
 }
 
 function showTabFromProfile(id) {
@@ -2014,7 +2022,8 @@ window.lrState = null; // null = no active round
 
 // Active session hooks -- called by dbPush to snapshot state to localStorage
 window._getActiveRound = function() { return window.lrState; };
-window._getActiveRange = function() { return null; }; // range not built yet
+/* window._getActiveRange = function() { return null; }; */ // range not built yet -- replaced below
+window._getActiveRange = function() { return window._rangeState || null; };
 
 // -- Gate state ---------------------------------------------------------------
 let _gateNewSitePass = '', _gateNewId = '', _gateNewPass = '';
@@ -2446,7 +2455,7 @@ function updateSessionPill() {
     } catch { title = '\u26F3 Round in progress'; }
   } else {
     title   = '\uD83C\uDFAF Range session in progress';
-    handler = null; // range tab not yet built
+    handler = function() { showTab('range'); }; // wired -- Phase 1
   }
   document.getElementById('spTitle').textContent = title;
   document.getElementById('spMeta').textContent  = meta;
