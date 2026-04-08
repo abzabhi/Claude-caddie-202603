@@ -3,7 +3,7 @@
 // Depends on: geo.js, store.js, dispersion.js, clubs.js
 
 import { fmtDate, deriveStats, calcImplied, calcPlayHcp, tierIndex, calcDiff } from './geo.js';
-import { uid, today, save, bag, courses, rounds, history, profile, removeHistory } from './store.js';
+import { uid, today, save, bag, courses, rounds, history, profile, removeHistory, rangeSessions, removeRangeSession } from './store.js';
 import { getDispersion } from './dispersion.js';
 import { getYardLabel } from './clubs.js';
 
@@ -95,37 +95,63 @@ function renderAIHelp() {
 }
 
 function renderSessions() {
-  // Badge counts all history entries
   const badge = document.getElementById('sessionsBadge');
   const caddieSessions = history.filter(h=>h.type!=='data-update');
-  if(badge) badge.textContent = caddieSessions.length;
+  const allCount = caddieSessions.length + rangeSessions.length;
+  if(badge) badge.textContent = allCount;
   const el = document.getElementById('sessionsList');
   if(!el) return;
-  if(!caddieSessions.length) {
-    el.innerHTML = '<div class="hist-empty">No caddie sessions yet.<br><br>Go to the GORDy tab to run a caddie session, or save a manual plan from the Viz tab.</div>';
+  if(!allCount) {
+    el.innerHTML = '<div class="hist-empty">No sessions yet.<br><br>Go to the GORDy tab to run a caddie session, or use the Range tab to log a range session.</div>';
     return;
   }
-  el.innerHTML = caddieSessions.map(h => {
+  const cRows = caddieSessions.map(h => ({ _type:'caddie', _date: h.date||'', _data: h }));
+  const rRows = rangeSessions.map(s  => ({ _type:'range',  _date: s.date||'', _data: s }));
+  const merged = cRows.concat(rRows).sort((a,b) => b._date.localeCompare(a._date));
+  el.innerHTML = merged.map(row => {
+    if(row._type === 'range') {
+      const s = row._data;
+      const d = fmtDate(s.date);
+      const clubRec = bag.find(c=>c.id===s.clubId)||{};
+      const club = clubRec.identifier || clubRec.type || 'Unknown club';
+      const shotCount = (s.shots||[]).length;
+      const avgYds = s.averageYardage ? s.averageYardage + ' yds avg' : '';
+      const bulls  = (s.shots||[]).filter(x=>x.radial_ring==='bull').length;
+      const inners = (s.shots||[]).filter(x=>x.radial_ring==='inner').length;
+      const outers = (s.shots||[]).filter(x=>x.radial_ring==='outer').length;
+      const pct = n => shotCount ? Math.round(n/shotCount*100)+'%' : '0%';
+      const meta = [shotCount+' shot'+(shotCount!==1?'s':''), avgYds, 'Bull '+pct(bulls)+' / In '+pct(inners)+' / Out '+pct(outers)].filter(Boolean).join(' \u00B7 ');
+      return `
+      <div class="hist-item" id="rsi-${s.sessionId}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>
+            <div class="hist-course">${club}</div>
+            <div style="font-size:.62rem;color:var(--tx3);margin-top:2px;">${meta}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+            <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
+            <button class="sess-del" onclick="deleteRangeSession('${s.sessionId}')">\u2715</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    const h = row._data;
     const d = fmtDate(h.date);
     const typeLabel = h.type==='optimisation' ? '\uD83E\uDD16 Bag Optimisation' : h.type==='caddie' ? '\uD83E\uDD16 Hole-by-Hole Caddie' : h.type==='both' ? '\uD83E\uDD16 Full Caddie Session' : h.type==='manual' ? '\u270F\uFE0F Manual Plan' : '\uD83D\uDCCB Session';
-    const meta = [
-      h.tee ? h.tee + ' tees' : '',
-      h.holes && h.holes !== 'all 18' ? h.holes : '',
-      h.hcp && h.hcp !== 'not set' ? 'HCP ' + h.hcp : '',
-      h.conditions && h.conditions !== 'calm' ? h.conditions : '',
-    ].filter(Boolean).join(' \u00B7 ');
+    const meta = [h.tee?h.tee+' tees':'',h.holes&&h.holes!=='all 18'?h.holes:'',h.hcp&&h.hcp!=='not set'?'HCP '+h.hcp:'',h.conditions&&h.conditions!=='calm'?h.conditions:''].filter(Boolean).join(' \u00B7 ');
     return `
     <div class="hist-item" id="si-${h.id}" onclick="toggleSession('${h.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="min-width:0;flex:1">
           <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">${typeLabel}</div>
-          <div class="hist-course">${h.course||'Unnamed'}${h.tee ? ' \u2014 ' + h.tee + ' tees' : ''}</div>
+          <div class="hist-course">${h.course||'Unnamed'}${h.tee?' \u2014 '+h.tee+' tees':''}</div>
           <div style="font-size:.62rem;color:var(--tx3);margin-top:2px;">${meta}</div>
           <div class="hist-preview" style="margin-top:4px;">${escHtml(h.text)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
-          <button class="btn sec" style="font-size:.55rem;padding:2px 7px" onclick="event.stopPropagation();exportSessionPdf('${h.id}')">\uD83D\uDCC4 Scorecard</button>
+          <button class="btn sec" style="font-size:.55rem;padding:2px 7px" onclick="event.stopPropagation();exportSessionPdf('${h.id}')">&#128196; Scorecard</button>
           <button class="sess-del" onclick="event.stopPropagation();deleteCaddieSession('${h.id}')">\u2715</button>
         </div>
       </div>
@@ -138,6 +164,11 @@ function toggleSession(id) { document.getElementById('si-' + id)?.classList.togg
 
 function deleteCaddieSession(id) {
   removeHistory(id);
+  save(); renderSessions();
+}
+
+function deleteRangeSession(id) {
+  removeRangeSession(id);
   save(); renderSessions();
 }
 
@@ -782,7 +813,7 @@ ${existingLine}${preLoadedBlock}`;
 
 Object.assign(window, {
   updateCourseSelects, updateCadTees, renderAIHelp, renderSessions,
-  toggleSession, deleteCaddieSession, renderHistory,
+  toggleSession, deleteCaddieSession, deleteRangeSession, renderHistory,
   exportForAI, toggleCard,
   fmtDate, deriveStats,
   importCaddieResult, importClubResult, importCourseResult, importRoundResult,
