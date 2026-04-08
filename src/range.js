@@ -1,4 +1,4 @@
-/** 
+/**
  * range.js — Range Session tab for Gordy the Virtual Caddy.
  * Rules: no Unicode literals (\uXXXX only), all onclick fns on window,
  * old code commented not deleted, strict mode via type="module".
@@ -140,7 +140,7 @@ function _buildRadialSVG(selRing, selSeg, isStatic, heatCounts, heatMax) {
 // Helpers
 // -----------------------------------------------------------------------------
 
-function _activeBag() { return bag.filter(function(c) { return c.tested === true; }); }
+function _activeBag() { return bag.filter(function(c) { return c.tested === true && c.type !== 'Putter'; }); }
 
 function _clubName(id) {
   var c = bag.find(function(x) { return x.id === id; });
@@ -384,6 +384,8 @@ function rangeStartSession() {
   var clubId = _startClubId || (clubs[0] && clubs[0].id);
   if (!clubId) return;
   var now = Date.now();
+  var initClub = clubs.find(function(c) { return c.id === clubId; });
+  var initAvg  = initClub ? _clubAvgYds(initClub) : null;
   _rangeState = {
     sessionId:         generateSessionId(SESSION_TYPES.RANGE),
     date:              new Date().toISOString().slice(0, 10),
@@ -391,7 +393,7 @@ function rangeStartSession() {
     club_bag_snapshot: clubs.map(function(c) { return c.id; }),
     shots:             [],
     committed:         false,
-    targetYardage:     null,
+    targetYardage:     initAvg || null,
     _sessionStart:     now
   };
   _sessionStart   = now;
@@ -408,10 +410,16 @@ function rangeStartSession() {
 // Single-select — works on both start screen and active session
 function rangeSelectClub(clubId) {
   if (!clubId) return;
+  var c   = bag.find(function(x) { return x.id === clubId; });
+  var avg = c ? _clubAvgYds(c) : null;
   if (_rangeState) {
     _rangeState.clubId = clubId;
+    if (avg) _rangeState.targetYardage = avg;
     window._rangeState = _rangeState;
     _rangePersist();
+    // Update target input if visible
+    var inp = document.getElementById('rangeTargetInput');
+    if (inp && avg) inp.value = avg;
   } else {
     _startClubId = clubId;
   }
