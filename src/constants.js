@@ -211,3 +211,94 @@ export const VIZ_ROLL = {
 export const BRANDS = ["Callaway","TaylorMade","Titleist","Ping","Mizuno","Cleveland","Cobra","Srixon","Wilson","Bridgestone","PXG","Lazrus","MacGregor","Kirkland","Tour Edge","Custom/Other"];
 export const CLUB_TYPES = ["Driver","Fairway Wood","Hybrid","Iron","Wedge","Putter","Chipper"];
 export const STIFFNESS = ["Ladies","Senior","Regular","Stiff","X-Stiff","Tour X"];
+
+// =============================================================================
+// SHOT TRACKER — Phase 0 additions
+// =============================================================================
+
+// SHOT TRACKER — ZONE MAP
+// radial_ring: 'bull' | 'inner' | 'outer'
+// radial_segment: 0-7 integer, clockwise from 12 o'clock
+// 0 = straight/long (top center), 2 = right, 4 = straight/short, 6 = left
+// Diagonals: 1 (top-right), 3 (bottom-right), 5 (bottom-left), 7 (top-left)
+
+export const ZONE_SEGMENT_LABELS = [
+  'Straight/Long', 'Long Right', 'Right',
+  'Short Right',   'Straight/Short', 'Short Left',
+  'Left',          'Long Left'
+];
+
+// Segment centroids as [angleDeg] from top-center, clockwise
+// Used for ellipse fitting and scatter dot placement
+export const ZONE_SEGMENT_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+// Ring radius ratios relative to SVG viewBox (300x300, center 150,150)
+export const ZONE_RING_RADII = {
+  bull:  30,   // bullseye circle radius
+  inner: 90,   // inner ring outer radius
+  outer: 140   // outer ring outer radius
+};
+
+// SHOT TRACKER — FLIGHT PATH
+export const FLIGHT_PATHS = [
+  { value: 'straight',      label: 'Straight' },
+  { value: 'left-to-right', label: 'Left to Right' },
+  { value: 'right-to-left', label: 'Right to Left' }
+];
+
+// SHOT TRACKER — LIE OPTIONS
+// Order matches strokes gained methodology
+// 'green' substitutes 'fairway' in Approach mode
+export const LIE_OPTIONS = [
+  { value: 'tee',      label: 'Tee' },
+  { value: 'fairway',  label: 'Fairway' },
+  { value: 'rough',    label: 'Rough' },
+  { value: 'sand',     label: 'Sand' },
+  { value: 'recovery', label: 'Recovery' }
+];
+
+export const LIE_OPTIONS_APPROACH = [
+  { value: 'green',    label: 'Green' },
+  { value: 'rough',    label: 'Rough' },
+  { value: 'sand',     label: 'Sand' },
+  { value: 'recovery', label: 'Recovery' }
+];
+
+// SHOT TRACKER — SHOT MODES (live round only)
+export const SHOT_MODES = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'approach', label: 'Approach' },
+  { value: 'on_green', label: 'On Green' }
+];
+
+// SHOT TRACKER — RING PERCENTAGE DEFAULTS
+// Used to derive synthetic yardage from zone selections
+// Tier 0-1 = scratch/low, Tier 2-3 = mid, Tier 4-5 = high
+export const RING_PCT_DEFAULTS = [
+  { tier: 'pro', inner: 0.95, bull: 1.00, outer: 1.05 },
+  { tier: 'low', inner: 0.90, bull: 1.00, outer: 1.10 },
+  { tier: 'mid', inner: 0.85, bull: 1.00, outer: 1.15 }
+];
+
+// SHOT TRACKER — SESSION TYPES
+export const SESSION_TYPES = {
+  RANGE:     'range',
+  LIVE:      'live',
+  AI_CADDIE: 'ai-caddie',
+  MANUAL:    'manual'
+};
+
+// Session ID generator
+// Format: {YYYYMMDDTHHmmss}-{type}-{4_random_chars}
+export function generateSessionId(type) {
+  var now = new Date();
+  var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+  var dt = now.getFullYear().toString()
+    + pad(now.getMonth() + 1)
+    + pad(now.getDate())
+    + 'T' + pad(now.getHours())
+    + pad(now.getMinutes())
+    + pad(now.getSeconds());
+  var rand = Math.random().toString(36).slice(2, 6);
+  return dt + '-' + type + '-' + rand;
+}
