@@ -1,7 +1,7 @@
 import { FLIGHT_DATA } from './constants.js';
 import { calcHandicap } from './geo.js';
 
-export let bag = [], courses = [], rounds = [], history = [];
+export let bag = [], courses = [], rounds = [], history = [], rangeSessions = [];
 export let profile = {};
 
 export function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
@@ -12,16 +12,18 @@ export function save() {
   localStorage.setItem('vc:courses', JSON.stringify(courses));
   localStorage.setItem('vc:rounds', JSON.stringify(rounds));
   localStorage.setItem('vc:history', JSON.stringify(history));
+  localStorage.setItem('vc:rangeSessions', JSON.stringify(rangeSessions));
   localStorage.setItem('vc:profile', JSON.stringify(profile));
 }
 
-const _SEED = {bag:[], courses:[], history:[]};
+const _SEED = {bag:[], courses:[], history:[], rangeSessions:[]};
 
 export function load() {
   try { const b=JSON.parse(localStorage.getItem('vc:bag')); bag=Array.isArray(b)&&b.length?b.filter(x=>x&&x.id):_SEED.bag; } catch { bag=_SEED.bag; }
   try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)&&c.length?c.filter(x=>x&&x.id):_SEED.courses; } catch { courses=_SEED.courses; }
   try { const r=JSON.parse(localStorage.getItem('vc:rounds')); rounds=Array.isArray(r)?r:[]; } catch { rounds=[]; }
   try { const h=JSON.parse(localStorage.getItem('vc:history')); history=Array.isArray(h)&&h.length?h.filter(x=>x&&x.id):_SEED.history; } catch { history=_SEED.history; }
+  try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); rangeSessions=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; } catch { rangeSessions=_SEED.rangeSessions; }
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
   courses=courses.filter(x=>x&&x.id);
@@ -36,8 +38,9 @@ export function replaceCourse(u) { const i=courses.findIndex(c=>c.id===u.id); if
 export function removeCourse(id)  { const i=courses.findIndex(c=>c.id===id);  if(i>-1) courses.splice(i,1); }
 export function removeRound(id)   { const i=rounds.findIndex(r=>r.id===id);   if(i>-1) rounds.splice(i,1); }
 export function removeHistory(id) { const i=history.findIndex(h=>h.id===id);  if(i>-1) history.splice(i,1); }
+export function removeRangeSession(id) { const i=rangeSessions.findIndex(s=>s.sessionId===id); if(i>-1) rangeSessions.splice(i,1); }
 export function clearAll() {
-  bag.length=0; courses.length=0; rounds.length=0; history.length=0;
+  bag.length=0; courses.length=0; rounds.length=0; history.length=0; rangeSessions.length=0;
   Object.keys(profile).forEach(k=>delete profile[k]);
 }
 
@@ -114,7 +117,9 @@ export function serialise() {
     if(h.bagMap?.length) lines.push('  BAGMAP | '+h.bagMap.join(','));
   });
   lines.push('');
-  lines.push('=== FLIGHT_REF ===');
+  lines.push('=== RANGE_SESSIONS ===');
+  lines.push('# Stored as JSON in localStorage vc:rangeSessions — ' + rangeSessions.length + ' session(s)');
+  lines.push('');
   lines.push('VERSION | 1');
   lines.push('TIERS | '+FLIGHT_DATA.tiers.join(' | '));
   lines.push('CLUB_KEYS | '+Object.keys(FLIGHT_DATA.clubs).join(' | '));
