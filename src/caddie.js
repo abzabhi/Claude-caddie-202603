@@ -113,7 +113,7 @@ function renderSessions() {
       const s = row._data;
       const d = fmtDate(s.date);
       // Danger delete button — bigger icon, inline confirm before delete
-      const delBtn = `<button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="confirmDeleteRangeSession('${s.sessionId}')">\u2715</button>`;
+      const delBtn = `<button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="event.stopPropagation();confirmDeleteRangeSession('${s.sessionId}')">\u2715</button>`;
       // Fallback for old sessions recorded before clubSummary was introduced
       if (!s.clubSummary || !s.clubSummary.length) {
         return `
@@ -148,18 +148,18 @@ function renderSessions() {
         return r.identifier || r.type || 'Unknown';
       }))].join(', ');
       return `
-      <div class="hist-item" id="rsi-${s.sessionId}">
+      <div class="hist-item" id="rsi-${s.sessionId}" onclick="toggleRangeSession('${s.sessionId}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
           <div style="min-width:0;flex:1">
             <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>
             <div class="hist-course">${allClubs}</div>
-            ${breakdownRows}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
             <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
             ${delBtn}
           </div>
         </div>
+        <div class="hist-body">${breakdownRows}</div>
       </div>`;
     }
     const h = row._data;
@@ -187,6 +187,7 @@ function renderSessions() {
 }
 
 function toggleSession(id) { document.getElementById('si-' + id)?.classList.toggle('open'); }
+function toggleRangeSession(id) { document.getElementById('rsi-' + id)?.classList.toggle('open'); }
 
 function deleteCaddieSession(id) {
   removeHistory(id);
@@ -866,7 +867,7 @@ ${existingLine}${preLoadedBlock}`;
 
 Object.assign(window, {
   updateCourseSelects, updateCadTees, renderAIHelp, renderSessions,
-  toggleSession, deleteCaddieSession, deleteRangeSession, renderHistory,
+  toggleSession, toggleRangeSession, deleteCaddieSession, deleteRangeSession, renderHistory,
   confirmDeleteRangeSession, confirmDeleteCaddieSession,
   exportForAI, toggleCard,
   fmtDate, deriveStats,
