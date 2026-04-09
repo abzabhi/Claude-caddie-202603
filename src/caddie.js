@@ -112,26 +112,52 @@ function renderSessions() {
     if(row._type === 'range') {
       const s = row._data;
       const d = fmtDate(s.date);
-      const clubRec = bag.find(c=>c.id===s.clubId)||{};
-      const club = clubRec.identifier || clubRec.type || 'Unknown club';
-      const shotCount = (s.shots||[]).length;
-      const avgYds = s.averageYardage ? s.averageYardage + ' yds avg' : '';
-      const bulls  = (s.shots||[]).filter(x=>x.radial_ring==='bull').length;
-      const inners = (s.shots||[]).filter(x=>x.radial_ring==='inner').length;
-      const outers = (s.shots||[]).filter(x=>x.radial_ring==='outer').length;
-      const pct = n => shotCount ? Math.round(n/shotCount*100)+'%' : '0%';
-      const meta = [shotCount+' shot'+(shotCount!==1?'s':''), avgYds, 'Bull '+pct(bulls)+' / In '+pct(inners)+' / Out '+pct(outers)].filter(Boolean).join(' \u00B7 ');
+      // Danger delete button — bigger icon, inline confirm before delete
+      const delBtn = `<button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="confirmDeleteRangeSession('${s.sessionId}')">\u2715</button>`;
+      // Fallback for old sessions recorded before clubSummary was introduced
+      if (!s.clubSummary || !s.clubSummary.length) {
+        return `
+        <div class="hist-item" id="rsi-${s.sessionId}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+            <div style="min-width:0;flex:1">
+              <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>
+              <div style="font-size:.65rem;color:var(--tx3)">Session data unavailable \u2014 recorded before current version.</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+              <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
+              ${delBtn}
+            </div>
+          </div>
+        </div>`;
+      }
+      // Build per-club/target breakdown rows (matching live Session Summary format)
+      const breakdownRows = s.clubSummary.map(clubEntry => {
+        return clubEntry.targets.map(target => {
+          const total     = target.shotCount;
+          const bullCnt   = target.dispersion.bull.total;
+          const innerCnt  = Object.values(target.dispersion.inner).reduce((a, z) => a + z.total, 0);
+          const outerCnt  = Object.values(target.dispersion.outer).reduce((a, z) => a + z.total, 0);
+          const pct       = n => total ? Math.round(n / total * 100) + '%' : '0%';
+          const clubRec   = bag.find(c => c.id === clubEntry.clubId) || {};
+          const clubName  = clubRec.identifier || clubRec.type || 'Unknown club';
+          return `<div style="font-size:.62rem;color:var(--tx3);margin-top:2px">${clubName} \u00B7 ${target.yardage} yds \u00B7 Bull ${pct(bullCnt)} / Inner ${pct(innerCnt)} / Outer ${pct(outerCnt)}</div>`;
+        }).join('');
+      }).join('');
+      const allClubs = [...new Set(s.clubSummary.map(ce => {
+        const r = bag.find(c => c.id === ce.clubId) || {};
+        return r.identifier || r.type || 'Unknown';
+      }))].join(', ');
       return `
       <div class="hist-item" id="rsi-${s.sessionId}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
           <div style="min-width:0;flex:1">
             <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>
-            <div class="hist-course">${club}</div>
-            <div style="font-size:.62rem;color:var(--tx3);margin-top:2px;">${meta}</div>
+            <div class="hist-course">${allClubs}</div>
+            ${breakdownRows}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
             <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
-            <button class="sess-del" onclick="deleteRangeSession('${s.sessionId}')">\u2715</button>
+            ${delBtn}
           </div>
         </div>
       </div>`;
@@ -152,7 +178,7 @@ function renderSessions() {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
           <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
           <button class="btn sec" style="font-size:.55rem;padding:2px 7px" onclick="event.stopPropagation();exportSessionPdf('${h.id}')">&#128196; Scorecard</button>
-          <button class="sess-del" onclick="event.stopPropagation();deleteCaddieSession('${h.id}')">\u2715</button>
+          <button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="event.stopPropagation();confirmDeleteCaddieSession('${h.id}')">\u2715</button>
         </div>
       </div>
       <div class="hist-body">${escHtml(h.text)}</div>
@@ -170,6 +196,33 @@ function deleteCaddieSession(id) {
 function deleteRangeSession(id) {
   removeRangeSession(id);
   save(); renderSessions();
+}
+
+// Inline confirm before delete — injects strip into row, no modal
+function confirmDeleteRangeSession(id) {
+  if (document.getElementById('rsi-confirm-' + id)) return;
+  var row = document.getElementById('rsi-' + id);
+  if (!row) return;
+  var strip = document.createElement('div');
+  strip.id = 'rsi-confirm-' + id;
+  strip.style.cssText = 'padding:6px 10px;font-size:.65rem;display:flex;gap:8px;align-items:center;border-top:1px solid var(--br);flex-wrap:wrap';
+  strip.innerHTML = '<span style="color:var(--danger)">Delete this session?</span>' +
+    '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.6rem;padding:2px 8px" onclick="deleteRangeSession(\'' + id + '\')">Delete</button>' +
+    '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="document.getElementById(\'rsi-confirm-' + id + '\').remove()">Cancel</button>';
+  row.appendChild(strip);
+}
+
+function confirmDeleteCaddieSession(id) {
+  if (document.getElementById('si-confirm-' + id)) return;
+  var row = document.getElementById('si-' + id);
+  if (!row) return;
+  var strip = document.createElement('div');
+  strip.id = 'si-confirm-' + id;
+  strip.style.cssText = 'padding:6px 10px;font-size:.65rem;display:flex;gap:8px;align-items:center;border-top:1px solid var(--br);flex-wrap:wrap';
+  strip.innerHTML = '<span style="color:var(--danger)">Delete this session?</span>' +
+    '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.6rem;padding:2px 8px" onclick="deleteCaddieSession(\'' + id + '\')">Delete</button>' +
+    '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="document.getElementById(\'si-confirm-' + id + '\').remove()">Cancel</button>';
+  row.appendChild(strip);
 }
 
 // Keep renderHistory as alias so import logic still works
@@ -814,6 +867,7 @@ ${existingLine}${preLoadedBlock}`;
 Object.assign(window, {
   updateCourseSelects, updateCadTees, renderAIHelp, renderSessions,
   toggleSession, deleteCaddieSession, deleteRangeSession, renderHistory,
+  confirmDeleteRangeSession, confirmDeleteCaddieSession,
   exportForAI, toggleCard,
   fmtDate, deriveStats,
   importCaddieResult, importClubResult, importCourseResult, importRoundResult,
