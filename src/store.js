@@ -23,7 +23,7 @@ export function load() {
   try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)&&c.length?c.filter(x=>x&&x.id):_SEED.courses; } catch { courses=_SEED.courses; }
   try { const r=JSON.parse(localStorage.getItem('vc:rounds')); rounds=Array.isArray(r)?r:[]; } catch { rounds=[]; }
   try { const h=JSON.parse(localStorage.getItem('vc:history')); history=Array.isArray(h)&&h.length?h.filter(x=>x&&x.id):_SEED.history; } catch { history=_SEED.history; }
-  try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); rangeSessions=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; } catch { rangeSessions=_SEED.rangeSessions; }
+  try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); const rsParsed=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; rangeSessions.splice(0,rangeSessions.length,...rsParsed); } catch { rangeSessions.splice(0,rangeSessions.length); }
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
   courses=courses.filter(x=>x&&x.id);
@@ -118,7 +118,7 @@ export function serialise() {
   });
   lines.push('');
   lines.push('=== RANGE_SESSIONS ===');
-  lines.push('# Stored as JSON in localStorage vc:rangeSessions — ' + rangeSessions.length + ' session(s)');
+  rangeSessions.forEach(s => lines.push('RANGE_SESSION | ' + JSON.stringify(s)));
   lines.push('');
   lines.push('VERSION | 1');
   lines.push('TIERS | '+FLIGHT_DATA.tiers.join(' | '));
