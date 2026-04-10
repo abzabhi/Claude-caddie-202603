@@ -101,72 +101,14 @@ function renderSessions() {
   if(badge) badge.textContent = allCount;
   const el = document.getElementById('sessionsList');
   if(!el) return;
-  if(!allCount) {
-    el.innerHTML = '<div class="hist-empty">No sessions yet.<br><br>Go to the GORDy tab to run a caddie session, or use the Range tab to log a range session.</div>';
-    return;
-  }
-  const cRows = caddieSessions.map(h => ({ _type:'caddie', _date: h.date||'', _data: h }));
-  const rRows = rangeSessions.map(s  => ({ _type:'range',  _date: s.date||'', _data: s }));
-  const merged = cRows.concat(rRows).sort((a,b) => b._date.localeCompare(a._date));
-  el.innerHTML = merged.map(row => {
-    if(row._type === 'range') {
-      const s = row._data;
-      const d = fmtDate(s.date);
-      // Danger delete button — bigger icon, inline confirm before delete
-      const delBtn = `<button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="event.stopPropagation();confirmDeleteRangeSession('${s.sessionId}')">\u2715</button>`;
-      // Fallback for old sessions recorded before clubSummary was introduced
-      if (!s.clubSummary || !s.clubSummary.length) {
-        return `
-        <div class="hist-item" id="rsi-${s.sessionId}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-            <div style="min-width:0;flex:1">
-              <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>
-              <div style="font-size:.65rem;color:var(--tx3)">Session data unavailable \u2014 recorded before current version.</div>
-            </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-              <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
-              ${delBtn}
-            </div>
-          </div>
-        </div>`;
-      }
-      // Build per-club/target breakdown rows (matching live Session Summary format)
-      const breakdownRows = s.clubSummary.map(clubEntry => {
-        return clubEntry.targets.map(target => {
-          const total     = target.shotCount;
-          const bullCnt   = target.dispersion.bull.total;
-          const innerCnt  = Object.values(target.dispersion.inner).reduce((a, z) => a + z.total, 0);
-          const outerCnt  = Object.values(target.dispersion.outer).reduce((a, z) => a + z.total, 0);
-          const pct       = n => total ? Math.round(n / total * 100) + '%' : '0%';
-          const clubRec   = bag.find(c => c.id === clubEntry.clubId) || {};
-          const clubName  = clubRec.identifier || clubRec.type || 'Unknown club';
-          return `<div style="font-size:.62rem;color:var(--tx3);margin-top:2px">${clubName} \u00B7 ${target.yardage} yds \u00B7 Bull ${pct(bullCnt)} / Inner ${pct(innerCnt)} / Outer ${pct(outerCnt)}</div>`;
-        }).join('');
-      }).join('');
-      const allClubs = [...new Set(s.clubSummary.map(ce => {
-        const r = bag.find(c => c.id === ce.clubId) || {};
-        return r.identifier || r.type || 'Unknown';
-      }))].join(', ');
+  if(!caddieSessions.length) {
+    el.innerHTML = '<div class="hist-empty">No caddie sessions yet. Go to the GORDy tab to run your first session.</div>';
+  } else {
+    el.innerHTML = caddieSessions.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(h => {
+      const d = fmtDate(h.date);
+      const typeLabel = h.type==='optimisation' ? '\uD83E\uDD16 Bag Optimisation' : h.type==='caddie' ? '\uD83E\uDD16 Hole-by-Hole Caddie' : h.type==='both' ? '\uD83E\uDD16 Full Caddie Session' : h.type==='manual' ? '\u270F\uFE0F Manual Plan' : '\uD83D\uDCCB Session';
+      const meta = [h.tee?h.tee+' tees':'',h.holes&&h.holes!=='all 18'?h.holes:'',h.hcp&&h.hcp!=='not set'?'HCP '+h.hcp:'',h.conditions&&h.conditions!=='calm'?h.conditions:''].filter(Boolean).join(' \u00B7 ');
       return `
-      <div class="hist-item" id="rsi-${s.sessionId}" onclick="toggleRangeSession('${s.sessionId}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-          <div style="min-width:0;flex:1">
-            <div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>
-            <div class="hist-course">${allClubs}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-            <div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">${d}</div>
-            ${delBtn}
-          </div>
-        </div>
-        <div class="hist-body">${breakdownRows}</div>
-      </div>`;
-    }
-    const h = row._data;
-    const d = fmtDate(h.date);
-    const typeLabel = h.type==='optimisation' ? '\uD83E\uDD16 Bag Optimisation' : h.type==='caddie' ? '\uD83E\uDD16 Hole-by-Hole Caddie' : h.type==='both' ? '\uD83E\uDD16 Full Caddie Session' : h.type==='manual' ? '\u270F\uFE0F Manual Plan' : '\uD83D\uDCCB Session';
-    const meta = [h.tee?h.tee+' tees':'',h.holes&&h.holes!=='all 18'?h.holes:'',h.hcp&&h.hcp!=='not set'?'HCP '+h.hcp:'',h.conditions&&h.conditions!=='calm'?h.conditions:''].filter(Boolean).join(' \u00B7 ');
-    return `
     <div class="hist-item" id="si-${h.id}" onclick="toggleSession('${h.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
         <div style="min-width:0;flex:1">
@@ -183,7 +125,9 @@ function renderSessions() {
       </div>
       <div class="hist-body">${escHtml(h.text)}</div>
     </div>`;
-  }).join('');
+    }).join('');
+  }
+  if (window.renderRangeSessions) window.renderRangeSessions();
 }
 
 function toggleSession(id) { document.getElementById('si-' + id)?.classList.toggle('open'); }
