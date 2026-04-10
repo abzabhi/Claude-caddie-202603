@@ -241,7 +241,7 @@ function _buildClubSummary(shots) {
   Object.keys(groups).forEach(function(key) {
     var g   = groups[key];
     var cid = g.clubId;
-    if (!clubMap[cid]) { clubMap[cid] = { clubId: cid, targets: [] }; }
+    if (!clubMap[cid]) { clubMap[cid] = { clubId: cid, clubName: _clubName(cid), targets: [] }; }
 
     // Initialise dispersion structure with all 8 segments
     var disp = {
@@ -828,7 +828,7 @@ function renderRangeSessions() {
         totalShots += t.shotCount;
         var pctBull = t.shotCount ? Math.round(t.dispersion.bull.total / t.shotCount * 100) : 0;
         lines += '<div style="font-size:.62rem;color:var(--tx3);margin-left:8px">' +
-          _clubName(ce.clubId) + ' \u00B7 ' + t.yardage + 'yd \u00B7 ' +
+          (ce.clubName || _clubName(ce.clubId)) + ' \u00B7 ' + t.yardage + 'yd \u00B7 ' +
           t.shotCount + ' shot' + (t.shotCount !== 1 ? 's' : '') +
           ' \u00B7 Bull ' + pctBull + '%</div>';
       });
