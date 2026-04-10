@@ -1273,6 +1273,7 @@ body{
   <!-- CADDIE SESSIONS -->
   <div id="tab-sessions" class="panel">
     <div id="sessionsList"><div class="hist-empty">No caddie sessions yet. Go to the GORDy tab to run your first session.</div></div>
+    <div id="rangeSessionsList"></div>
   </div>
 
   <!-- VIZ -->
@@ -1998,7 +1999,7 @@ function showTab(id) {
   if(id==='courses') renderCourseList();
   if(id==='rounds') renderHandicap();
   if(id==='gordy') renderAIHelp();
-  if(id==='sessions') renderSessions();
+  if(id==='sessions') { renderSessions(); if(window.renderRangeSessions) window.renderRangeSessions(); }
   if(id==='viz') initViz();
   if(id==='range') { if(window.rangeInit) window.rangeInit(); }
 }
@@ -2013,7 +2014,7 @@ function showTabFromProfile(id) {
   if(id==='clubs')    renderClubs();
   if(id==='courses')  renderCourseList();
   if(id==='rounds')   renderHandicap();
-  if(id==='sessions') renderSessions();
+  if(id==='sessions') { renderSessions(); if(window.renderRangeSessions) window.renderRangeSessions(); }
   if(id==='profile')  renderProfile();
 }
 
