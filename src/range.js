@@ -5,7 +5,7 @@
  * NOTE: distance type stored in range sessions is carry (not total yardage).
  */
 
-import { bag, rangeSessions, save } from './store.js';
+import { bag, rangeSessions, save, removeRangeSession } from './store.js';
 import {
   generateSessionId, SESSION_TYPES,
   ZONE_SEGMENT_LABELS, ZONE_RING_RADII,
@@ -810,6 +810,46 @@ function _rangePersist() {
 }
 
 // -----------------------------------------------------------------------------
+// Sessions tab rendering
+// -----------------------------------------------------------------------------
+
+function renderRangeSessions() {
+  var el = document.getElementById('rangeSessionsList');
+  if (!el) return;
+  var committed = rangeSessions.filter(function(s) { return s.committed; });
+  if (!committed.length) { el.innerHTML = ''; return; }
+  var sorted = committed.slice().sort(function(a, b) { return a.date < b.date ? 1 : -1; });
+  var rows = '';
+  sorted.forEach(function(s) {
+    var totalShots = 0;
+    var lines = '';
+    (s.clubSummary || []).forEach(function(ce) {
+      ce.targets.forEach(function(t) {
+        totalShots += t.shotCount;
+        var pctBull = t.shotCount ? Math.round(t.dispersion.bull.total / t.shotCount * 100) : 0;
+        lines += '<div style="font-size:.62rem;color:var(--tx3);margin-left:8px">' +
+          _clubName(ce.clubId) + ' \u00B7 ' + t.yardage + 'yd \u00B7 ' +
+          t.shotCount + ' shot' + (t.shotCount !== 1 ? 's' : '') +
+          ' \u00B7 Bull ' + pctBull + '%</div>';
+      });
+    });
+    rows += '<div class="hist-item" style="flex-direction:column;align-items:stretch">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<span style="font-size:.68rem">\uD83C\uDFAF ' + s.date + ' \u00B7 ' + totalShots + ' shot' + (totalShots !== 1 ? 's' : '') + '</span>' +
+        '<button class="btn" onclick="rangeDeleteSession(\'' + s.sessionId + '\')"' +
+          ' style="font-size:.54rem;padding:1px 6px;background:var(--danger);color:white;border-color:var(--danger)">\u2715</button>' +
+      '</div>' + lines + '</div>';
+  });
+  el.innerHTML = '<div style="font-size:.62rem;font-weight:500;color:var(--tx2);letter-spacing:.08em;text-transform:uppercase;padding:10px 0 4px">Range Sessions</div>' + rows;
+}
+
+function rangeDeleteSession(sessionId) {
+  removeRangeSession(sessionId);
+  save();
+  renderRangeSessions();
+}
+
+// -----------------------------------------------------------------------------
 // window exposure
 // -----------------------------------------------------------------------------
 
@@ -822,5 +862,6 @@ Object.assign(window, {
   rangeCommit, rangeDiscard,
   // rangeToggleEllipse, // removed per 2026-04-08 rebuild
   _rangeToggleClubs, _rangeToggleLog, _rangeToggleSummary, _rangeToggleDist,
-  _rangeConfirmCommit, _rangeConfirmDiscard, _rangeSummarySelect
+  _rangeConfirmCommit, _rangeConfirmDiscard, _rangeSummarySelect,
+  renderRangeSessions, rangeDeleteSession
 });
