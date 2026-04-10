@@ -11,7 +11,7 @@ import {
   ZONE_SEGMENT_LABELS, ZONE_RING_RADII,
   FLIGHT_PATHS, VIZ_COLORS
 } from './constants.js';
-import { deriveStats } from './geo.js';
+import { deriveStats, fmtDate } from './geo.js';
 
 // -----------------------------------------------------------------------------
 // Module state
@@ -818,35 +818,57 @@ function renderRangeSessions() {
   if (!el) return;
   var committed = rangeSessions.filter(function(s) { return s.committed; });
   if (!committed.length) { el.innerHTML = ''; return; }
-  var sorted = committed.slice().sort(function(a, b) { return a.date < b.date ? 1 : -1; });
-  var rows = '';
-  sorted.forEach(function(s) {
-    var totalShots = 0;
-    var lines = '';
-    (s.clubSummary || []).forEach(function(ce) {
+  var sorted = committed.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+  el.innerHTML = sorted.map(function(s) {
+    var d = fmtDate(s.date);
+    var delBtn = '<button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1"' +
+      ' onclick="event.stopPropagation();confirmDeleteRangeSession(\'' + s.sessionId + '\')">\u2715</button>';
+    if (!s.clubSummary || !s.clubSummary.length) {
+      return '<div class="hist-item" id="rsi-' + s.sessionId + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>' +
+            '<div style="font-size:.65rem;color:var(--tx3)">Session data unavailable \u2014 recorded before current version.</div>' +
+          '</div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">' +
+            '<div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">' + d + '</div>' +
+            delBtn +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    var breakdownRows = '';
+    s.clubSummary.forEach(function(ce) {
       ce.targets.forEach(function(t) {
-        totalShots += t.shotCount;
-        var pctBull = t.shotCount ? Math.round(t.dispersion.bull.total / t.shotCount * 100) : 0;
-        lines += '<div style="font-size:.62rem;color:var(--tx3);margin-left:8px">' +
-          (ce.clubName || _clubName(ce.clubId)) + ' \u00B7 ' + t.yardage + 'yd \u00B7 ' +
-          t.shotCount + ' shot' + (t.shotCount !== 1 ? 's' : '') +
-          ' \u00B7 Bull ' + pctBull + '%</div>';
+        var total    = t.shotCount;
+        var bullCnt  = t.dispersion.bull.total;
+        var innerCnt = Object.values(t.dispersion.inner).reduce(function(a, z) { return a + z.total; }, 0);
+        var outerCnt = Object.values(t.dispersion.outer).reduce(function(a, z) { return a + z.total; }, 0);
+        var pct = function(n) { return total ? Math.round(n / total * 100) + '%' : '0%'; };
+        var cName = ce.clubName || _clubName(ce.clubId);
+        breakdownRows += '<div style="font-size:.62rem;color:var(--tx3);margin-top:2px">' +
+          cName + ' \u00B7 ' + t.yardage + ' yds \u00B7 Bull ' + pct(bullCnt) + ' / Inner ' + pct(innerCnt) + ' / Outer ' + pct(outerCnt) + '</div>';
       });
     });
-    rows += '<div class="hist-item" style="flex-direction:column;align-items:stretch">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-        '<span style="font-size:.68rem">\uD83C\uDFAF ' + s.date + ' \u00B7 ' + totalShots + ' shot' + (totalShots !== 1 ? 's' : '') + '</span>' +
-        '<button class="btn" onclick="rangeDeleteSession(\'' + s.sessionId + '\')"' +
-          ' style="font-size:.54rem;padding:1px 6px;background:var(--danger);color:white;border-color:var(--danger)">\u2715</button>' +
-      '</div>' + lines + '</div>';
-  });
-  el.innerHTML = '<div style="font-size:.62rem;font-weight:500;color:var(--tx2);letter-spacing:.08em;text-transform:uppercase;padding:10px 0 4px">Range Sessions</div>' + rows;
-}
-
-function rangeDeleteSession(sessionId) {
-  removeRangeSession(sessionId);
-  save();
-  renderRangeSessions();
+    var allClubs = [];
+    s.clubSummary.forEach(function(ce) {
+      var n = ce.clubName || _clubName(ce.clubId);
+      if (allClubs.indexOf(n) === -1) allClubs.push(n);
+    });
+    return '<div class="hist-item" id="rsi-' + s.sessionId + '" onclick="toggleRangeSession(\'' + s.sessionId + '\')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:2px;">\uD83C\uDFAF Range Session</div>' +
+          '<div class="hist-course">' + allClubs.join(', ') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">' +
+          '<div style="font-size:.6rem;color:var(--tx3);white-space:nowrap;">' + d + '</div>' +
+          delBtn +
+        '</div>' +
+      '</div>' +
+      '<div class="hist-body">' + breakdownRows + '</div>' +
+    '</div>';
+  }).join('');
 }
 
 // -----------------------------------------------------------------------------
@@ -863,5 +885,5 @@ Object.assign(window, {
   // rangeToggleEllipse, // removed per 2026-04-08 rebuild
   _rangeToggleClubs, _rangeToggleLog, _rangeToggleSummary, _rangeToggleDist,
   _rangeConfirmCommit, _rangeConfirmDiscard, _rangeSummarySelect,
-  renderRangeSessions, rangeDeleteSession
+  renderRangeSessions
 });
