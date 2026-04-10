@@ -53,24 +53,44 @@ function renderHandicap() {
       ? r.players.map(p=>`<span class="rnd-badge">${p.isMe?'\u2605 ':''} ${escHtml(p.name||'?')}${p.score?' \u00B7 '+p.score:''}</span>`).join('')
       : '';
     return `<div class="rnd-card" id="rnd-${r.id}">
-      <div class="rnd-row">
-        <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:88px">
-        <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="flex:1;min-width:0">
-        <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:48px">
-        <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:36px;text-align:center">
-        <span class="rnd-diff" id="rdiff-${r.id}">${r.diff!==null?r.diff:'\u2014'}</span>
-        <button class="rnd-del" onclick="rndToggleLink('${r.id}')" title="Link sessions" style="color:var(--tx3);font-size:.72rem">\uD83D\uDD17</button>
-        ${isMulti?`<button class="rnd-del" onclick="rndRegenPdf('${r.id}')" title="Export scorecard PDF" style="font-size:.65rem">\uD83D\uDCC4</button>`:''}
-        ${hasDetail?`<button class="rnd-del" onclick="rndToggleDetail('${r.id}')" title="Hole detail">\u25BC</button>`:''}
-        <button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="confirmDeleteRound('${r.id}')">\u2715</button>
+      <!-- Collapsed header: tap to expand -->
+      <div class="rnd-row" onclick="rndToggleCard('${r.id}')" style="cursor:pointer">
+        <span style="font-size:.68rem;color:var(--tx3);flex-shrink:0;white-space:nowrap">${fmtDate(r.date)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:var(--tx);margin:0 6px">${escHtml(r.courseName||'\u2014')}</span>
+        <span style="font-size:.72rem;color:var(--tx2);flex-shrink:0;margin-right:4px">${r.score||'\u2014'}</span>
+        <span class="rnd-diff" style="flex-shrink:0">${r.diff!==null?r.diff:'\u2014'}</span>
+        <span id="rnd-chev-${r.id}" style="font-size:.6rem;color:var(--tx3);margin-left:4px;flex-shrink:0">\u25BC</span>
       </div>
-      <div class="rnd-meta">
-        ${linkedBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${(r.notes||girStr||playerBadges)?'3px':'0'}">${linkedBadges}</div>`:''}
-        ${playerBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${(r.notes||girStr)?'3px':'0'}">${playerBadges}</div>`:''}
-        ${girStr||r.notes?`<div style="font-size:.58rem;color:var(--tx3)">${girStr}${escHtml(r.notes||'')}</div>`:''}
+      <!-- Expanded body: all editable fields, meta, actions -->
+      <div id="rnd-body-${r.id}" style="display:none;padding:8px 10px 10px;border-top:1px solid var(--br)">
+        <div class="g2" style="margin-bottom:4px">
+          <div class="field" style="margin-bottom:0"><div class="flbl">Date</div>
+            <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:100%"></div>
+          <div class="field" style="margin-bottom:0"><div class="flbl">Score</div>
+            <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:100%;text-align:center"></div>
+        </div>
+        <div class="field" style="margin-bottom:4px"><div class="flbl">Course</div>
+          <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="width:100%"></div>
+        <div class="g2" style="margin-bottom:4px">
+          <div class="field" style="margin-bottom:0"><div class="flbl">Tee</div>
+            <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:100%"></div>
+          <div class="field" style="margin-bottom:0"><div class="flbl">Differential</div>
+            <span class="rnd-diff" id="rdiff-${r.id}" style="display:block;padding:3px 0">${r.diff!==null?r.diff:'\u2014'}</span></div>
+        </div>
+        ${girStr||r.notes||linkedBadges||playerBadges?`<div class="rnd-meta" style="padding:4px 0 6px">
+          ${linkedBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px">${linkedBadges}</div>`:''}
+          ${playerBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px">${playerBadges}</div>`:''}
+          ${girStr||r.notes?`<div style="font-size:.58rem;color:var(--tx3)">${girStr}${escHtml(r.notes||'')}</div>`:''}
+        </div>`:''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
+          <button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndToggleLink('${r.id}')">\uD83D\uDD17 Sessions</button>
+          ${isMulti?`<button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndRegenPdf('${r.id}')">\uD83D\uDCC4 PDF</button>`:''}
+          ${hasDetail?`<button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndToggleDetail('${r.id}')">\u25BC Detail</button>`:''}
+          <button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:.72rem;padding:3px 9px;margin-left:auto" onclick="confirmDeleteRound('${r.id}')">\u2715 Delete</button>
+        </div>
+        <div id="rnd-link-${r.id}" style="display:none;padding:6px 0 2px">${_rndLinkHTML(r)}</div>
+        ${hasDetail?`<div id="rnd-detail-${r.id}" style="display:none;overflow-x:auto;padding-top:6px">${_rndDetailHTML(r)}</div>`:''}
       </div>
-      <div id="rnd-link-${r.id}" style="display:none;padding:4px 0 6px">${_rndLinkHTML(r)}</div>
-      ${hasDetail?`<div id="rnd-detail-${r.id}" style="display:none;overflow-x:auto;padding-bottom:6px">${_rndDetailHTML(r)}</div>`:''}
     </div>`;
   };
 
@@ -180,17 +200,26 @@ function addRound() {
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
 }
 
+function rndToggleCard(id) {
+  const body = document.getElementById('rnd-body-'+id);
+  const chev = document.getElementById('rnd-chev-'+id);
+  if(!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if(chev) chev.textContent = open ? '\u25BC' : '\u25B2';
+}
+
 function confirmDeleteRound(id) {
   if(document.getElementById('rnd-confirm-'+id)) return;
-  var row = document.getElementById('rnd-'+id);
-  if(!row) return;
+  var body = document.getElementById('rnd-body-'+id);
+  if(!body) return;
   var strip = document.createElement('div');
   strip.id = 'rnd-confirm-'+id;
-  strip.style.cssText = 'padding:6px 10px;font-size:.65rem;display:flex;gap:8px;align-items:center;border-top:1px solid var(--br);flex-wrap:wrap';
+  strip.style.cssText = 'padding:6px 0 2px;font-size:.65rem;display:flex;gap:8px;align-items:center;border-top:1px solid var(--br);margin-top:6px;flex-wrap:wrap';
   strip.innerHTML = '<span style="color:var(--danger)">Delete this round?</span>' +
     '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.6rem;padding:2px 8px" onclick="deleteRound(\'' + id + '\')">Delete</button>' +
     '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="document.getElementById(\'rnd-confirm-' + id + '\').remove()">Cancel</button>';
-  row.appendChild(strip);
+  body.appendChild(strip);
 }
 
 function deleteRound(id) { removeRound(id); save(); renderHandicap(); }
@@ -652,7 +681,7 @@ export {
 Object.assign(window, {
   renderHandicap, onRoundCourseSelect, onRoundTeeSelect, updateDiffPreview,
   addRound, deleteRound, confirmDeleteRound, updateRound, toggleRndSection, rndRegenPdf,
-  rndToggleDetail, rndToggleLink, rndDetailView, rndSaveLinks,
+  rndToggleCard, rndToggleDetail, rndToggleLink, rndDetailView, rndSaveLinks,
   toggleRoundMode, rndGridView, rndGirCycle, toggleRndLinker,
   exportRoundTask, exportProfilePdf
 });
