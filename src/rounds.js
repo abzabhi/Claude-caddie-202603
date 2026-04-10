@@ -62,7 +62,7 @@ function renderHandicap() {
         <button class="rnd-del" onclick="rndToggleLink('${r.id}')" title="Link sessions" style="color:var(--tx3);font-size:.72rem">\uD83D\uDD17</button>
         ${isMulti?`<button class="rnd-del" onclick="rndRegenPdf('${r.id}')" title="Export scorecard PDF" style="font-size:.65rem">\uD83D\uDCC4</button>`:''}
         ${hasDetail?`<button class="rnd-del" onclick="rndToggleDetail('${r.id}')" title="Hole detail">\u25BC</button>`:''}
-        <button class="rnd-del" onclick="deleteRound('${r.id}')">\u2715</button>
+        <button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:1rem;padding:4px 8px;line-height:1" onclick="confirmDeleteRound('${r.id}')">\u2715</button>
       </div>
       <div class="rnd-meta">
         ${linkedBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:${(r.notes||girStr||playerBadges)?'3px':'0'}">${linkedBadges}</div>`:''}
@@ -178,6 +178,19 @@ function addRound() {
   const mBtn=document.getElementById('rModeBtn');
   if(mBtn){mBtn.textContent='Simple';mBtn.classList.remove('on');}
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
+}
+
+function confirmDeleteRound(id) {
+  if(document.getElementById('rnd-confirm-'+id)) return;
+  var row = document.getElementById('rnd-'+id);
+  if(!row) return;
+  var strip = document.createElement('div');
+  strip.id = 'rnd-confirm-'+id;
+  strip.style.cssText = 'padding:6px 10px;font-size:.65rem;display:flex;gap:8px;align-items:center;border-top:1px solid var(--br);flex-wrap:wrap';
+  strip.innerHTML = '<span style="color:var(--danger)">Delete this round?</span>' +
+    '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.6rem;padding:2px 8px" onclick="deleteRound(\'' + id + '\')">Delete</button>' +
+    '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="document.getElementById(\'rnd-confirm-' + id + '\').remove()">Cancel</button>';
+  row.appendChild(strip);
 }
 
 function deleteRound(id) { removeRound(id); save(); renderHandicap(); }
@@ -638,7 +651,7 @@ export {
 
 Object.assign(window, {
   renderHandicap, onRoundCourseSelect, onRoundTeeSelect, updateDiffPreview,
-  addRound, deleteRound, updateRound, toggleRndSection, rndRegenPdf,
+  addRound, deleteRound, confirmDeleteRound, updateRound, toggleRndSection, rndRegenPdf,
   rndToggleDetail, rndToggleLink, rndDetailView, rndSaveLinks,
   toggleRoundMode, rndGridView, rndGirCycle, toggleRndLinker,
   exportRoundTask, exportProfilePdf
