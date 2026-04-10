@@ -2,7 +2,7 @@
 // Tabs, profile, data import/export, dropdown, modals, disclaimer.
 // Orchestrates all render functions -- last module loaded.
 
-import { bag, courses, rounds, history, profile,
+import { bag, courses, rounds, history, profile, rangeSessions,
          save, today, uid, serialise,
          setBag, setRounds, setProfile, replaceCourse, clearAll } from './store.js';
 import { calcDiff } from './geo.js';
@@ -162,7 +162,7 @@ function processDataText(text) {
 // -- Shared parser (processDataText + mergeDataText) --------------------------
 function _parseDataText(text) {
   const lines=text.split('\n');
-  const newBag=[], newRounds=[], newCourses=[], newHistory=[];
+  const newBag=[], newRounds=[], newCourses=[], newHistory=[], newRangeSessions=[];
   let section=null, cur=null, currentCourse=null, currentTee=null, currentEntry=null;
   let newProfile={}, newHcpMode=null, newManualHcp=null, newNoteLines=[];
   for(const raw of lines) {
@@ -175,6 +175,11 @@ function _parseDataText(text) {
     if(line==='=== HANDICAP ==='){section='handicap';continue;}
     if(line==='=== FLIGHT_REF ==='){section='flightref';continue;}
     if(line==='=== HISTORY ==='){section='history';continue;}
+    if(line==='=== RANGE_SESSIONS ==='){section='rangeSessions';continue;}
+    if(section==='rangeSessions'&&line.startsWith('RANGE_SESSION | ')){
+      try { const s=JSON.parse(line.slice('RANGE_SESSION | '.length)); if(s&&s.sessionId) newRangeSessions.push(s); } catch {}
+      continue;
+    }
     if(section==='profile'){
       const p=line.split('|').map(s=>s.trim());
       if(p[0]==='NAME')        newProfile.name         =p[1]||'';
@@ -251,13 +256,13 @@ function _parseDataText(text) {
       }
     }
   }
-  return {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines};
+  return {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines};
 }
 
 // Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
 // renderAll is called by gateUnlocked() after this returns.
 function dbLoadData(text) {
-  const {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
+  const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
   if(newBag.length) setBag(newBag);
   if(newRounds.length) setRounds(newRounds);
   if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
@@ -272,6 +277,7 @@ function dbLoadData(text) {
     });
   }
   if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
+  if(newRangeSessions.length){const ids=new Set(rangeSessions.map(s=>s.sessionId)); newRangeSessions.forEach(s=>{if(!ids.has(s.sessionId)) rangeSessions.push(s);});}
   save();
 }
 
