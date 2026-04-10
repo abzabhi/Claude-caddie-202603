@@ -1629,7 +1629,8 @@ body{
   <div id="lrEndBanner" style="display:none;position:fixed;bottom:60px;left:0;right:0;z-index:110;padding:10px 14px;background:var(--sf);border-top:2px solid var(--br);box-shadow:0 -4px 12px rgba(0,0,0,.12);max-width:820px;margin:0 auto">>
     <div style="font-size:.72rem;color:var(--tx);margin-bottom:8px" id="lrEndBannerMsg">End round?</div>
     <div style="display:flex;gap:8px">
-      <button class="btn danger" style="flex:1" onclick="lrConfirmEnd()">End Round</button>
+      <button class="btn danger" id="lrEndBannerConfirm" style="flex:1" onclick="lrConfirmEnd()">End Round</button>
+      <button class="btn danger" style="flex:1" onclick="lrConfirmDiscard()">Discard</button>
       <button class="btn sec" style="flex:1" onclick="lrCancelEndBanner()">Cancel</button>
     </div>
   </div>
