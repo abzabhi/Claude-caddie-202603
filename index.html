@@ -193,7 +193,7 @@ body{
 .rnd-diff{color:var(--gold);min-width:40px;text-align:right;flex-shrink:0;}
 .rnd-del{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:.68rem;padding:2px 5px;flex-shrink:0;}
 .rnd-del:hover{color:var(--danger);}
-.rnd-card{border-bottom:1px solid var(--br);}
+.rnd-card{border-bottom:1px solid var(--br);overflow:hidden;}
 .rnd-card:last-child{border-bottom:none;}
 .rnd-card .rnd-row{border-bottom:none;padding-bottom:2px;}
 .rnd-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:2px 0 6px;min-height:0;}
@@ -1794,6 +1794,7 @@ body{
         <div style="font-size:.58rem;color:var(--tx3);margin-top:6px" id="lrSaveStatus"></div>
       </div>
       <button class="btn sec" onclick="lrDiscardRound()" style="width:100%;background:var(--danger);color:white;border-color:var(--danger)">✕ Discard Round</button>
+      <button id="lrCloseBtn" class="rbtn" onclick="lrCloseRound()" style="display:none;width:100%;margin-top:8px">\u2713 Done \u2014 Back to Rounds</button>
     </div>
   </div>
 </div>
