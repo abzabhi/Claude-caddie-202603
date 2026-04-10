@@ -230,6 +230,7 @@ _lrPersist();
 
 function lrCancelSetup() {
 document.getElementById('lrOverlay').classList.remove('active');
+if(window.showTab) window.showTab('rounds');
 }
 
 // \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -586,7 +587,7 @@ const playerCols = LR_MODES[mode]?.shared
   : lrState.players.map(p=>escHtml(p.name.split(' ')[0]||'P'));
 
 let html = `<div style="overflow-x:auto">
-<table style="width:100%;border-collapse:collapse;font-size:.65rem">
+<table style="min-width:600px;border-collapse:collapse;font-size:.65rem">
   <thead><tr style="border-bottom:2px solid var(--br)">
     <th style="padding:5px 6px;text-align:left;color:var(--tx3);font-weight:400;font-size:.54rem;text-transform:uppercase;letter-spacing:.08em">H</th>
     <th style="padding:5px 6px;text-align:center;color:var(--tx3);font-weight:400;font-size:.54rem">Par</th>
@@ -665,11 +666,10 @@ document.getElementById('lrTallyContent').innerHTML = html;
 // \u2500\u2500 End round \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function lrCancelEndBanner() {
 const banner = document.getElementById('lrEndBanner');
-if(!banner) return;
-// Always reset confirm button back to End Round regardless of how banner was opened
-const confirmBtn = banner.querySelector('.btn.danger');
-if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
-banner.style.display = 'none';
+if(banner) banner.style.display = 'none';
+// Old rewire logic removed -- End Round button no longer gets dynamically reassigned:
+// const confirmBtn = banner.querySelector('.btn.danger');
+// if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
 }
 function lrEndRound() {
 const played = lrState.holes.filter((_,i)=>lrState.players.some(p=>p.scores[i]?.score!==null)).length;
@@ -948,21 +948,28 @@ else  URL.revokeObjectURL(url);
 }
 
 // \u2500\u2500 Discard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// lrDiscardRound -- called from summary screen button.
+// Uses inline confirm strip (not banner) matching range discard pattern.
+// Hole screen discard is accessible via lrEndBanner Discard button (index.html).
 function lrDiscardRound() {
-const banner = document.getElementById('lrEndBanner');
-const msg = document.getElementById('lrEndBannerMsg');
-if(msg) msg.textContent = 'Discard this round? All scores will be lost.';
-// Temporarily rewire confirm button for discard
-const confirmBtn = banner?.querySelector('.btn.danger');
-if(confirmBtn) { confirmBtn.textContent = 'Discard Round'; confirmBtn.onclick = lrConfirmDiscard; }
-if(banner) banner.style.display='block';
+if(document.getElementById('lrDiscardConfirm')) return;
+var btn = document.querySelector('[onclick="lrDiscardRound()"]');
+if(!btn) return;
+var wrap = document.createElement('div');
+wrap.id = 'lrDiscardConfirm';
+wrap.style.cssText = 'margin-top:8px;font-size:.68rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+wrap.innerHTML = '<span style="color:var(--danger)">Discard this round? All scores will be lost.</span>' +
+  '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.62rem;padding:2px 8px" onclick="lrConfirmDiscard()">' +
+  'Discard</button>' +
+  '<button class="btn sec" style="font-size:.62rem;padding:2px 8px" onclick="document.getElementById(\'lrDiscardConfirm\').remove()">Cancel</button>';
+btn.parentNode.insertBefore(wrap, btn.nextSibling);
 }
 function lrConfirmDiscard() {
 const banner = document.getElementById('lrEndBanner');
 if(banner) banner.style.display='none';
-// Reset confirm button back to End Round
-const confirmBtn = banner?.querySelector('.btn.danger');
-if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
+// Old banner button reset removed -- no longer rewiring confirm button:
+// const confirmBtn = banner?.querySelector('.btn.danger');
+// if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
 lrState = null;
 if (window.clearActiveSession) window.clearActiveSession('round');
 document.getElementById('lrOverlay').classList.remove('active');
