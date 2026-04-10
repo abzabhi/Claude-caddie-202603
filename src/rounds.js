@@ -54,10 +54,10 @@ function renderHandicap() {
       : '';
     return `<div class="rnd-card" id="rnd-${r.id}">
       <div class="rnd-row">
-        <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:100px">
-        <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="flex:1;min-width:80px">
-        <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:60px">
-        <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:44px;text-align:center">
+        <input class="rnd-edit" type="date" value="${r.date}" onchange="updateRound('${r.id}','date',this.value)" style="width:88px">
+        <input class="rnd-edit" type="text" value="${r.courseName||''}" placeholder="Course" onchange="updateRound('${r.id}','courseName',this.value)" style="flex:1;min-width:0">
+        <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:48px">
+        <input class="rnd-edit" type="text" inputmode="numeric" value="${r.score}" placeholder="Score" onchange="updateRound('${r.id}','score',this.value)" style="width:36px;text-align:center">
         <span class="rnd-diff" id="rdiff-${r.id}">${r.diff!==null?r.diff:'\u2014'}</span>
         <button class="rnd-del" onclick="rndToggleLink('${r.id}')" title="Link sessions" style="color:var(--tx3);font-size:.72rem">\uD83D\uDD17</button>
         ${isMulti?`<button class="rnd-del" onclick="rndRegenPdf('${r.id}')" title="Export scorecard PDF" style="font-size:.65rem">\uD83D\uDCC4</button>`:''}
