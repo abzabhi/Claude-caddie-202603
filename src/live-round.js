@@ -587,7 +587,7 @@ const playerCols = LR_MODES[mode]?.shared
   : lrState.players.map(p=>escHtml(p.name.split(' ')[0]||'P'));
 
 let html = `<div style="overflow-x:auto">
-<table style="min-width:600px;border-collapse:collapse;font-size:.65rem">
+<table style="width:100%;border-collapse:collapse;font-size:.65rem">
   <thead><tr style="border-bottom:2px solid var(--br)">
     <th style="padding:5px 6px;text-align:left;color:var(--tx3);font-weight:400;font-size:.54rem;text-transform:uppercase;letter-spacing:.08em">H</th>
     <th style="padding:5px 6px;text-align:center;color:var(--tx3);font-weight:400;font-size:.54rem">Par</th>
@@ -822,6 +822,8 @@ if (window.clearActiveSession) window.clearActiveSession('round');
 const st = document.getElementById('lrSaveStatus');
 st.style.color = 'var(--ac)';
 st.textContent = '\u2713 Round saved.'+(capped?' Max score (net double bogey) applied to differential.':'');
+const closeBtn = document.getElementById('lrCloseBtn');
+if(closeBtn) closeBtn.style.display = '';
 lrUpdatePill();
 }
 
@@ -987,6 +989,13 @@ const b=document.getElementById('lrEndBanner');
 if(b) b.style.display='none';
 }
 
+function lrCloseRound() {
+document.getElementById('lrOverlay').classList.remove('active');
+lrState = null;
+lrUpdatePill();
+if(window.showTab) window.showTab('rounds');
+}
+
 // -- Persist active round to localStorage on every meaningful state change --
 function _lrPersist() {
   if (window.lrState) localStorage.setItem('gordy:activeRound', JSON.stringify(window.lrState));
@@ -1002,7 +1011,7 @@ Object.assign(window, {
   lrMinimize, lrExpand, lrUpdatePill,
   lrShowTally, lrShowTallyFromSummary, lrShowHole,
   lrEndRound, lrCancelEndBanner, lrConfirmEnd,
-  lrSaveRound, lrExportPdf,
+  lrSaveRound, lrCloseRound, lrExportPdf,
   lrDiscardRound, lrConfirmDiscard,
   lrAdj, lrSetGir, lrToggleNote, lrSaveNote,
   lrSetPlayer, lrRenderHole, lrRenderTally, lrShowScreen,
