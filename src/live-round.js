@@ -1,4 +1,4 @@
-import { uid, today, save, courses, rounds, profile } from './store.js';
+import { uid, today, save, courses, rounds, profile, bag } from './store.js';
 import { calcDiff } from './geo.js';
 import { renderHandicap } from './rounds.js';
 
@@ -375,6 +375,9 @@ if(shared) {
   scroll.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
 }
 
+/* Phase 4: advanced mode collapsible */
+scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
+
 // Tally strip
 scroll.innerHTML += lrTallyStrip();
 
@@ -513,6 +516,12 @@ if(next < 0 || next >= lrState.holes.length) {
 lrState.curHole = next;
 lrState.curPlayer = 0;
 lrState._noteOpen = false;
+/* Phase 4: clear advanced mode state on hole change */
+_lrShotDraft        = null;
+_lrEditingIndex     = null;
+_lrObConfirmPending = false;
+_lrDeleteConfirmIdx = null;
+_lrGirPromptPending = false;
 lrRenderHole();
 _lrPersist();
 }
@@ -805,6 +814,12 @@ const newRound = {
     putts: s.putts!==null?String(s.putts):'',
     gir: s.gir,
     notes: s.notes||'',
+    /* Phase 4 additive fields */
+    fir:               s.fir               !== undefined ? s.fir               : null,
+    shots:             s.shots             || [],
+    on_green_distance: s.on_green_distance !== undefined ? s.on_green_distance : null,
+    chip_putt_count:   s.chip_putt_count   !== undefined ? s.chip_putt_count   : null,
+    holed_out:         s.holed_out         || false,
   })).filter(h=>h.score) : [],
   players: lrState.players.map(p=>({
     name: p.name,
@@ -996,10 +1011,506 @@ lrUpdatePill();
 if(window.showTab) window.showTab('rounds');
 }
 
+// -- Phase 4: Advanced shot logging -- module-level state --
+var _lrAdvancedOpen    = false;
+var _lrShotDraft       = null;
+var _lrEditingIndex    = null;
+var _lrObConfirmPending  = false;
+var _lrDeleteConfirmIdx  = null;
+var _lrGirPromptPending  = false;
+
 // -- Persist active round to localStorage on every meaningful state change --
 function _lrPersist() {
   if (window.lrState) localStorage.setItem('gordy:activeRound', JSON.stringify(window.lrState));
   if (window.updateSessionPill) window.updateSessionPill();
+}
+
+// \u2500\u2500 Phase 4: Advanced Shot Logging \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function _lrDefaultDraft(holeIdx) {
+  var hole    = lrState.holes[holeIdx];
+  var pi      = lrState.curPlayer;
+  var s       = lrState.players[pi].scores[holeIdx];
+  var isFirst = !s.shots || s.shots.length === 0;
+  return {
+    clubId:          '',
+    shot_mode:       'standard',
+    lie:             isFirst ? 'tee' : '',
+    radial_ring:     null,
+    radial_segment:  null,
+    flight_path:     null,
+    distanceToHole:  isFirst ? (hole.yards || null) : null,
+    is_ob:           false,
+    penalty_strokes: 0,
+    timestamp:       '',
+    entryType:       'live'
+  };
+}
+
+function _lrCalcScore(shots) {
+  return shots.reduce(function(t, sh) { return t + 1 + (sh.penalty_strokes || 0); }, 0);
+}
+
+function _lrAutoFir(shots) {
+  if (!shots || !shots.length) return null;
+  return shots[0].lie === 'fairway';
+}
+
+function _lrArcPath(cx, cy, r1, r2, startDeg, endDeg) {
+  var toRad = Math.PI / 180;
+  var s1 = (startDeg - 90) * toRad, e1 = (endDeg - 90) * toRad;
+  var x1 = cx + r2 * Math.cos(s1), y1 = cy + r2 * Math.sin(s1);
+  var x2 = cx + r2 * Math.cos(e1), y2 = cy + r2 * Math.sin(e1);
+  var x3 = cx + r1 * Math.cos(e1), y3 = cy + r1 * Math.sin(e1);
+  var x4 = cx + r1 * Math.cos(s1), y4 = cy + r1 * Math.sin(s1);
+  var laf = (endDeg - startDeg) > 180 ? 1 : 0;
+  return 'M' + x1.toFixed(2) + ' ' + y1.toFixed(2)
+    + ' A' + r2 + ' ' + r2 + ' 0 ' + laf + ' 1 ' + x2.toFixed(2) + ' ' + y2.toFixed(2)
+    + ' L' + x3.toFixed(2) + ' ' + y3.toFixed(2)
+    + ' A' + r1 + ' ' + r1 + ' 0 ' + laf + ' 0 ' + x4.toFixed(2) + ' ' + y4.toFixed(2) + ' Z';
+}
+
+/* Radial SVG builder -- arc logic duplicated from range.js _buildRadialSVG (Phase 4 handoff note) */
+function _buildLrRadialSVG(selRing, selSeg) {
+  var cx = 100, cy = 100;
+  var rIn1 = 22, rIn2 = 52, rOut1 = 52, rOut2 = 88;
+  var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  var bullFill   = selRing === 'bull' ? 'var(--ac)' : 'var(--gr2)';
+  var bullStroke = selRing === 'bull' ? 'var(--ac)' : 'var(--br)';
+  var innerArcs = '', outerArcs = '';
+  for (var i = 0; i < 8; i++) {
+    var startDeg = i * 45, endDeg = startDeg + 45;
+    var isSelIn  = selRing === 'inner' && selSeg === i;
+    var isSelOut = selRing === 'outer' && selSeg === i;
+    var midRad   = ((startDeg + 22.5) - 90) * Math.PI / 180;
+    var lxIn  = (cx + 37 * Math.cos(midRad)).toFixed(1);
+    var lyIn  = (cy + 37 * Math.sin(midRad) + 3).toFixed(1);
+    var lxOut = (cx + 70 * Math.cos(midRad)).toFixed(1);
+    var lyOut = (cy + 70 * Math.sin(midRad) + 3).toFixed(1);
+    var inPath  = _lrArcPath(cx, cy, rIn1,  rIn2,  startDeg, endDeg);
+    var outPath = _lrArcPath(cx, cy, rOut1, rOut2, startDeg, endDeg);
+    innerArcs += '<path d="' + inPath  + '" fill="' + (isSelIn  ? 'var(--ac)' : 'var(--gr2)')
+      + '" stroke="var(--br)" stroke-width="1" style="cursor:pointer" onclick="lrSelectZone(\'inner\',' + i + ')"></path>';
+    innerArcs += '<text x="' + lxIn  + '" y="' + lyIn
+      + '" text-anchor="middle" font-size="6" fill="var(--tx3)" pointer-events="none">' + dirs[i] + '</text>';
+    outerArcs += '<path d="' + outPath + '" fill="' + (isSelOut ? 'var(--ac)' : 'var(--bg)')
+      + '" stroke="var(--br)" stroke-width="1" style="cursor:pointer" onclick="lrSelectZone(\'outer\',' + i + ')"></path>';
+    outerArcs += '<text x="' + lxOut + '" y="' + lyOut
+      + '" text-anchor="middle" font-size="7" fill="var(--tx3)" pointer-events="none">' + dirs[i] + '</text>';
+  }
+  return '<svg viewBox="0 0 200 200" width="200" height="200" xmlns="http://www.w3.org/2000/svg">'
+    + outerArcs + innerArcs
+    + '<circle cx="' + cx + '" cy="' + cy + '" r="22" fill="' + bullFill + '" stroke="' + bullStroke
+    + '" stroke-width="1.5" style="cursor:pointer" onclick="lrSelectZone(\'bull\',null)"></circle>'
+    + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="7" fill="var(--tx)" pointer-events="none">BULL</text>'
+    + '</svg>';
+}
+
+function _lrZoneLabel(ring, seg) {
+  if (!ring) return '\u2014';
+  var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  if (ring === 'bull') return 'Bull\u2019s-eye';
+  return (ring === 'inner' ? 'Inner' : 'Outer') + (seg !== null ? ' \u00B7 ' + dirs[seg] : '');
+}
+
+function _lrModeBtn(mode, active) {
+  var labels = { standard: 'Standard', approach: 'Approach', on_green: 'On Green' };
+  return '<button class="implied-tog' + (active === mode ? ' on' : '')
+    + '" style="flex:1" onclick="lrSetShotMode(\'' + mode + '\')">' + labels[mode] + '</button>';
+}
+
+function _lrClubOptions(selectedId) {
+  var opts = '<option value="">-- Club --</option>';
+  if (typeof bag !== 'undefined' && bag && bag.length) {
+    bag.forEach(function(c) {
+      var label = [c.brand, c.type, c.identifier].filter(Boolean).join(' ');
+      opts += '<option value="' + escHtml(c.id) + '"' + (c.id === selectedId ? ' selected' : '') + '>'
+        + escHtml(label) + '</option>';
+    });
+  }
+  return opts;
+}
+
+function _lrShotLogHtml(shots) {
+  if (!shots || !shots.length) return '';
+  var rows = shots.map(function(sh, i) {
+    var zone   = sh.radial_ring ? _lrZoneLabel(sh.radial_ring, sh.radial_segment) : '';
+    var obTag  = sh.is_ob
+      ? ' <span style="color:var(--danger);font-size:.6rem">OB+' + (sh.penalty_strokes || 0) + '</span>'
+      : '';
+    var editBtn = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:4px"'
+      + ' onclick="lrEditShot(' + i + ')">Edit</button>';
+    var delBtn  = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:2px;color:var(--danger)"'
+      + ' onclick="lrDeleteShot(' + i + ')">\u2715</button>';
+    var confirmHtml = (_lrDeleteConfirmIdx === i)
+      ? '<div style="margin-top:4px;font-size:.6rem;display:flex;gap:6px;align-items:center">'
+          + '<span style="color:var(--danger)">Delete this shot?</span>'
+          + '<button class="btn" style="background:var(--danger);color:#fff;border-color:var(--danger);'
+          + 'font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotConfirm(' + i + ')">Yes</button>'
+          + '<button class="btn sec" style="font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotCancel()">No</button>'
+          + '</div>'
+      : '';
+    var parts = ['Shot ' + (i + 1), sh.clubId || '\u2014', sh.shot_mode, sh.lie || '\u2014'];
+    if (zone) parts.push(zone);
+    if (sh.flight_path) parts.push(sh.flight_path);
+    return '<div style="font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)">'
+      + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'
+      + '<span>' + parts.join(' \u00B7 ') + obTag + '</span>' + editBtn + delBtn
+      + '</div>' + confirmHtml + '</div>';
+  }).join('');
+  return '<div style="margin-bottom:10px">'
+    + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:4px">Shot Log</div>'
+    + rows + '</div>';
+}
+
+function _lrGirFirToggles(s, hole) {
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">';
+  html += '<div class="card" style="margin-bottom:0"><div class="card-title">GIR</div>'
+    + '<div style="display:flex;gap:6px;margin-top:4px">'
+    + '<button class="lr-tog' + (s.gir === true  ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleGir(true)">\u2713</button>'
+    + '<button class="lr-tog' + (s.gir === false ? ' on-n' : '') + '" style="flex:1" onclick="lrToggleGir(false)">\u2717</button>'
+    + '</div></div>';
+  if (hole.par > 3) {
+    html += '<div class="card" style="margin-bottom:0"><div class="card-title">FIR</div>'
+      + '<div style="display:flex;gap:6px;margin-top:4px">'
+      + '<button class="lr-tog' + (s.fir === true  ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleFir(true)">\u2713</button>'
+      + '<button class="lr-tog' + (s.fir === false ? ' on-n' : '') + '" style="flex:1" onclick="lrToggleFir(false)">\u2717</button>'
+      + '</div></div>';
+  }
+  return html + '</div>';
+}
+
+function _lrAdvancedHtml(holeIdx, pi, shared) {
+  var d    = _lrShotDraft || _lrDefaultDraft(holeIdx);
+  var s    = lrState.players[pi].scores[holeIdx];
+  var shots = s.shots || [];
+  var hole  = lrState.holes[holeIdx];
+  var arrow = _lrAdvancedOpen ? '\u25B2' : '\u25BC';
+  var hdr   = '<div class="collapsible-hdr" onclick="lrToggleAdvanced()" id="lrAdvancedHdr"'
+    + ' style="cursor:pointer;padding:10px 0;font-size:.72rem;font-family:\'DM Mono\',monospace;'
+    + 'color:var(--tx3);display:flex;justify-content:space-between;border-top:1px solid var(--br);margin-top:10px">'
+    + '<span>Advanced Mode</span><span>' + arrow + '</span></div>';
+  if (!_lrAdvancedOpen) return hdr + '<div id="lrAdvancedBody" style="display:none"></div>';
+
+  var html = '<div id="lrAdvancedBody" style="padding-bottom:12px">';
+  html += _lrShotLogHtml(shots);
+
+  /* GIR prompt when Hole Complete pressed without on_green mode */
+  if (_lrGirPromptPending) {
+    html += '<div class="card" style="margin-bottom:8px">'
+      + '<div style="font-size:.68rem;margin-bottom:10px">Did you reach the green?</div>'
+      + '<div style="display:flex;gap:8px">'
+      + '<button class="lr-tog" style="flex:1" onclick="lrGirPromptAnswer(true)">\u2713 Yes</button>'
+      + '<button class="lr-tog" style="flex:1" onclick="lrGirPromptAnswer(false)">\u2717 No</button>'
+      + '<button class="btn sec" style="flex:1;font-size:.65rem" onclick="lrGirPromptAnswer(null)">Skip</button>'
+      + '</div></div></div>';
+    return hdr + html;
+  }
+
+  if (d.shot_mode === 'on_green') {
+    /* On Green body */
+    var ogDist = (s.on_green_distance !== undefined && s.on_green_distance !== null) ? s.on_green_distance : '';
+    var cpc    = s.chip_putt_count || 0;
+    var holed  = s.holed_out || false;
+    html += '<div class="card" style="margin-bottom:8px">'
+      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">On Green</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+      + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
+      + '</div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (yds)</div>'
+      + '<input type="number" inputmode="numeric" class="field"'
+      + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
+      + ' value="' + ogDist + '" oninput="lrSetOnGreenDist(this.value)"></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Strokes on Green</div>'
+      + '<div class="lr-stepper">'
+      + '<button class="lr-step-btn sm" onclick="lrAdjChipPutt(-1)">\u2212</button>'
+      + '<div class="lr-step-val"><div class="lr-step-num sm">' + cpc + '</div></div>'
+      + '<button class="lr-step-btn sm" onclick="lrAdjChipPutt(1)">+</button>'
+      + '</div></div>'
+      + '<div style="margin-bottom:10px"><div class="card-title">Holed Out</div>'
+      + '<div style="display:flex;gap:6px;margin-top:4px">'
+      + '<button class="lr-tog' + (holed ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleHoledOut()">'
+      + (holed ? '\u2713 Yes' : 'No') + '</button>'
+      + '</div></div>'
+      + _lrGirFirToggles(s, hole)
+      + '<button class="rbtn" style="width:100%;margin-top:10px" onclick="lrCompleteHole()">\u2713 Complete Hole</button>'
+      + '</div>';
+  } else {
+    /* Standard / Approach entry form */
+    var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
+    var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
+    var lies = d.shot_mode === 'approach'
+      ? ['green','rough','sand','recovery']
+      : ['tee','fairway','rough','sand','recovery'];
+    html += '<div class="card" style="margin-bottom:8px">'
+      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">' + shotLabel + '</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+      + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
+      + '</div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Club</div>'
+      + '<select class="field" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
+      + ' onchange="lrSetClub(this.value)">' + _lrClubOptions(d.clubId) + '</select></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (yds)</div>'
+      + '<input type="number" inputmode="numeric" class="field"'
+      + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
+      + ' value="' + (d.distanceToHole !== null ? d.distanceToHole : '') + '" oninput="lrSetDist(this.value)"></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Result Zone</div>'
+      + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment) + '</div>'
+      + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">'
+      + _lrZoneLabel(d.radial_ring, d.radial_segment) + '</div></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Lie</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">';
+    lies.forEach(function(lie) {
+      html += '<button class="implied-tog' + (d.lie === lie ? ' on' : '') + '" onclick="lrSetShotLie(\''
+        + lie + '\')">' + lie.charAt(0).toUpperCase() + lie.slice(1) + '</button>';
+    });
+    html += '</div></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Flight Path</div>'
+      + '<div style="display:flex;gap:6px;margin-top:4px">';
+    [['straight','Straight'],['left-to-right','L\u2192R'],['right-to-left','R\u2192L']].forEach(function(fp) {
+      html += '<button class="implied-tog' + (d.flight_path === fp[0] ? ' on' : '') + '" style="flex:1"'
+        + ' onclick="lrSetFlightPath(\'' + fp[0] + '\')">' + fp[1] + '</button>';
+    });
+    html += '</div></div>';
+    /* OB toggle / inline confirm */
+    if (_lrObConfirmPending) {
+      html += '<div style="margin-bottom:10px;padding:8px;background:var(--gr2);border-radius:6px;font-size:.68rem">'
+        + 'OB \u2014 add 1 penalty stroke?'
+        + '<button class="btn" style="font-size:.62rem;padding:2px 8px;margin-left:8px;'
+        + 'background:var(--danger);color:#fff;border-color:var(--danger)" onclick="lrObConfirm(true)">Yes</button>'
+        + '<button class="btn sec" style="font-size:.62rem;padding:2px 8px;margin-left:4px" onclick="lrObConfirm(false)">No</button>'
+        + '</div>';
+    } else {
+      html += '<div style="margin-bottom:10px">'
+        + '<button class="implied-tog' + (d.is_ob ? ' on' : '') + '" onclick="lrToggleOb()">OB: '
+        + (d.is_ob ? 'Yes' : 'No') + '</button></div>';
+    }
+    html += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
+      + (_lrEditingIndex !== null ? 'Update Shot' : 'Record Shot') + '</button></div>';
+    /* GIR / FIR and Hole Complete once at least one shot is logged */
+    if (shots.length > 0) {
+      html += _lrGirFirToggles(s, hole);
+      html += '<button class="btn sec" style="width:100%;margin-top:8px" onclick="lrCompleteHole()">\u2713 Hole Complete</button>';
+    }
+  }
+  return hdr + html + '</div>';
+}
+
+/* ── Exported advanced-mode interaction functions ────────────────────────── */
+
+function lrToggleAdvanced() {
+  _lrAdvancedOpen = !_lrAdvancedOpen;
+  if (_lrAdvancedOpen && !_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  lrRenderHole();
+}
+
+function lrSetShotMode(mode) {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  _lrShotDraft.shot_mode = mode;
+  if (mode === 'on_green') {
+    _lrShotDraft.radial_ring    = null;
+    _lrShotDraft.radial_segment = null;
+    _lrShotDraft.flight_path    = null;
+  }
+  _lrObConfirmPending = false;
+  lrRenderHole();
+}
+
+function lrSetShotLie(lie) {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  _lrShotDraft.lie = lie;
+  lrRenderHole();
+}
+
+function lrSetFlightPath(fp) {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  _lrShotDraft.flight_path = _lrShotDraft.flight_path === fp ? null : fp;
+  lrRenderHole();
+}
+
+function lrSelectZone(ring, seg) {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  if (_lrShotDraft.radial_ring === ring && _lrShotDraft.radial_segment === seg) {
+    _lrShotDraft.radial_ring    = null;
+    _lrShotDraft.radial_segment = null;
+  } else {
+    _lrShotDraft.radial_ring    = ring;
+    _lrShotDraft.radial_segment = seg;
+  }
+  lrRenderHole();
+}
+
+function lrSetClub(clubId) {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  _lrShotDraft.clubId = clubId;
+}
+
+function lrSetDist(val) {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  _lrShotDraft.distanceToHole = val !== '' ? parseFloat(val) : null;
+}
+
+function lrToggleOb() {
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
+  _lrShotDraft.is_ob = !_lrShotDraft.is_ob;
+  _lrObConfirmPending = _lrShotDraft.is_ob;
+  if (!_lrShotDraft.is_ob) _lrShotDraft.penalty_strokes = 0;
+  lrRenderHole();
+}
+
+function lrObConfirm(addPenalty) {
+  if (!_lrShotDraft) return;
+  _lrShotDraft.penalty_strokes = addPenalty ? 1 : 0;
+  _lrObConfirmPending = false;
+  lrRenderHole();
+}
+
+function lrRecordShot() {
+  if (!lrState || !_lrShotDraft) return;
+  if (_lrObConfirmPending) return; /* must confirm OB first */
+  var d       = _lrShotDraft;
+  d.timestamp = new Date().toISOString();
+  var pi      = lrState.curPlayer;
+  var holeIdx = lrState.curHole;
+  var s       = lrState.players[pi].scores[holeIdx];
+  if (!s.shots) s.shots = [];
+  var wasOb  = d.is_ob;
+  var isEdit = _lrEditingIndex !== null;
+  if (isEdit) {
+    s.shots[_lrEditingIndex] = Object.assign({}, d);
+  } else {
+    s.shots.push(Object.assign({}, d));
+  }
+  /* Auto-FIR: first shot, par 4/5 only */
+  var hole = lrState.holes[holeIdx];
+  if (s.shots.length === 1 && hole.par > 3) s.fir = _lrAutoFir(s.shots);
+  /* Derive score from shots */
+  s.score = _lrCalcScore(s.shots);
+  _lrEditingIndex     = null;
+  _lrObConfirmPending = false;
+  _lrDeleteConfirmIdx = null;
+  /* Post-OB: pre-fill recovery draft */
+  _lrShotDraft = _lrDefaultDraft(holeIdx);
+  if (wasOb && !isEdit) _lrShotDraft.lie = 'recovery';
+  lrRenderHole();
+  _lrPersist();
+}
+
+function lrEditShot(idx) {
+  var pi = lrState.curPlayer;
+  var s  = lrState.players[pi].scores[lrState.curHole];
+  if (!s.shots || !s.shots[idx]) return;
+  _lrShotDraft        = Object.assign({}, s.shots[idx]);
+  _lrEditingIndex     = idx;
+  _lrObConfirmPending = false;
+  _lrDeleteConfirmIdx = null;
+  _lrGirPromptPending = false;
+  lrRenderHole();
+}
+
+function lrDeleteShot(idx) {
+  _lrDeleteConfirmIdx = idx;
+  lrRenderHole();
+}
+
+function lrDeleteShotConfirm(idx) {
+  var pi   = lrState.curPlayer;
+  var s    = lrState.players[pi].scores[lrState.curHole];
+  var hole = lrState.holes[lrState.curHole];
+  if (!s.shots) return;
+  s.shots.splice(idx, 1);
+  s.score = s.shots.length ? _lrCalcScore(s.shots) : null;
+  if (hole.par > 3) s.fir = s.shots.length ? _lrAutoFir(s.shots) : null;
+  _lrDeleteConfirmIdx = null;
+  if (_lrEditingIndex === idx) { _lrEditingIndex = null; _lrShotDraft = _lrDefaultDraft(lrState.curHole); }
+  lrRenderHole();
+  _lrPersist();
+}
+
+function lrDeleteShotCancel() {
+  _lrDeleteConfirmIdx = null;
+  lrRenderHole();
+}
+
+function lrCompleteHole() {
+  var pi      = lrState.curPlayer;
+  var holeIdx = lrState.curHole;
+  var s       = lrState.players[pi].scores[holeIdx];
+  var hole    = lrState.holes[holeIdx];
+  var shots   = s.shots || [];
+  var isOnGreen = _lrShotDraft && _lrShotDraft.shot_mode === 'on_green';
+  if (isOnGreen) {
+    var cpc      = s.chip_putt_count || 0;
+    s.putts      = cpc; /* backwards compat */
+    var preGreen = shots.filter(function(sh) { return sh.shot_mode !== 'on_green'; });
+    s.score      = _lrCalcScore(preGreen) + cpc;
+    if (s.gir === null || s.gir === undefined) {
+      var girStrokes = preGreen.reduce(function(t, sh) { return t + 1 + (sh.penalty_strokes || 0); }, 0);
+      s.gir = girStrokes <= (hole.par - 2);
+    }
+    _lrShotDraft = null; _lrEditingIndex = null;
+    _lrObConfirmPending = false; _lrDeleteConfirmIdx = null; _lrGirPromptPending = false;
+    lrGoHole(1);
+  } else {
+    /* No on_green -- prompt for GIR if not already set */
+    if (!_lrGirPromptPending && (s.gir === null || s.gir === undefined)) {
+      _lrGirPromptPending = true;
+      lrRenderHole();
+      return;
+    }
+    _lrShotDraft = null; _lrEditingIndex = null;
+    _lrObConfirmPending = false; _lrDeleteConfirmIdx = null; _lrGirPromptPending = false;
+    lrGoHole(1);
+  }
+}
+
+function lrGirPromptAnswer(val) {
+  var pi = lrState.curPlayer;
+  var s  = lrState.players[pi].scores[lrState.curHole];
+  if (val !== null) s.gir = val;
+  _lrShotDraft = null; _lrEditingIndex = null;
+  _lrObConfirmPending = false; _lrDeleteConfirmIdx = null; _lrGirPromptPending = false;
+  lrGoHole(1);
+}
+
+function lrToggleGir(val) {
+  if (!lrState) return;
+  var shared = !!(LR_MODES[lrState.mode] && LR_MODES[lrState.mode].shared);
+  lrSetGir(lrState.curPlayer, lrState.curHole, val, shared);
+}
+
+function lrToggleFir(val) {
+  if (!lrState) return;
+  var s = lrState.players[lrState.curPlayer].scores[lrState.curHole];
+  s.fir = s.fir === val ? null : val;
+  lrRenderHole();
+  _lrPersist();
+}
+
+function lrSetOnGreenDist(val) {
+  if (!lrState) return;
+  lrState.players[lrState.curPlayer].scores[lrState.curHole].on_green_distance =
+    val !== '' ? parseFloat(val) : null;
+  _lrPersist();
+}
+
+function lrAdjChipPutt(delta) {
+  if (!lrState) return;
+  var s = lrState.players[lrState.curPlayer].scores[lrState.curHole];
+  s.chip_putt_count = Math.max(0, (s.chip_putt_count || 0) + delta);
+  lrRenderHole();
+  _lrPersist();
+}
+
+function lrToggleHoledOut() {
+  if (!lrState) return;
+  var s = lrState.players[lrState.curPlayer].scores[lrState.curHole];
+  s.holed_out = !s.holed_out;
+  lrRenderHole();
+  _lrPersist();
 }
 
 // -- Expose to window (required for HTML onclick handlers) --
@@ -1015,4 +1526,11 @@ Object.assign(window, {
   lrDiscardRound, lrConfirmDiscard,
   lrAdj, lrSetGir, lrToggleNote, lrSaveNote,
   lrSetPlayer, lrRenderHole, lrRenderTally, lrShowScreen,
+  /* Phase 4: advanced shot logging */
+  lrToggleAdvanced, lrSelectZone, lrToggleOb, lrRecordShot,
+  lrEditShot, lrDeleteShot, lrDeleteShotConfirm, lrDeleteShotCancel,
+  lrCompleteHole, lrToggleFir, lrToggleGir,
+  lrSetShotMode, lrSetShotLie, lrSetFlightPath, lrSetClub, lrSetDist,
+  lrObConfirm, lrSetOnGreenDist, lrAdjChipPutt, lrToggleHoledOut,
+  lrGirPromptAnswer,
 });
