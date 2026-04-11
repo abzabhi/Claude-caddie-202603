@@ -1282,10 +1282,12 @@ body{
       <div style="display:flex;gap:6px;margin-bottom:4px">
         <button class="implied-tog on" id="vmode-coverage" onclick="onVizModeChange('coverage')" style="flex:1;padding:7px 4px;font-size:.68rem">📊 Bag coverage</button>
         <button class="implied-tog"    id="vmode-hole"     onclick="onVizModeChange('hole')"     style="flex:1;padding:7px 4px;font-size:.68rem">⛳ Hole planning</button>
+        <button class="implied-tog"    id="vmode-dispersion" onclick="onVizModeChange('dispersion')" style="flex:1;padding:7px 4px;font-size:.68rem">\uD83C\uDFAF Dispersion</button>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:12px">
         <div class="slbl" style="flex:1;text-align:center;margin:0">Compare all clubs</div>
         <div class="slbl" style="flex:1;text-align:center;margin:0">Plan a specific hole</div>
+        <div class="slbl" style="flex:1;text-align:center;margin:0">Range sessions</div>
       </div>
 
       <!-- MODE 1: Bag coverage controls -->
@@ -1345,8 +1347,23 @@ body{
         </div>
       </div>
 
+      <!-- MODE 3: Dispersion controls -->
+      <div id="vizDispersionControls" style="display:none">
+        <div style="font-size:.62rem;color:var(--tx3);margin-bottom:8px">
+          Select sessions then clubs to compare dispersion across range data.
+        </div>
+        <div class="flbl" style="margin-bottom:4px">Sessions</div>
+        <div id="vizDispSessionShelf" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;padding:8px;background:var(--bg);border:1px solid var(--br);border-radius:4px">
+          <span style="font-size:.62rem;color:var(--tx3)">No range sessions yet.</span>
+        </div>
+        <div class="flbl" style="margin-bottom:4px">Club &amp; Distance</div>
+        <div id="vizDispClubShelf" style="display:flex;flex-wrap:wrap;gap:5px;padding:8px;background:var(--bg);border:1px solid var(--br);border-radius:4px">
+          <span style="font-size:.62rem;color:var(--tx3)">No sessions selected.</span>
+        </div>
+      </div>
+
       <!-- Shared: yardage mode + fairway + range + display -->
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
+      <div id="vizSharedControls" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
         <div class="field">
           <div class="flbl">Yardage</div>
           <div style="display:flex;gap:3px">
@@ -1379,12 +1396,13 @@ body{
         </div>
       </div>
     </div>
-    <div class="card" style="padding:12px">
+    <div class="card" id="vizSvgCard" style="padding:12px">
       <div id="vizHoleNote" style="display:none;margin-bottom:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--br);border-radius:4px;font-size:.66rem;color:var(--tx2);line-height:1.7;white-space:pre-wrap"></div>
       <svg id="vizSvg" viewBox="0 0 440 520" style="display:block;width:100%;height:auto"><text x="220" y="260" text-anchor="middle" font-family="monospace" font-size="12" fill="#c8bba6">Select a mode above</text></svg>
       <div id="vizLegend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
       <div id="vizChips"  style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
     </div>
+    <div id="vizDispOutput" style="display:none"></div>
   </div>
 
   <!-- NOTES -->
@@ -1831,7 +1849,8 @@ body{
   setVizYard, setVizDisplay, buildVizHoleShelf, buildVizDistanceDropdown,
   vizClubsFromEntry, syncOptimisedSelection, _saveCurrentHoleEdits,
   syncHoleClubsFromSession, _buildBagMap, _buildHoleMapFromEdits,
-  saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots,setVizInitDone
+  saveManualBag, saveManualPlan, initViz, _rebuildPathPlanner, _rebuildShotSlots,setVizInitDone,
+  vizDispToggleSession, vizDispToggleClub
 } from './src/viz.js';
   import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange,calcVizMaxRange } from './src/clubs.js';
   import { renderCourseList } from './src/courses.js';
