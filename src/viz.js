@@ -1,6 +1,6 @@
 import { calcVizMaxRange } from './clubs.js';
 import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath } from './geo.js';
-import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLIGHT_DATA, BIAS_DATA } from './constants.js';
+import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLIGHT_DATA, BIAS_DATA, ZONE_RING_RADII } from './constants.js';
 import { vizGetDisp } from './dispersion.js';
 import { bag, courses, history, profile, save, rangeSessions } from './store.js';
 
