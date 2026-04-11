@@ -1,4 +1,5 @@
 import { uid, today, save, courses, rounds, profile, bag } from './store.js';
+import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII } from './constants.js';
 import { calcDiff } from './geo.js';
 import { renderHandicap } from './rounds.js';
 
@@ -1056,61 +1057,71 @@ function _lrAutoFir(shots) {
   return shots[0].lie === 'fairway';
 }
 
-function _lrArcPath(cx, cy, r1, r2, startDeg, endDeg) {
-  var toRad = Math.PI / 180;
-  var s1 = (startDeg - 90) * toRad, e1 = (endDeg - 90) * toRad;
-  var x1 = cx + r2 * Math.cos(s1), y1 = cy + r2 * Math.sin(s1);
-  var x2 = cx + r2 * Math.cos(e1), y2 = cy + r2 * Math.sin(e1);
-  var x3 = cx + r1 * Math.cos(e1), y3 = cy + r1 * Math.sin(e1);
-  var x4 = cx + r1 * Math.cos(s1), y4 = cy + r1 * Math.sin(s1);
-  var laf = (endDeg - startDeg) > 180 ? 1 : 0;
-  return 'M' + x1.toFixed(2) + ' ' + y1.toFixed(2)
-    + ' A' + r2 + ' ' + r2 + ' 0 ' + laf + ' 1 ' + x2.toFixed(2) + ' ' + y2.toFixed(2)
-    + ' L' + x3.toFixed(2) + ' ' + y3.toFixed(2)
-    + ' A' + r1 + ' ' + r1 + ' 0 ' + laf + ' 0 ' + x4.toFixed(2) + ' ' + y4.toFixed(2) + ' Z';
+/* Radial arc helpers -- identical convention to range.js _pt / _arcPath (Phase 4 handoff note: duplicated from range.js) */
+function _lrPt(cx, cy, r, angleDeg) {
+  var rad = angleDeg * Math.PI / 180;
+  return { x: +(cx + r * Math.sin(rad)).toFixed(3), y: +(cy - r * Math.cos(rad)).toFixed(3) };
 }
 
-/* Radial SVG builder -- arc logic duplicated from range.js _buildRadialSVG (Phase 4 handoff note) */
-function _buildLrRadialSVG(selRing, selSeg) {
-  var cx = 100, cy = 100;
-  var rIn1 = 22, rIn2 = 52, rOut1 = 52, rOut2 = 88;
-  var dirs = ['N','NE','E','SE','S','SW','W','NW'];
-  var bullFill   = selRing === 'bull' ? 'var(--ac)' : 'var(--gr2)';
-  var bullStroke = selRing === 'bull' ? 'var(--ac)' : 'var(--br)';
-  var innerArcs = '', outerArcs = '';
+function _lrArcPath(cx, cy, r1, r2, startDeg, endDeg) {
+  var s1 = _lrPt(cx, cy, r2, startDeg), e1 = _lrPt(cx, cy, r2, endDeg);
+  var s2 = _lrPt(cx, cy, r1, endDeg),   e2 = _lrPt(cx, cy, r1, startDeg);
+  return 'M ' + s1.x + ' ' + s1.y + ' A ' + r2 + ' ' + r2 + ' 0 0 1 ' + e1.x + ' ' + e1.y
+    + ' L ' + s2.x + ' ' + s2.y + ' A ' + r1 + ' ' + r1 + ' 0 0 0 ' + e2.x + ' ' + e2.y + ' Z';
+}
+
+/* Radial SVG builder -- matches range.js _buildRadialSVG (interactive mode only, onclick wired to lrSelectZone)
+   isApproach=true: inner+bull get muted green base fill to indicate proximity to hole; flag icon on bull */
+function _buildLrRadialSVG(selRing, selSeg, isApproach) {
+  var cx = 150, cy = 150;
+  var rB = ZONE_RING_RADII.bull, rI = ZONE_RING_RADII.inner, rO = ZONE_RING_RADII.outer;
+  var bg = '<rect width="300" height="300" fill="#6a9a50"/>'
+    + '<rect x="90" y="0" width="120" height="300" fill="#9ec880"/>';
+  var paths = '';
+  /* 8 inner segments */
   for (var i = 0; i < 8; i++) {
-    var startDeg = i * 45, endDeg = startDeg + 45;
-    var isSelIn  = selRing === 'inner' && selSeg === i;
-    var isSelOut = selRing === 'outer' && selSeg === i;
-    var midRad   = ((startDeg + 22.5) - 90) * Math.PI / 180;
-    var lxIn  = (cx + 37 * Math.cos(midRad)).toFixed(1);
-    var lyIn  = (cy + 37 * Math.sin(midRad) + 3).toFixed(1);
-    var lxOut = (cx + 70 * Math.cos(midRad)).toFixed(1);
-    var lyOut = (cy + 70 * Math.sin(midRad) + 3).toFixed(1);
-    var inPath  = _lrArcPath(cx, cy, rIn1,  rIn2,  startDeg, endDeg);
-    var outPath = _lrArcPath(cx, cy, rOut1, rOut2, startDeg, endDeg);
-    innerArcs += '<path d="' + inPath  + '" fill="' + (isSelIn  ? 'var(--ac)' : 'var(--gr2)')
-      + '" stroke="var(--br)" stroke-width="1" style="cursor:pointer" onclick="lrSelectZone(\'inner\',' + i + ')"></path>';
-    innerArcs += '<text x="' + lxIn  + '" y="' + lyIn
-      + '" text-anchor="middle" font-size="6" fill="var(--tx3)" pointer-events="none">' + dirs[i] + '</text>';
-    outerArcs += '<path d="' + outPath + '" fill="' + (isSelOut ? 'var(--ac)' : 'var(--bg)')
-      + '" stroke="var(--br)" stroke-width="1" style="cursor:pointer" onclick="lrSelectZone(\'outer\',' + i + ')"></path>';
-    outerArcs += '<text x="' + lxOut + '" y="' + lyOut
-      + '" text-anchor="middle" font-size="7" fill="var(--tx3)" pointer-events="none">' + dirs[i] + '</text>';
+    var isSel    = selRing === 'inner' && selSeg === i;
+    var baseFill = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
+    var fill     = isSel ? 'rgba(180,30,30,0.45)' : baseFill;
+    var strk     = isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+    var sw       = isSel ? '2.5' : '1.5';
+    var d        = _lrArcPath(cx, cy, rB, rI, (i * 45) - 22.5, (i * 45) + 22.5);
+    paths += '<path d="' + d + '" fill="' + fill + '" stroke="' + strk + '" stroke-width="' + sw
+      + '" onclick="lrSelectZone(\'inner\',' + i + ')" style="cursor:pointer;touch-action:manipulation"></path>';
   }
-  return '<svg viewBox="0 0 200 200" width="200" height="200" xmlns="http://www.w3.org/2000/svg">'
-    + outerArcs + innerArcs
-    + '<circle cx="' + cx + '" cy="' + cy + '" r="22" fill="' + bullFill + '" stroke="' + bullStroke
-    + '" stroke-width="1.5" style="cursor:pointer" onclick="lrSelectZone(\'bull\',null)"></circle>'
-    + '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-size="7" fill="var(--tx)" pointer-events="none">BULL</text>'
-    + '</svg>';
+  /* 8 outer segments -- neutral regardless of mode */
+  for (var j = 0; j < 8; j++) {
+    var isSel2 = selRing === 'outer' && selSeg === j;
+    var fill2  = isSel2 ? 'rgba(180,30,30,0.25)' : 'rgba(255,255,255,0.18)';
+    var strk2  = isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+    var sw2    = isSel2 ? '2.5' : '1.5';
+    var d2     = _lrArcPath(cx, cy, rI, rO, (j * 45) - 22.5, (j * 45) + 22.5);
+    paths += '<path d="' + d2 + '" fill="' + fill2 + '" stroke="' + strk2 + '" stroke-width="' + sw2
+      + '" onclick="lrSelectZone(\'outer\',' + j + ')" style="cursor:pointer;touch-action:manipulation"></path>';
+  }
+  /* Bullseye */
+  var bullSel      = selRing === 'bull';
+  var bullBaseFill = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
+  var bullFill     = bullSel ? 'rgba(180,30,30,0.85)' : bullBaseFill;
+  var bullStrk     = bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+  var bullSW       = bullSel ? '2.5' : '1.5';
+  paths += '<circle cx="150" cy="150" r="' + rB + '" fill="' + bullFill + '" stroke="' + bullStrk
+    + '" stroke-width="' + bullSW + '" onclick="lrSelectZone(\'bull\',null)" style="cursor:pointer;touch-action:manipulation"></circle>';
+  /* Flag icon on bull for approach mode */
+  if (isApproach) {
+    paths += '<line x1="150" y1="132" x2="150" y2="168" stroke="rgba(255,255,255,0.85)" stroke-width="2" pointer-events="none"/>'
+      + '<polygon points="150,132 164,139 150,146" fill="rgba(255,255,255,0.85)" pointer-events="none"/>';
+  }
+  return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"'
+    + ' style="width:100%;max-width:300px;display:block;margin:0 auto">'
+    + bg + paths + '</svg>';
 }
 
 function _lrZoneLabel(ring, seg) {
   if (!ring) return '\u2014';
-  var dirs = ['N','NE','E','SE','S','SW','W','NW'];
-  if (ring === 'bull') return 'Bull\u2019s-eye';
-  return (ring === 'inner' ? 'Inner' : 'Outer') + (seg !== null ? ' \u00B7 ' + dirs[seg] : '');
+  if (ring === 'bull') return 'Bull';
+  return (ring === 'inner' ? 'Inner' : 'Outer')
+    + (seg !== null && seg !== undefined ? ' \u00B7 ' + (ZONE_SEGMENT_LABELS[seg] || seg) : '');
 }
 
 function _lrModeBtn(mode, active) {
@@ -1244,7 +1255,9 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
       ? ['green','rough','sand','recovery']
       : ['tee','fairway','rough','sand','recovery'];
     html += '<div class="card" style="margin-bottom:8px">'
-      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">' + shotLabel + '</div>'
+      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
+      + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>'
+      + '</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:10px">'
       + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
       + '</div>'
@@ -1258,7 +1271,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
       + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
       + ' value="' + (d.distanceToHole !== null ? d.distanceToHole : '') + '" oninput="lrSetDist(this.value)"></div>'
       + '<div style="margin-bottom:8px"><div class="card-title">Result Zone</div>'
-      + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment) + '</div>'
+      + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach') + '</div>'
       + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">'
       + _lrZoneLabel(d.radial_ring, d.radial_segment) + '</div></div>'
       + '<div style="margin-bottom:8px"><div class="card-title">Lie</div>'
