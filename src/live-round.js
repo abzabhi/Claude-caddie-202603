@@ -3,6 +3,8 @@ import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js
 import { calcDiff } from './geo.js';
 import { renderHandicap } from './rounds.js';
 
+function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
+
 // \u2500\u2500 Live Round Tracker \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // lrState shape:
 // { courseId, courseName, tee, date, conditions, mode, countForHandicap,
