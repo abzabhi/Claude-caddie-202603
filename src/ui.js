@@ -703,7 +703,7 @@ function hideAIStepsCard(pasteId) {
 }
 
 function updateSessionLinker() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = today();
   const unlinked = history.filter(s => (!s.roundId) && s.date && s.date.slice(0, 10) === todayStr);
   const linkerBody = document.getElementById('rSessLinker');
   if (linkerBody) linkerBody.style.display = unlinked.length > 0 ? 'block' : 'none';
