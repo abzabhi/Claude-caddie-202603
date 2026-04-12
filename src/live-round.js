@@ -1179,7 +1179,7 @@ function _lrClubOptions(selectedId) {
   var opts = '<option value="">-- Club --</option>';
   if (typeof bag !== 'undefined' && bag && bag.length) {
     bag.forEach(function(c) {
-      var label = [c.type, c.identifier].filter(Boolean).join(' ');
+      var label = c.identifier || c.type;
       opts += '<option value="' + escHtml(c.id) + '"' + (c.id === selectedId ? ' selected' : '') + '>'
         + escHtml(label) + '</option>';
     });
@@ -1328,7 +1328,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
       + '<input type="number" inputmode="numeric" class="field"'
       + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
       + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
-      + ' value="' + (d.distanceToHole !== null ? d.distanceToHole : '') + '" oninput="lrSetDist(this.value)"></div>'
+      + ' value="' + (d.distanceToHole !== null ? d.distanceToHole : '') + '" onblur="lrSetDist(this.value)"></div>'
       + '<div style="margin-bottom:8px"><div class="card-title">Result Zone</div>'
       + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach') + '</div>'
       + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">'
@@ -1423,7 +1423,6 @@ function lrSetClub(clubId) {
 function lrSetDist(val) {
   if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
   _lrShotDraft.distanceToHole = val !== '' ? parseFloat(val) : null;
-  lrRenderHole();
 }
 
 function lrToggleOb() {
