@@ -17,6 +17,7 @@ export let vizDispSelectedSessions = new Set();
 export let vizDispSelectedKeys     = new Set();
 export let vizDispInitDone         = false;
 export let vizDispYardageFilter    = {}; // clubId -> yardage number | null (null = All)
+export let vizDispSelectedRounds   = new Set(); // Set of history[] indices
 
 export function setVizInitDone(v) { vizInitDone = v; }
 export function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
@@ -691,11 +692,27 @@ function _buildDispRadialSVG(heatCounts, heatMax){
   return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px;display:block;margin:0 auto">'+bg+paths+labels+'</svg>';
 }
 
+function _lrShotClubName(shot){
+  if(shot.clubName) return shot.clubName;
+  var c=bag.find(function(x){ return x.id===shot.clubId; });
+  return c?(c.type+(c.identifier?' '+c.identifier:'')):(shot.clubId||'Unknown');
+}
+
 export function initVizDisp(){
   if(vizDispInitDone){ renderVizDisp(); return; }
   vizDispInitDone=true;
   vizDispSelectedSessions=new Set((rangeSessions||[]).filter(function(s){ return s.committed; }).map(function(s){ return s.sessionId; }));
+  vizDispSelectedRounds=new Set(
+    (history||[]).reduce(function(acc,r,i){
+      var hasShots=(r.holes||[]).some(function(h){
+        return (h.shots||[]).some(function(s){ return s.radial_ring; });
+      });
+      if(hasShots) acc.push(i);
+      return acc;
+    },[])
+  );
   _buildDispSessionShelf();
+  _buildDispRoundShelf();
   _buildDispClubShelf();
   renderVizDisp();
 }
@@ -723,6 +740,36 @@ function _buildDispSessionShelf(){
   }).join('');
 }
 
+function _buildDispRoundShelf(){
+  var shelf=document.getElementById('vizDispRoundShelf');
+  if(!shelf) return;
+  var eligible=(history||[]).map(function(r,i){ return {r:r,i:i}; }).filter(function(obj){
+    return (obj.r.holes||[]).some(function(h){
+      return (h.shots||[]).some(function(s){ return s.radial_ring; });
+    });
+  });
+  if(!eligible.length){
+    shelf.innerHTML='<span style="font-size:.62rem;color:var(--tx3)">No rounds with shot data yet.</span>';
+    return;
+  }
+  shelf.innerHTML=eligible.map(function(obj,i){
+    var r=obj.r, idx=obj.i;
+    var on=vizDispSelectedRounds.has(idx);
+    var shotCount=(r.holes||[]).reduce(function(acc,h){
+      return acc+((h.shots||[]).filter(function(s){ return s.radial_ring; }).length);
+    },0);
+    var col=VIZ_COLORS[(i+20)%VIZ_COLORS.length];
+    return '<label onclick="vizDispToggleRound('+idx+')" id="vdround-'+idx+'"'+
+      ' style="display:flex;align-items:center;gap:5px;padding:4px 9px;'+
+      'background:'+(on?'var(--gr3)':'var(--bg)')+';border:1px solid '+(on?'var(--gr2)':'var(--br)')+';'+
+      'border-radius:4px;cursor:pointer;font-size:.62rem;transition:all .15s">'+
+      '<div style="width:8px;height:8px;border-radius:2px;background:'+col+';flex-shrink:0"></div>'+
+      escHtml(fmtDate(r.date))+(r.course?' \u00B7 '+escHtml(r.course):'')+
+      ' <span style="color:var(--tx3);font-size:.56rem">'+shotCount+' shot'+(shotCount!==1?'s':'')+'</span>'+
+      '</label>';
+  }).join('');
+}
+
 function _buildDispClubShelf(){
   var shelf=document.getElementById('vizDispClubShelf');
   if(!shelf) return;
@@ -733,6 +780,18 @@ function _buildDispClubShelf(){
       var name=cs.clubName||cs.clubId;
       if(!nameMap[name]) nameMap[name]={ clubName:name, totalShots:0 };
       (cs.targets||[]).forEach(function(t){ nameMap[name].totalShots+=t.shotCount||0; });
+    });
+  });
+  // Round pass — aggregate by clubName from selected rounds
+  (history||[]).forEach(function(r,idx){
+    if(!vizDispSelectedRounds.has(idx)) return;
+    (r.holes||[]).forEach(function(h){
+      (h.shots||[]).forEach(function(shot){
+        if(!shot.radial_ring) return;
+        var name=_lrShotClubName(shot);
+        if(!nameMap[name]) nameMap[name]={ clubName:name, totalShots:0 };
+        nameMap[name].totalShots++;
+      });
     });
   });
   var names=Object.keys(nameMap);
@@ -778,6 +837,23 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
         if(d.inner[i]){ counts['inner-'+i]+=d.inner[i].total||0; Object.keys(d.inner[i].flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.inner[i].flightPaths[fp2]||0; }); }
         if(d.outer[i]){ counts['outer-'+i]+=d.outer[i].total||0; Object.keys(d.outer[i].flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.outer[i].flightPaths[fp2]||0; }); }
       }
+    });
+  });
+  // Round pass — yardageFilter does not apply to round shots
+  (history||[]).forEach(function(r,idx){
+    if(!vizDispSelectedRounds.has(idx)) return;
+    (r.holes||[]).forEach(function(h){
+      (h.shots||[]).forEach(function(shot){
+        if(!shot.radial_ring) return;
+        if(_lrShotClubName(shot)!==clubName) return;
+        totalShots++;
+        var ring=shot.radial_ring, seg=shot.radial_segment;
+        if(ring==='bull'){ counts.bull++; }
+        else if(ring==='inner'&&seg!==null&&seg!==undefined){ counts['inner-'+seg]++; }
+        else if(ring==='outer'&&seg!==null&&seg!==undefined){ counts['outer-'+seg]++; }
+        var fp2=shot.flight_path;
+        if(fp2&&fp[fp2]!==undefined) fp[fp2]++;
+      });
     });
   });
   return { counts:counts, fp:fp, totalShots:totalShots };
@@ -828,8 +904,9 @@ export function renderVizDisp(){
   var out=document.getElementById('vizDispOutput');
   if(!out) return;
   var selectedSessions=(rangeSessions||[]).filter(function(s){ return s.committed&&vizDispSelectedSessions.has(s.sessionId); });
-  if(!selectedSessions.length){
-    out.innerHTML='<div class="card"><div class="hist-empty">No sessions selected.</div></div>';
+  var hasAnySource=selectedSessions.length||vizDispSelectedRounds.size;
+  if(!hasAnySource){
+    out.innerHTML='<div class="card"><div class="hist-empty">No sessions or rounds selected.</div></div>';
     return;
   }
   if(!vizDispSelectedKeys.size){
@@ -882,11 +959,21 @@ export function vizDispToggleClub(clubName){
   renderVizDisp();
 }
 
+export function vizDispToggleRound(idx){
+  if(vizDispSelectedRounds.has(idx)) vizDispSelectedRounds.delete(idx);
+  else vizDispSelectedRounds.add(idx);
+  var on=vizDispSelectedRounds.has(idx);
+  var lbl=document.getElementById('vdround-'+idx);
+  if(lbl){ lbl.style.background=on?'var(--gr3)':'var(--bg)'; lbl.style.borderColor=on?'var(--gr2)':'var(--br)'; }
+  _buildDispClubShelf();
+  renderVizDisp();
+}
+
 Object.assign(window, {
   onVizModeChange, onVizClubSrcChange, onVizOptSessionChange,
   onVizCourseChange, onVizTeeChange, onVizHoleSessionChange,
   resetVizMaxRange, saveManualBag, saveManualPlan,
   setVizDisplay, setVizYard, vizSelectHole,
   vizToggleClub, vizTogglePath, vizTogglePlanner, vizUpdatePath,
-  vizDispToggleSession, vizDispToggleClub, vizDispSetYardage
+  vizDispToggleSession, vizDispToggleClub, vizDispSetYardage, vizDispToggleRound
 });
