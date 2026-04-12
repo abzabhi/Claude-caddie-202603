@@ -13,6 +13,8 @@ import {
 } from './constants.js';
 import { deriveStats, fmtDate } from './geo.js';
 
+function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
+
 // -----------------------------------------------------------------------------
 // Module state
 // -----------------------------------------------------------------------------
@@ -526,7 +528,7 @@ function rangeStartSession() {
   var initAvg  = initClub ? _clubAvgYds(initClub) : null;
   _rangeState = {
     sessionId:         generateSessionId(SESSION_TYPES.RANGE),
-    date:              new Date().toISOString().slice(0, 10),
+    date:              today().slice(0, 10),
     clubId:            clubId,
     club_bag_snapshot: clubs.map(function(c) { return c.id; }),
     shots:             [],
@@ -619,7 +621,7 @@ function rangeRecordShot() {
     radial_ring:    _pendingRing,
     radial_segment: _pendingSegment,
     flight_path:    _pendingFlight,
-    timestamp:      new Date().toISOString(),
+    timestamp:      _localISO(),
     timestampDelta: Math.floor((Date.now() - _sessionStart) / 1000),
     yardage:        _rangeState.targetYardage,
     entryType:      SESSION_TYPES.RANGE
