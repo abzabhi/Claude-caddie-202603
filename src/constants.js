@@ -302,3 +302,112 @@ export function generateSessionId(type) {
   var rand = Math.random().toString(36).slice(2, 6);
   return dt + '-' + type + '-' + rand;
 }
+
+// =============================================================================
+// STROKES GAINED \u2014 Phase 4b
+// Source: PGA Tour baseline expected strokes by lie and distance
+// Tee/Fairway/Rough/Sand/Recovery: distance in yards
+// Green (putting): distance in feet
+// Lookup via sgExpected() \u2014 uses linear interpolation between entries
+// =============================================================================
+
+export const SG_TABLE = {
+  tee: [
+    {maxDist:100,expected:2.92},{maxDist:120,expected:2.99},{maxDist:140,expected:2.97},
+    {maxDist:160,expected:2.99},{maxDist:180,expected:3.05},{maxDist:200,expected:3.12},
+    {maxDist:220,expected:3.17},{maxDist:240,expected:3.25},{maxDist:260,expected:3.45},
+    {maxDist:280,expected:3.65},{maxDist:300,expected:3.71},{maxDist:320,expected:3.79},
+    {maxDist:340,expected:3.86},{maxDist:360,expected:3.92},{maxDist:380,expected:3.96},
+    {maxDist:400,expected:3.99},{maxDist:420,expected:4.02},{maxDist:440,expected:4.08},
+    {maxDist:460,expected:4.17},{maxDist:480,expected:4.28},{maxDist:500,expected:4.41},
+    {maxDist:520,expected:4.54},{maxDist:540,expected:4.65},{maxDist:560,expected:4.74},
+    {maxDist:580,expected:4.79},{maxDist:600,expected:4.82}
+  ],
+  fairway: [
+    {maxDist:10,expected:2.18},{maxDist:20,expected:2.40},{maxDist:30,expected:2.52},
+    {maxDist:40,expected:2.60},{maxDist:50,expected:2.66},{maxDist:60,expected:2.70},
+    {maxDist:70,expected:2.72},{maxDist:80,expected:2.75},{maxDist:90,expected:2.77},
+    {maxDist:100,expected:2.80},{maxDist:120,expected:2.85},{maxDist:140,expected:2.91},
+    {maxDist:160,expected:2.98},{maxDist:180,expected:3.08},{maxDist:200,expected:3.19},
+    {maxDist:220,expected:3.32},{maxDist:240,expected:3.45},{maxDist:260,expected:3.58},
+    {maxDist:280,expected:3.69},{maxDist:300,expected:3.78},{maxDist:320,expected:3.84},
+    {maxDist:340,expected:3.88},{maxDist:360,expected:3.95},{maxDist:380,expected:4.03},
+    {maxDist:400,expected:4.11},{maxDist:420,expected:4.19},{maxDist:440,expected:4.27},
+    {maxDist:460,expected:4.34},{maxDist:480,expected:4.42},{maxDist:500,expected:4.50},
+    {maxDist:520,expected:4.58},{maxDist:540,expected:4.66},{maxDist:560,expected:4.74},
+    {maxDist:580,expected:4.82},{maxDist:600,expected:4.89}
+  ],
+  rough: [
+    {maxDist:10,expected:2.34},{maxDist:20,expected:2.59},{maxDist:30,expected:2.70},
+    {maxDist:40,expected:2.78},{maxDist:50,expected:2.87},{maxDist:60,expected:2.91},
+    {maxDist:70,expected:2.93},{maxDist:80,expected:2.96},{maxDist:90,expected:2.99},
+    {maxDist:100,expected:3.02},{maxDist:120,expected:3.08},{maxDist:140,expected:3.15},
+    {maxDist:160,expected:3.23},{maxDist:180,expected:3.31},{maxDist:200,expected:3.42},
+    {maxDist:220,expected:3.53},{maxDist:240,expected:3.64},{maxDist:260,expected:3.74},
+    {maxDist:280,expected:3.83},{maxDist:300,expected:3.90},{maxDist:320,expected:3.95},
+    {maxDist:340,expected:4.02},{maxDist:360,expected:4.11},{maxDist:380,expected:4.21},
+    {maxDist:400,expected:4.30},{maxDist:420,expected:4.40},{maxDist:440,expected:4.49},
+    {maxDist:460,expected:4.58},{maxDist:480,expected:4.68},{maxDist:500,expected:4.77},
+    {maxDist:520,expected:4.87},{maxDist:540,expected:4.96},{maxDist:560,expected:5.06},
+    {maxDist:580,expected:5.15},{maxDist:600,expected:5.25}
+  ],
+  sand: [
+    {maxDist:10,expected:2.43},{maxDist:20,expected:2.53},{maxDist:30,expected:2.66},
+    {maxDist:40,expected:2.82},{maxDist:50,expected:2.92},{maxDist:60,expected:3.15},
+    {maxDist:70,expected:3.21},{maxDist:80,expected:3.24},{maxDist:90,expected:3.24},
+    {maxDist:100,expected:3.23},{maxDist:120,expected:3.21},{maxDist:140,expected:3.22},
+    {maxDist:160,expected:3.28},{maxDist:180,expected:3.40},{maxDist:200,expected:3.55},
+    {maxDist:220,expected:3.70},{maxDist:240,expected:3.84},{maxDist:260,expected:3.93},
+    {maxDist:280,expected:4.00},{maxDist:300,expected:4.04},{maxDist:320,expected:4.12},
+    {maxDist:340,expected:4.26},{maxDist:360,expected:4.41},{maxDist:380,expected:4.55},
+    {maxDist:400,expected:4.69},{maxDist:420,expected:4.83},{maxDist:440,expected:4.97},
+    {maxDist:460,expected:5.11},{maxDist:480,expected:5.25},{maxDist:500,expected:5.40},
+    {maxDist:520,expected:5.54},{maxDist:540,expected:5.68},{maxDist:560,expected:5.82},
+    {maxDist:580,expected:5.96},{maxDist:600,expected:6.10}
+  ],
+  recovery: [
+    {maxDist:10,expected:3.45},{maxDist:20,expected:3.51},{maxDist:30,expected:3.57},
+    {maxDist:40,expected:3.71},{maxDist:50,expected:3.79},{maxDist:60,expected:3.83},
+    {maxDist:70,expected:3.84},{maxDist:80,expected:3.84},{maxDist:90,expected:3.82},
+    {maxDist:100,expected:3.80},{maxDist:120,expected:3.78},{maxDist:140,expected:3.80},
+    {maxDist:160,expected:3.81},{maxDist:180,expected:3.82},{maxDist:200,expected:3.87},
+    {maxDist:220,expected:3.92},{maxDist:240,expected:3.97},{maxDist:260,expected:4.03},
+    {maxDist:280,expected:4.10},{maxDist:300,expected:4.20},{maxDist:320,expected:4.31},
+    {maxDist:340,expected:4.44},{maxDist:360,expected:4.56},{maxDist:380,expected:4.66},
+    {maxDist:400,expected:4.75},{maxDist:420,expected:4.84},{maxDist:440,expected:4.94},
+    {maxDist:460,expected:5.03},{maxDist:480,expected:5.13},{maxDist:500,expected:5.22},
+    {maxDist:520,expected:5.32},{maxDist:540,expected:5.41},{maxDist:560,expected:5.51},
+    {maxDist:580,expected:5.60},{maxDist:600,expected:5.70}
+  ],
+  /* green: distance in feet (user entry and table both in feet) */
+  green: [
+    {maxDist:3,expected:1.04},{maxDist:4,expected:1.13},{maxDist:5,expected:1.23},
+    {maxDist:6,expected:1.34},{maxDist:7,expected:1.42},{maxDist:8,expected:1.50},
+    {maxDist:9,expected:1.56},{maxDist:10,expected:1.61},{maxDist:15,expected:1.78},
+    {maxDist:20,expected:1.87},{maxDist:30,expected:1.98},{maxDist:40,expected:2.06},
+    {maxDist:50,expected:2.14},{maxDist:60,expected:2.21},{maxDist:90,expected:2.40}
+  ]
+};
+
+// Returns expected strokes from a given lie and distance using linear interpolation.
+// lie: key in SG_TABLE. distance: yards for all lies except 'green' (feet).
+// Returns null if lie unknown, distance invalid, or table empty.
+export function sgExpected(lie, distance) {
+  var tbl = SG_TABLE[lie];
+  if (!tbl || !tbl.length) return null;
+  var dist = Number(distance);
+  if (isNaN(dist) || dist < 0) return null;
+  /* Below minimum -- return first entry */
+  if (dist <= tbl[0].maxDist) return tbl[0].expected;
+  /* Beyond maximum -- return last entry */
+  if (dist >= tbl[tbl.length - 1].maxDist) return tbl[tbl.length - 1].expected;
+  /* Linear interpolation between surrounding entries */
+  for (var i = 1; i < tbl.length; i++) {
+    if (dist <= tbl[i].maxDist) {
+      var lo = tbl[i - 1], hi = tbl[i];
+      var t = (dist - lo.maxDist) / (hi.maxDist - lo.maxDist);
+      return parseFloat((lo.expected + t * (hi.expected - lo.expected)).toFixed(4));
+    }
+  }
+  return tbl[tbl.length - 1].expected;
+}
