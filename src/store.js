@@ -5,7 +5,7 @@ export let bag = [], courses = [], rounds = [], history = [], rangeSessions = []
 export let profile = {};
 
 export function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
-export function today() { return new Date().toISOString().slice(0,10); }
+export function today() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate()); }
 
 export function save() {
   localStorage.setItem('vc:bag', JSON.stringify(bag));
