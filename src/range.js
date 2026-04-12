@@ -691,6 +691,7 @@ function _rangeConfirmCommit() {
   };
   if (Array.isArray(rangeSessions)) rangeSessions.push(toSave);
   save();
+  if (window.syncSave) window.syncSave();
   localStorage.removeItem('gordy:activeRange');
   _rangeState         = null;
   _pendingRing        = null;
