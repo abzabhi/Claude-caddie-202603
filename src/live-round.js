@@ -426,6 +426,7 @@ return `<div class="card" style="margin-bottom:0">
       <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',1,${shared})">+</button>
     </div>
   </div>
+  ${(()=>{ const _shots = s.shots||[]; const _hide = _lrAdvancedOpen && _shots.length > 0; return _hide ? '' : `
   <div class="card" style="margin-bottom:0">
     <div class="card-title">GIR</div>
     <div style="display:flex;gap:6px;margin-top:4px">
@@ -433,7 +434,7 @@ return `<div class="card" style="margin-bottom:0">
       <button class="lr-tog ${s.gir===false?'on-n':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},false,${shared})">\u2717 No</button>
     </div>
     <div style="font-size:.54rem;color:var(--tx3);margin-top:6px">Reach in ${hole.par-2} stroke${hole.par-2!==1?'s':''}</div>
-  </div>
+  </div>`; })()}
 </div>
 <div class="card" style="margin-bottom:0" id="lrNoteCard">
   <button class="notes-toggle" id="lrNoteToggle" onclick="lrToggleNote(${pi},${holeIdx})">\uD83D\uDCDD ${s.notes?s.notes.slice(0,40)+(s.notes.length>40?'\u2026':''):'Add a note\u2026'}</button>
