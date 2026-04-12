@@ -2,7 +2,7 @@ import { calcVizMaxRange } from './clubs.js';
 import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath } from './geo.js';
 import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLIGHT_DATA, BIAS_DATA, ZONE_RING_RADII } from './constants.js';
 import { vizGetDisp } from './dispersion.js';
-import { bag, courses, history, profile, save, rangeSessions } from './store.js';
+import { bag, courses, history, rounds, profile, save, rangeSessions } from './store.js';
 
 export let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
 export let vizSelectedHole=1, vizActiveCourse=null, vizActiveTee=null, vizInitDone=false, vizClubSrc='custom';
@@ -693,9 +693,8 @@ function _buildDispRadialSVG(heatCounts, heatMax){
 }
 
 function _lrShotClubName(shot){
-  if(shot.clubName) return shot.clubName;
   var c=bag.find(function(x){ return x.id===shot.clubId; });
-  return c?(c.type+(c.identifier?' '+c.identifier:'')):(shot.clubId||'Unknown');
+  return c?(c.identifier||c.type):(shot.clubName||(shot.clubId||'Unknown'));
 }
 
 export function initVizDisp(){
@@ -704,7 +703,7 @@ export function initVizDisp(){
   vizDispSelectedSessions=new Set((rangeSessions||[]).filter(function(s){ return s.committed; }).map(function(s){ return s.sessionId; }));
   _buildDispSessionShelf();
   vizDispSelectedRounds=new Set(
-    (history||[]).reduce(function(acc,r,i){
+    (rounds||[]).reduce(function(acc,r,i){
       if(!r) return acc;
       var hasShots=(r.holes||[]).some(function(h){
         return (h.shots||[]).some(function(s){ return s&&s.radial_ring; });
@@ -744,7 +743,7 @@ function _buildDispSessionShelf(){
 function _buildDispRoundShelf(){
   var shelf=document.getElementById('vizDispRoundShelf');
   if(!shelf) return;
-  var eligible=(history||[]).map(function(r,i){ return {r:r,i:i}; }).filter(function(obj){
+  var eligible=(rounds||[]).map(function(r,i){ return {r:r,i:i}; }).filter(function(obj){
     return (obj.r.holes||[]).some(function(h){
       return (h.shots||[]).some(function(s){ return s.radial_ring; });
     });
@@ -765,7 +764,7 @@ function _buildDispRoundShelf(){
       'background:'+(on?'var(--gr3)':'var(--bg)')+';border:1px solid '+(on?'var(--gr2)':'var(--br)')+';'+
       'border-radius:4px;cursor:pointer;font-size:.62rem;transition:all .15s">'+
       '<div style="width:8px;height:8px;border-radius:2px;background:'+col+';flex-shrink:0"></div>'+
-      escHtml(fmtDate(r.date))+(r.course?' \u00B7 '+escHtml(r.course):'')+
+      escHtml(fmtDate(r.date))+(r.courseName?' \u00B7 '+escHtml(r.courseName):'')+
       ' <span style="color:var(--tx3);font-size:.56rem">'+shotCount+' shot'+(shotCount!==1?'s':'')+'</span>'+
       '</label>';
   }).join('');
@@ -784,7 +783,7 @@ function _buildDispClubShelf(){
     });
   });
   // Round pass — aggregate by clubName from selected rounds
-  (history||[]).forEach(function(r,idx){
+  (rounds||[]).forEach(function(r,idx){
     if(!vizDispSelectedRounds.has(idx)) return;
     (r.holes||[]).forEach(function(h){
       (h.shots||[]).forEach(function(shot){
@@ -841,7 +840,7 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
     });
   });
   // Round pass — yardageFilter does not apply to round shots
-  (history||[]).forEach(function(r,idx){
+  (rounds||[]).forEach(function(r,idx){
     if(!vizDispSelectedRounds.has(idx)) return;
     (r.holes||[]).forEach(function(h){
       (h.shots||[]).forEach(function(shot){
