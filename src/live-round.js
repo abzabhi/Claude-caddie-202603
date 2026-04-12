@@ -835,6 +835,7 @@ const newRound = {
 
 /* rounds = [newRound, ...rounds]; */ rounds.unshift(newRound);
 save();
+if (window.syncSave) window.syncSave();
 renderHandicap();
 lrState.saved = true;
 if (window.clearActiveSession) window.clearActiveSession('round');
@@ -1074,18 +1075,24 @@ function _lrWriteSG(s) {
 // \u2500\u2500 Phase 4: Advanced Shot Logging \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function _lrDefaultDraft(holeIdx) {
-  var hole    = lrState.holes[holeIdx];
-  var pi      = lrState.curPlayer;
-  var s       = lrState.players[pi].scores[holeIdx];
-  var isFirst = !s.shots || s.shots.length === 0;
+  var hole     = lrState.holes[holeIdx];
+  var pi       = lrState.curPlayer;
+  var s        = lrState.players[pi].scores[holeIdx];
+  var isFirst  = !s.shots || s.shots.length === 0;
+  var lastShot = s.shots && s.shots.length ? s.shots[s.shots.length - 1] : null;
+  var dist     = isFirst ? (hole.yards || null) : null;
+  var autoMode = isFirst ? 'standard'
+    : lastShot && lastShot.shot_mode === 'approach' && lastShot.radial_ring ? 'on_green'
+    : dist !== null && dist <= 100 ? 'approach'
+    : 'standard';
   return {
     clubId:          '',
-    shot_mode:       'standard',
+    shot_mode:       autoMode,
     lie:             isFirst ? 'tee' : '',
     radial_ring:     null,
     radial_segment:  null,
     flight_path:     null,
-    distanceToHole:  isFirst ? (hole.yards || null) : null,
+    distanceToHole:  dist,
     is_ob:           false,
     penalty_strokes: 0,
     timestamp:       '',
@@ -1304,7 +1311,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
     var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
     var lies = d.shot_mode === 'approach'
-      ? ['green','rough','sand','recovery']
+      ? ['fairway','green','rough','sand','recovery']
       : ['tee','fairway','rough','sand','recovery'];
     html += '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
