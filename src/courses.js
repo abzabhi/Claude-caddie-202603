@@ -381,7 +381,7 @@ function saveCourse() {
     currentEditTeeId = defaultTee.id;
   }
   if(currentEditTeeId) editCourseData.selectedTee = currentEditTeeId;
-  editCourseData.updatedAt = new Date().toISOString().slice(0,10);
+  editCourseData.updatedAt = today();
   const idx=courses.findIndex(c=>c.id===editCourseData.id);
   if(idx>=0) courses[idx]=editCourseData; else courses.push(editCourseData);
   if(nameOnlyMatch && errEl){ errEl.textContent='A course with this name is already saved. Saved anyway.'; errEl.style.cssText='display:block;font-size:.68rem;padding:6px 10px;border-radius:4px;margin-bottom:10px;background:var(--gr3);border:1px solid var(--gr2);color:var(--ac)'; }
