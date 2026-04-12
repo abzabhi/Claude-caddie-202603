@@ -102,7 +102,9 @@ function processDataText(text) {
       cur.players=line.replace(/^PLAYERS \| /,'').trim().split(',').map(s=>{const[n,me,hcp,sc]=s.split(':');return{name:n||'',isMe:me==='1',handicap:hcp?+hcp:null,score:sc?+sc:null};});
     } else if(section==='rounds'&&line.startsWith('HOLE |')&&cur) {
       const p=line.split('|').map(s=>s.trim());
-      cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||'',yards:p[7]||''});
+      cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||'',yards:p[7]||'',fir:p[8]==='Y'?true:p[8]==='N'?false:null,shots:[]});
+    } else if(section==='rounds'&&line.startsWith('SHOT |')&&cur&&cur.holes.length) {
+      try { cur.holes[cur.holes.length-1].shots.push(JSON.parse(line.slice(7))); } catch {}
     }
     if(section==='history') {
       if(raw.trimStart().startsWith('ENTRY |')) {
@@ -228,7 +230,9 @@ function _parseDataText(text) {
       cur.players=line.replace(/^PLAYERS \| /,'').trim().split(',').map(s=>{const[n,me,hcp,sc]=s.split(':');return{name:n||'',isMe:me==='1',handicap:hcp?+hcp:null,score:sc?+sc:null};});
     } else if(section==='rounds'&&line.startsWith('HOLE |')&&cur){
       const p=line.split('|').map(s=>s.trim());
-      cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||'',yards:p[7]||''});
+      cur.holes.push({n:parseInt(p[1])||0,par:p[2]||'',score:p[3]||'',putts:p[4]||'',gir:p[5]==='Y'?true:p[5]==='N'?false:null,notes:p[6]||'',yards:p[7]||'',fir:p[8]==='Y'?true:p[8]==='N'?false:null,shots:[]});
+    } else if(section==='rounds'&&line.startsWith('SHOT |')&&cur&&cur.holes.length){
+      try { cur.holes[cur.holes.length-1].shots.push(JSON.parse(line.slice(7))); } catch {}
     }
     if(section==='history'){
       if(raw.trimStart().startsWith('ENTRY |')){
