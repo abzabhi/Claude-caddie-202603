@@ -1,5 +1,5 @@
 import { uid, today, save, courses, rounds, profile, bag } from './store.js';
-import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII } from './constants.js';
+import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
 import { calcDiff } from './geo.js';
 import { renderHandicap } from './rounds.js';
 
@@ -791,6 +791,8 @@ function lrSaveRound() {
 if(lrState.saved) { document.getElementById('lrSaveStatus').textContent='Already saved.'; return; }
 const meIdx = lrState.players.findIndex(p=>p.isMe);
 const me    = meIdx>=0 ? lrState.players[meIdx] : null;
+/* Phase 4b: ensure SG written on all holes before saving */
+if (me) me.scores.forEach(function(s) { _lrWriteSG(s); });
 const totalScore = me ? me.scores.reduce((t,s)=>t+(s.score||0),0) : null;
 const par        = lrState.holes.reduce((t,h)=>t+h.par,0);
 const {diff, capped} = meIdx>=0 ? lrCalcDiffWithCap(meIdx) : {diff:null, capped:false};
@@ -1027,6 +1029,48 @@ function _lrPersist() {
   if (window.updateSessionPill) window.updateSessionPill();
 }
 
+// \u2500\u2500 Phase 4b: Strokes Gained \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function _lrCalcSG(shots) {
+  if (!shots || !shots.length) return [];
+  return shots.map(function(shot, i) {
+    var expBefore = sgExpected(shot.lie, shot.distanceToHole);
+    if (expBefore === null) return null;
+    var expAfter;
+    if (i === shots.length - 1) {
+      expAfter = 0; /* holed out */
+    } else {
+      var next = shots[i + 1];
+      expAfter = sgExpected(next.lie, next.distanceToHole);
+      if (expAfter === null) return null;
+    }
+    return parseFloat((expBefore - expAfter - 1).toFixed(3));
+  });
+}
+
+function _lrFmtSG(val) {
+  if (val === null || val === undefined) return null;
+  var sign = val >= 0 ? '+' : '\u2212';
+  return sign + Math.abs(val).toFixed(3);
+}
+
+function _lrSGColor(val) {
+  if (val === null || val === undefined) return 'var(--tx3)';
+  if (val > 0) return 'var(--ac2)';
+  if (val < 0) return 'var(--danger)';
+  return 'var(--tx3)';
+}
+
+function _lrWriteSG(s) {
+  /* Write shot.sg onto each shot in s.shots[], derived from _lrCalcSG */
+  if (!s.shots || !s.shots.length) return;
+  var sgVals = _lrCalcSG(s.shots);
+  s.shots.forEach(function(shot, i) {
+    shot.sg = (sgVals[i] !== null && sgVals[i] !== undefined)
+      ? sgVals[i] : null;
+  });
+}
+
 // \u2500\u2500 Phase 4: Advanced Shot Logging \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function _lrDefaultDraft(holeIdx) {
@@ -1150,6 +1194,9 @@ function _lrShotLogHtml(shots) {
     var obTag  = sh.is_ob
       ? ' <span style="color:var(--danger);font-size:.6rem">OB+' + (sh.penalty_strokes || 0) + '</span>'
       : '';
+    var sgTag = (sh.sg !== null && sh.sg !== undefined)
+      ? ' <span style="color:' + _lrSGColor(sh.sg) + ';font-size:.6rem">\u00B7 SG: ' + _lrFmtSG(sh.sg) + '</span>'
+      : '';
     var editBtn = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:4px"'
       + ' onclick="lrEditShot(' + i + ')">Edit</button>';
     var delBtn  = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:2px;color:var(--danger)"'
@@ -1171,7 +1218,7 @@ function _lrShotLogHtml(shots) {
     if (sh.flight_path) parts.push(sh.flight_path);
     return '<div style="font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)">'
       + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'
-      + '<span>' + parts.join(' \u00B7 ') + obTag + '</span>' + editBtn + delBtn
+      + '<span>' + parts.join(' \u00B7 ') + obTag + sgTag + '</span>' + editBtn + delBtn
       + '</div>' + confirmHtml + '</div>';
   }).join('');
   return '<div style="margin-bottom:10px">'
@@ -1233,7 +1280,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
       + '<div style="display:flex;gap:6px;margin-bottom:10px">'
       + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
       + '</div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (yds)</div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (ft)</div>'
       + '<input type="number" inputmode="numeric" class="field"'
       + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
       + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
@@ -1262,6 +1309,13 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     html += '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
       + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>'
+      + (function() {
+          /* SG info line: show expected strokes from current lie + distance */
+          if (!d.lie || d.distanceToHole === null || d.distanceToHole === undefined) return '';
+          var exp = sgExpected(d.lie, d.distanceToHole);
+          if (exp === null) return '';
+          return '<span style="font-size:.62rem;color:var(--tx3)">Exp: ' + exp.toFixed(2) + ' strokes from here</span>';
+        })()
       + '</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:10px">'
       + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
@@ -1369,6 +1423,7 @@ function lrSetClub(clubId) {
 function lrSetDist(val) {
   if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(lrState.curHole);
   _lrShotDraft.distanceToHole = val !== '' ? parseFloat(val) : null;
+  lrRenderHole();
 }
 
 function lrToggleOb() {
@@ -1397,6 +1452,11 @@ function lrRecordShot() {
   if (!s.shots) s.shots = [];
   var wasOb  = d.is_ob;
   var isEdit = _lrEditingIndex !== null;
+  /* Phase 4b: stamp clubName at record time for stable cross-session identification */
+  d.clubName = (function() {
+    var c = bag && bag.find(function(x) { return x.id === d.clubId; });
+    return c ? (c.type + (c.identifier ? ' ' + c.identifier : '')) : (d.clubId || '');
+  })();
   if (isEdit) {
     s.shots[_lrEditingIndex] = Object.assign({}, d);
   } else {
@@ -1407,6 +1467,8 @@ function lrRecordShot() {
   if (s.shots.length === 1 && hole.par > 3) s.fir = _lrAutoFir(s.shots);
   /* Derive score from shots */
   s.score = _lrCalcScore(s.shots);
+  /* Phase 4b: calculate SG immediately so shot log shows values */
+  _lrWriteSG(s);
   _lrEditingIndex     = null;
   _lrObConfirmPending = false;
   _lrDeleteConfirmIdx = null;
@@ -1469,6 +1531,7 @@ function lrCompleteHole() {
       var girStrokes = preGreen.reduce(function(t, sh) { return t + 1 + (sh.penalty_strokes || 0); }, 0);
       s.gir = girStrokes <= (hole.par - 2);
     }
+    _lrWriteSG(s);
     _lrShotDraft = null; _lrEditingIndex = null;
     _lrObConfirmPending = false; _lrDeleteConfirmIdx = null; _lrGirPromptPending = false;
     lrGoHole(1);
