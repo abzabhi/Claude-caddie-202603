@@ -1253,7 +1253,8 @@ function _lrGirFirToggles(s, hole) {
 }
 
 function _lrAdvancedHtml(holeIdx, pi, shared) {
-  var d    = _lrShotDraft || _lrDefaultDraft(holeIdx);
+  if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(holeIdx);
+  var d    = _lrShotDraft;
   var s    = lrState.players[pi].scores[holeIdx];
   var shots = s.shots || [];
   var hole  = lrState.holes[holeIdx];
@@ -1314,7 +1315,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
     var lies = d.shot_mode === 'approach'
       ? ['green','fairway','rough','sand','recovery']
-      : ['tee','fairway','rough','sand','recovery'];
+      : ['fairway','rough','sand','recovery'];
     html += '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
       + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>'
