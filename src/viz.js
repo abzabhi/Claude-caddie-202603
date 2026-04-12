@@ -702,16 +702,17 @@ export function initVizDisp(){
   if(vizDispInitDone){ renderVizDisp(); return; }
   vizDispInitDone=true;
   vizDispSelectedSessions=new Set((rangeSessions||[]).filter(function(s){ return s.committed; }).map(function(s){ return s.sessionId; }));
+  _buildDispSessionShelf();
   vizDispSelectedRounds=new Set(
     (history||[]).reduce(function(acc,r,i){
+      if(!r) return acc;
       var hasShots=(r.holes||[]).some(function(h){
-        return (h.shots||[]).some(function(s){ return s.radial_ring; });
+        return (h.shots||[]).some(function(s){ return s&&s.radial_ring; });
       });
       if(hasShots) acc.push(i);
       return acc;
     },[])
   );
-  _buildDispSessionShelf();
   _buildDispRoundShelf();
   _buildDispClubShelf();
   renderVizDisp();
