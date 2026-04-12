@@ -1135,7 +1135,7 @@ function _lrClubOptions(selectedId) {
   var opts = '<option value="">-- Club --</option>';
   if (typeof bag !== 'undefined' && bag && bag.length) {
     bag.forEach(function(c) {
-      var label = [c.brand, c.type, c.identifier].filter(Boolean).join(' ');
+      var label = [c.type, c.identifier].filter(Boolean).join(' ');
       opts += '<option value="' + escHtml(c.id) + '"' + (c.id === selectedId ? ' selected' : '') + '>'
         + escHtml(label) + '</option>';
     });
@@ -1162,7 +1162,11 @@ function _lrShotLogHtml(shots) {
           + '<button class="btn sec" style="font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotCancel()">No</button>'
           + '</div>'
       : '';
-    var parts = ['Shot ' + (i + 1), sh.clubId || '\u2014', sh.shot_mode, sh.lie || '\u2014'];
+    var clubDisplay = (function() {
+      var c = bag && bag.find(function(x) { return x.id === sh.clubId; });
+      return c ? [c.type, c.identifier].filter(Boolean).join(' ') : '\u2014';
+    })();
+    var parts = ['Shot ' + (i + 1), clubDisplay, sh.shot_mode, sh.lie || '\u2014'];
     if (zone) parts.push(zone);
     if (sh.flight_path) parts.push(sh.flight_path);
     return '<div style="font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)">'
