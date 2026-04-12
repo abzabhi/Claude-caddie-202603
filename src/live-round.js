@@ -1311,7 +1311,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
     var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
     var lies = d.shot_mode === 'approach'
-      ? ['fairway','green','rough','sand','recovery']
+      ? ['green','fairway','rough','sand','recovery']
       : ['tee','fairway','rough','sand','recovery'];
     html += '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
