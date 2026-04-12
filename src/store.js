@@ -80,7 +80,10 @@ export function serialise() {
     lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||'',r.countForHandicap===false?'0':'1',r.id||''].join(' | '));
     if(r.sessionIds?.length) lines.push('  SESSIONIDS | '+r.sessionIds.join(','));
     if(r.players?.length) lines.push('  PLAYERS | '+r.players.map(p=>`${p.name||''}:${p.isMe?'1':'0'}:${p.handicap??''}:${p.score??''}`).join(','));
-    if(r.holes?.length) r.holes.forEach(h=>lines.push('  HOLE | '+[h.n,h.par,h.score,h.putts,h.gir===true?'Y':h.gir===false?'N':'',h.notes||'',h.yards||''].join(' | ')));
+    if(r.holes?.length) r.holes.forEach(h=>{
+      lines.push('  HOLE | '+[h.n,h.par,h.score,h.putts,h.gir===true?'Y':h.gir===false?'N':'',h.notes||'',h.yards||'',h.fir===true?'Y':h.fir===false?'N':''].join(' | '));
+      if(h.shots?.length) h.shots.forEach(sh=>lines.push('    SHOT | '+JSON.stringify(sh)));
+    });
   });
   lines.push('');
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
