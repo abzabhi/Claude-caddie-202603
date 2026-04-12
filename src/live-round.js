@@ -1451,7 +1451,7 @@ function lrRecordShot() {
   if (!lrState || !_lrShotDraft) return;
   if (_lrObConfirmPending) return; /* must confirm OB first */
   var d       = _lrShotDraft;
-  d.timestamp = new Date().toISOString();
+  d.timestamp = _localISO();
   var pi      = lrState.curPlayer;
   var holeIdx = lrState.curHole;
   var s       = lrState.players[pi].scores[holeIdx];
