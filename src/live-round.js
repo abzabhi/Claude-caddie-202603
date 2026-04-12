@@ -1455,7 +1455,7 @@ function lrRecordShot() {
   /* Phase 4b: stamp clubName at record time for stable cross-session identification */
   d.clubName = (function() {
     var c = bag && bag.find(function(x) { return x.id === d.clubId; });
-    return c ? (c.type + (c.identifier ? ' ' + c.identifier : '')) : (d.clubId || '');
+    return c ? (c.identifier || c.type) : (d.clubId || '');
   })();
   if (isEdit) {
     s.shots[_lrEditingIndex] = Object.assign({}, d);
