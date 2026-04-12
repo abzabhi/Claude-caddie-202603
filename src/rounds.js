@@ -255,7 +255,18 @@ function rndRegenPdf(id) {
       isMe: p.isMe||false,
       handicap: p.handicap||null,
       scores: r.holes?.length
-        ? r.holes.map(h=>({score:+h.score||null,putts:+h.putts||null,gir:h.gir,notes:h.notes||''}))
+        ? r.holes.map(h=>({
+            score:             +h.score||null,
+            putts:             +h.putts||null,
+            gir:               h.gir,
+            notes:             h.notes||'',
+            /* Phase 4 fields -- preserved through replay */
+            fir:               h.fir               !== undefined ? h.fir               : null,
+            shots:             Array.isArray(h.shots) ? h.shots : [],
+            on_green_distance: h.on_green_distance  !== undefined ? h.on_green_distance : null,
+            chip_putt_count:   h.chip_putt_count    !== undefined ? h.chip_putt_count   : null,
+            holed_out:         h.holed_out           || false,
+          }))
         : Array.from({length:holeCount},()=>({score:null,putts:null,gir:null,notes:''})),
     })),
     netView: false,
