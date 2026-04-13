@@ -5,7 +5,7 @@
  * NOTE: distance type stored in range sessions is carry (not total yardage).
  */
 
-import { bag, rangeSessions, save, removeRangeSession } from './store.js';
+import { bag, rangeSessions, save, removeRangeSession, today } from './store.js';
 import {
   generateSessionId, SESSION_TYPES,
   ZONE_SEGMENT_LABELS, ZONE_RING_RADII,
