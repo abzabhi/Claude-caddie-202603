@@ -2305,7 +2305,11 @@ function gateUnlocked(active) {
   } else {
     var _validTabs=['profile','gordy','rounds','sessions','viz','clubs','courses','range','notes'];
     var _lastTab=null; try{ _lastTab=localStorage.getItem('gordy:lastTab'); }catch(e){}
-    showTabFromProfile((_lastTab&&_validTabs.indexOf(_lastTab)!==-1)?_lastTab:'profile');
+ var _tabToShow=(_lastTab&&_validTabs.indexOf(_lastTab)!==-1)?_lastTab:'profile';
+    showTabFromProfile(_tabToShow);
+    if(_tabToShow==='range' &&window.rangeInit)    window.rangeInit();
+    if(_tabToShow==='viz'   &&window.initViz)      window.initViz();
+    if(_tabToShow==='gordy' &&window.renderAIHelp) window.renderAIHelp();
   }
   updateSessionPill();
   resetInactivityTimer();
