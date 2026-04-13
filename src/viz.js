@@ -662,7 +662,7 @@ function _dispArcPath(cx,cy,r1,r2,startDeg,endDeg){
          ' L '+s2[0]+' '+s2[1]+' A '+r1+' '+r1+' 0 0 0 '+e2[0]+' '+e2[1]+' Z';
 }
 
-function _buildDispRadialSVG(heatCounts, heatMax){
+function _buildDispRadialSVG(heatCounts, heatMax, fpCounts){
   var cx=150, cy=150;
   var rB=ZONE_RING_RADII.bull, rI=ZONE_RING_RADII.inner, rO=ZONE_RING_RADII.outer;
   var bg='<rect width="300" height="300" fill="#6a9a50"/><rect x="90" y="0" width="120" height="300" fill="#9ec880"/>';
@@ -685,10 +685,24 @@ function _buildDispRadialSVG(heatCounts, heatMax){
     var lbl=function(pct,x,y){ return pct>0?'<text x="'+x+'" y="'+y+'" font-family="monospace" font-size="9" fill="white" text-anchor="middle">'+pct+'%</text>':''; };
     var iMid=(rB+rI)/2, oMid=(rI+rO)/2;
     labels+=lbl(Math.round((heatCounts['bull']||0)/total*100),150,154);
+    var _fpLine=function(segKey,segCount,x,y){
+      if(!fpCounts||!segCount) return '';
+      var sfp=fpCounts[segKey]; if(!sfp) return '';
+      var parts=[];
+      if(sfp.straight>0)         parts.push('\u2191'+Math.round(sfp.straight/segCount*100)+'%');
+      if(sfp['left-to-right']>0) parts.push('\u21b1'+Math.round(sfp['left-to-right']/segCount*100)+'%');
+      if(sfp['right-to-left']>0) parts.push('\u21b0'+Math.round(sfp['right-to-left']/segCount*100)+'%');
+      if(!parts.length) return '';
+      return '<text x="'+x+'" y="'+(parseFloat(y)+10)+'" font-family="monospace" font-size="7" fill="white" text-anchor="middle">'+parts.join(' ')+'</text>';
+    };
     for(i=0;i<8;i++){
       var ang=i*45*Math.PI/180;
-      labels+=lbl(Math.round((heatCounts['inner-'+i]||0)/total*100),(cx+iMid*Math.sin(ang)).toFixed(1),(cy-iMid*Math.cos(ang)+3).toFixed(1));
-      labels+=lbl(Math.round((heatCounts['outer-'+i]||0)/total*100),(cx+oMid*Math.sin(ang)).toFixed(1),(cy-oMid*Math.cos(ang)+3).toFixed(1));
+      var ix=(cx+iMid*Math.sin(ang)).toFixed(1),iy=(cy-iMid*Math.cos(ang)+3).toFixed(1);
+      var ox=(cx+oMid*Math.sin(ang)).toFixed(1),oy=(cy-oMid*Math.cos(ang)+3).toFixed(1);
+      labels+=lbl(Math.round((heatCounts['inner-'+i]||0)/total*100),ix,iy);
+      labels+=_fpLine('inner-'+i,heatCounts['inner-'+i]||0,ix,iy);
+      labels+=lbl(Math.round((heatCounts['outer-'+i]||0)/total*100),ox,oy);
+      labels+=_fpLine('outer-'+i,heatCounts['outer-'+i]||0,ox,oy);
     }
   }
   return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px;display:block;margin:0 auto">'+bg+paths+labels+'</svg>';
@@ -719,6 +733,12 @@ export function initVizDisp(){
   renderVizDisp();
 }
 
+var _DISP_TYPE_ORDER=['driver','wood','hybrid','iron','wedge'];
+function _dispClubSortKey(n){
+  n=(n||'').toLowerCase();
+  for(var i=0;i<_DISP_TYPE_ORDER.length;i++){ if(n.indexOf(_DISP_TYPE_ORDER[i])!==-1) return i; }
+  return _DISP_TYPE_ORDER.length;
+}
 function _buildDispSessionShelf(){
   var shelf=document.getElementById('vizDispSessionShelf');
   if(!shelf) return;
@@ -824,6 +844,8 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
   var i;
   for(i=0;i<8;i++){ counts['inner-'+i]=0; counts['outer-'+i]=0; }
   var fp={ straight:0, 'left-to-right':0, 'right-to-left':0 };
+  var fpCounts={bull:{straight:0,'left-to-right':0,'right-to-left':0}};
+  for(i=0;i<8;i++){ fpCounts['inner-'+i]={straight:0,'left-to-right':0,'right-to-left':0}; fpCounts['outer-'+i]={straight:0,'left-to-right':0,'right-to-left':0}; }
   var totalShots=0;
   selectedSessions.forEach(function(s){
     // Match by clubName — handles ID instability across sessions
@@ -834,10 +856,10 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
       var d=t.dispersion;
       totalShots+=t.shotCount||0;
       counts.bull+=d.bull.total||0;
-      Object.keys(d.bull.flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.bull.flightPaths[fp2]||0; });
+      Object.keys(d.bull.flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.bull.flightPaths[fp2]||0; if(fpCounts.bull[fp2]!==undefined) fpCounts.bull[fp2]+=d.bull.flightPaths[fp2]||0; });
       for(i=0;i<8;i++){
-        if(d.inner[i]){ counts['inner-'+i]+=d.inner[i].total||0; Object.keys(d.inner[i].flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.inner[i].flightPaths[fp2]||0; }); }
-        if(d.outer[i]){ counts['outer-'+i]+=d.outer[i].total||0; Object.keys(d.outer[i].flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.outer[i].flightPaths[fp2]||0; }); }
+        if(d.inner[i]){ counts['inner-'+i]+=d.inner[i].total||0; Object.keys(d.inner[i].flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.inner[i].flightPaths[fp2]||0; if(fpCounts['inner-'+i][fp2]!==undefined) fpCounts['inner-'+i][fp2]+=d.inner[i].flightPaths[fp2]||0; }); }
+        if(d.outer[i]){ counts['outer-'+i]+=d.outer[i].total||0; Object.keys(d.outer[i].flightPaths||{}).forEach(function(fp2){ if(fp[fp2]!==undefined) fp[fp2]+=d.outer[i].flightPaths[fp2]||0; if(fpCounts['outer-'+i][fp2]!==undefined) fpCounts['outer-'+i][fp2]+=d.outer[i].flightPaths[fp2]||0; }); }
       }
     });
   });
@@ -853,12 +875,14 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
         if(ring==='bull'){ counts.bull++; }
         else if(ring==='inner'&&seg!==null&&seg!==undefined){ counts['inner-'+seg]++; }
         else if(ring==='outer'&&seg!==null&&seg!==undefined){ counts['outer-'+seg]++; }
+        var segKey2=ring==='bull'?'bull':((ring==='inner'||ring==='outer')&&seg!==null&&seg!==undefined?(ring+'-'+seg):null);
+        if(segKey2&&shot.flight_path&&fpCounts[segKey2]&&fpCounts[segKey2][shot.flight_path]!==undefined) fpCounts[segKey2][shot.flight_path]++;
         var fp2=shot.flight_path;
         if(fp2&&fp[fp2]!==undefined) fp[fp2]++;
       });
     });
   });
-  return { counts:counts, fp:fp, totalShots:totalShots };
+  return { counts:counts, fp:fp, totalShots:totalShots, fpCounts:fpCounts };
 }
 
 function _buildDispCardInner(clubName, selectedSessions, yardageFilter){
@@ -897,7 +921,7 @@ function _buildDispCardInner(clubName, selectedSessions, yardageFilter){
       }).join('')+
     '</div>';
   }
-  return _buildDispRadialSVG(counts,heatMax)+
+  return _buildDispRadialSVG(counts,heatMax,agg.fpCounts)+
     '<div style="font-size:.58rem;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.9">'+statStr+'</div>'+
     yardageChips;
 }
@@ -916,7 +940,11 @@ export function renderVizDisp(){
     return;
   }
   var cards=[];
-  vizDispSelectedKeys.forEach(function(clubName){
+  var sortedKeys=Array.from(vizDispSelectedKeys).sort(function(a,b){
+    var ka=_dispClubSortKey(a),kb=_dispClubSortKey(b);
+    return ka!==kb?ka-kb:a.localeCompare(b);
+  });
+  sortedKeys.forEach(function(clubName){
     var yardageFilter=vizDispYardageFilter[clubName]!==undefined?vizDispYardageFilter[clubName]:null;
     var totalAll=_aggregateDispCounts(clubName,selectedSessions,null).totalShots;
     var safeId=clubName.replace(/[^a-zA-Z0-9]/g,'-');
@@ -971,11 +999,49 @@ export function vizDispToggleRound(idx){
   renderVizDisp();
 }
 
+export function vizDispToggleAllSessions(){
+  var committed=(rangeSessions||[]).filter(function(s){ return s.committed; });
+  var allSelected=committed.every(function(s){ return vizDispSelectedSessions.has(s.sessionId); });
+  if(allSelected){ vizDispSelectedSessions=new Set(); }
+  else { vizDispSelectedSessions=new Set(committed.map(function(s){ return s.sessionId; })); }
+  committed.forEach(function(s){
+    var on=vizDispSelectedSessions.has(s.sessionId);
+    var lbl=document.getElementById('vdsess-'+s.sessionId);
+    if(lbl){ lbl.style.background=on?'var(--gr3)':'var(--bg)'; lbl.style.borderColor=on?'var(--gr2)':'var(--br)'; }
+  });
+  var btn=document.getElementById('vizDispSessionAllBtn');
+  if(btn) btn.textContent=vizDispSelectedSessions.size===0?'All':'None';
+  _buildDispClubShelf();
+  renderVizDisp();
+}
+
+export function vizDispToggleAllRounds(){
+  var eligible=(rounds||[]).map(function(r,i){ return i; }).filter(function(i){
+    var r=rounds[i];
+    return r&&(r.holes||[]).some(function(h){
+      return (h.shots||[]).some(function(s){ return s&&s.radial_ring; });
+    });
+  });
+  var allSelected=eligible.every(function(i){ return vizDispSelectedRounds.has(i); });
+  if(allSelected){ vizDispSelectedRounds=new Set(); }
+  else { vizDispSelectedRounds=new Set(eligible); }
+  eligible.forEach(function(i){
+    var on=vizDispSelectedRounds.has(i);
+    var lbl=document.getElementById('vdround-'+i);
+    if(lbl){ lbl.style.background=on?'var(--gr3)':'var(--bg)'; lbl.style.borderColor=on?'var(--gr2)':'var(--br)'; }
+  });
+  var btn=document.getElementById('vizDispRoundAllBtn');
+  if(btn) btn.textContent=vizDispSelectedRounds.size===0?'All':'None';
+  _buildDispClubShelf();
+  renderVizDisp();
+}
+
 Object.assign(window, {
   onVizModeChange, onVizClubSrcChange, onVizOptSessionChange,
   onVizCourseChange, onVizTeeChange, onVizHoleSessionChange,
   resetVizMaxRange, saveManualBag, saveManualPlan,
   setVizDisplay, setVizYard, vizSelectHole,
   vizToggleClub, vizTogglePath, vizTogglePlanner, vizUpdatePath,
-  vizDispToggleSession, vizDispToggleClub, vizDispSetYardage, vizDispToggleRound
+  vizDispToggleSession, vizDispToggleClub, vizDispSetYardage, vizDispToggleRound,
+  vizDispToggleAllSessions, vizDispToggleAllRounds
 });
