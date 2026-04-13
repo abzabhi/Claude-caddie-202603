@@ -374,10 +374,11 @@ function onMergeFile(e, mode) {
 
 // -- Tabs ---------------------------------------------------------------------
 function showTab(id) {
+  try{ localStorage.setItem('gordy:lastTab',id); }catch(e){}
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
-  event.currentTarget.classList.add('active');
+  if(event&&event.currentTarget) event.currentTarget.classList.add('active');
   if(id==='profile')  renderProfile();
   if(id==='clubs')    renderClubs();
   if(id==='courses')  renderCourseList();
