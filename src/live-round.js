@@ -791,10 +791,10 @@ document.getElementById('lrSumLeaderboard').innerHTML = lrState.players.length>1
       : '';
     _firGirLine = [_firStr, _girStr].filter(Boolean).join(' \u00B7 ');
   }
-  var _sgCard = '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:.54rem;'
-    + 'text-transform:uppercase;letter-spacing:.1em;color:var(--tx3);padding:8px 0;'
-    + 'border-top:1px solid var(--br);list-style:none;display:flex;justify-content:space-between">'
-    + '<span>Strokes Gained</span>'
+  var _sgCard = '<details style="margin-top:10px"><summary style="cursor:pointer;'
+    + 'color:var(--tx3);padding:8px 0;'
+    + 'border-top:1px solid var(--br);list-style:none;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:.8rem;font-weight:600">Strokes Gained</span>'
     + '<span style="color:' + _lrSGColor(_sgData.total) + ';font-size:.8rem;font-weight:700">'
     + (_sgData.total >= 0 ? '+' : '\u2212') + Math.abs(_sgData.total).toFixed(2) + '</span>'
     + '</summary>'
