@@ -674,6 +674,24 @@ if(lrHasAnyHandicap()) {
   </div>`;
 }
 document.getElementById('lrTallyContent').innerHTML = html;
+
+/* SG tally row -- me player only */
+var _lrTallyMeIdx = lrState.players.findIndex(function(p) { return p.isMe; });
+if (_lrTallyMeIdx >= 0) {
+  var _lrTallySG = _lrRoundSG(lrState.players[_lrTallyMeIdx].scores, lrState.holes);
+  var _lrTallySGHasData = lrState.players[_lrTallyMeIdx].scores.some(function(s) {
+    return s.shots && s.shots.some(function(sh) { return sh.sg !== null && sh.sg !== undefined; });
+  });
+  var _lrTallySGVal = _lrTallySGHasData
+    ? '<span style="color:' + _lrSGColor(_lrTallySG.total) + ';font-weight:600">'
+      + (_lrTallySG.total >= 0 ? '+' : '\u2212') + Math.abs(_lrTallySG.total).toFixed(2) + '</span>'
+    : '\u2014';
+  document.getElementById('lrTallyContent').innerHTML +=
+    '<div style="display:flex;justify-content:space-between;align-items:center;'
+    + 'padding:8px 6px;margin-top:8px;border-top:1px solid var(--br);font-size:.65rem">'
+    + '<span style="color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;font-size:.54rem">SG Total</span>'
+    + _lrTallySGVal + '</div>';
+}
 }
 
 // \u2500\u2500 End round \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -744,6 +762,53 @@ document.getElementById('lrSumLeaderboard').innerHTML = lrState.players.length>1
       <span style="font-size:.6rem;color:var(--tx3);min-width:28px;text-align:right">${d!==null?lrRelLabel(d):''}</span>
     </div>`;
   }).join('')}</div>` : '';
+
+/* SG summary card */
+(function() {
+  var _sgMe = meIdx >= 0 ? lrState.players[meIdx] : null;
+  if (!_sgMe) return;
+  var _sgData = _lrRoundSG(_sgMe.scores, lrState.holes);
+  var _sgHasData = _sgMe.scores.some(function(s) {
+    return s.shots && s.shots.some(function(sh) { return sh.sg !== null && sh.sg !== undefined; });
+  });
+  if (!_sgHasData) return;
+  function _sgFmt(v) {
+    return '<span style="color:' + _lrSGColor(v) + '">'
+      + (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2) + '</span>';
+  }
+  var _firData = _lrRoundFIR(_sgMe.scores, lrState.holes);
+  var _girHit = _sgMe.scores.filter(function(s) { return s.gir === true; }).length;
+  var _girElig = _sgMe.scores.filter(function(s) { return s.gir !== null && s.gir !== undefined; }).length;
+  var _firGirLine = '';
+  if (_firData.eligible > 0 || _girElig > 0) {
+    var _firStr = _firData.eligible > 0
+      ? 'FIR: ' + _firData.hit + '/' + _firData.eligible
+        + ' (' + Math.round((_firData.pct || 0) * 100) + '%)'
+      : '';
+    var _girStr = _girElig > 0
+      ? 'GIR: ' + _girHit + '/' + _girElig
+        + ' (' + Math.round(_girHit / _girElig * 100) + '%)'
+      : '';
+    _firGirLine = [_firStr, _girStr].filter(Boolean).join(' \u00B7 ');
+  }
+  var _sgCard = '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:.54rem;'
+    + 'text-transform:uppercase;letter-spacing:.1em;color:var(--tx3);padding:8px 0;'
+    + 'border-top:1px solid var(--br);list-style:none;display:flex;justify-content:space-between">'
+    + '<span>Strokes Gained</span>'
+    + '<span style="color:' + _lrSGColor(_sgData.total) + ';font-size:.8rem;font-weight:700">'
+    + (_sgData.total >= 0 ? '+' : '\u2212') + Math.abs(_sgData.total).toFixed(2) + '</span>'
+    + '</summary>'
+    + '<div class="card" style="margin-top:6px;margin-bottom:0">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:.65rem">'
+    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Off the Tee</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.OTT) + '</td></tr>'
+    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Approach</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.APP) + '</td></tr>'
+    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Around the Green</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.ARG) + '</td></tr>'
+    + '<tr><td style="padding:5px 2px;color:var(--tx2)">Putting</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.PUTT) + '</td></tr>'
+    + '</table>'
+    + (_firGirLine ? '<div style="margin-top:8px;font-size:.6rem;color:var(--tx3)">' + _firGirLine + '</div>' : '')
+    + '</div></details>';
+  document.getElementById('lrSumLeaderboard').innerHTML += _sgCard;
+})();
 
 // Save note
 const noteEl = document.getElementById('lrSaveNote');
@@ -1074,6 +1139,63 @@ function _lrWriteSG(s) {
   });
 }
 
+// \u2500\u2500 SG Categorisation Engine \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function _lrSGCategory(shot, shotIndex, holePar) {
+  /* OTT: first shot on par 4 or 5 */
+  if (shotIndex === 0 && holePar >= 4) return 'OTT';
+  /* PUTT: any shot from green */
+  if (shot.lie === 'green') return 'PUTT';
+  /* APP: first shot on par 3 */
+  if (shotIndex === 0 && holePar === 3) return 'APP';
+  /* Need distanceToHole to distinguish ARG vs APP */
+  if (shot.distanceToHole === null || shot.distanceToHole === undefined) return null;
+  /* ARG: within 30 yards, not green */
+  if (shot.distanceToHole <= 30) return 'ARG';
+  /* APP: beyond 30 yards, not green */
+  return 'APP';
+}
+
+function _lrAggregateSG(shots, holePar) {
+  var result = { OTT: 0, APP: 0, ARG: 0, PUTT: 0, total: 0 };
+  if (!shots || !shots.length) return result;
+  shots.forEach(function(shot, i) {
+    if (shot.sg === null || shot.sg === undefined) return;
+    var cat = _lrSGCategory(shot, i, holePar);
+    if (!cat) return;
+    result[cat] = +(result[cat] + shot.sg).toFixed(3);
+    result.total = +(result.total + shot.sg).toFixed(3);
+  });
+  return result;
+}
+
+function _lrRoundSG(scores, holes) {
+  var result = { OTT: 0, APP: 0, ARG: 0, PUTT: 0, total: 0 };
+  scores.forEach(function(s, i) {
+    if (!s.shots || !s.shots.length) return;
+    var hole = holes[i];
+    if (!hole) return;
+    var h = _lrAggregateSG(s.shots, hole.par);
+    result.OTT   = +(result.OTT  + h.OTT).toFixed(3);
+    result.APP   = +(result.APP  + h.APP).toFixed(3);
+    result.ARG   = +(result.ARG  + h.ARG).toFixed(3);
+    result.PUTT  = +(result.PUTT + h.PUTT).toFixed(3);
+    result.total = +(result.total + h.total).toFixed(3);
+  });
+  return result;
+}
+
+function _lrRoundFIR(scores, holes) {
+  var eligible = 0, hit = 0;
+  scores.forEach(function(s, i) {
+    var hole = holes[i];
+    if (!hole || hole.par < 4 || !s.shots || !s.shots.length) return;
+    eligible++;
+    if (s.fir === true) hit++;
+  });
+  return { hit: hit, eligible: eligible, pct: eligible > 0 ? hit / eligible : null };
+}
+
 // \u2500\u2500 Phase 4: Advanced Shot Logging \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function _lrDefaultDraft(holeIdx) {
@@ -1201,7 +1323,7 @@ function _lrShotLogHtml(shots) {
   var rows = shots.map(function(sh, i) {
     var zone   = sh.radial_ring ? _lrZoneLabel(sh.radial_ring, sh.radial_segment) : '';
     var obTag  = sh.is_ob
-      ? ' <span style="color:var(--danger);font-size:.6rem">OB+' + (sh.penalty_strokes || 0) + '</span>'
+      ? ' <span style="color:var(--danger);font-size:.6rem">Penalty+' + (sh.penalty_strokes || 0) + '</span>'
       : '';
     var sgTag = (sh.sg !== null && sh.sg !== undefined)
       ? ' <span style="color:' + _lrSGColor(sh.sg) + ';font-size:.6rem">\u00B7 SG: ' + _lrFmtSG(sh.sg) + '</span>'
@@ -1360,14 +1482,14 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     /* OB toggle / inline confirm */
     if (_lrObConfirmPending) {
       html += '<div style="margin-bottom:10px;padding:8px;background:var(--gr2);border-radius:6px;font-size:.68rem">'
-        + 'OB \u2014 add 1 penalty stroke?'
+        + 'Penalty \u2014 add 1 penalty stroke?'
         + '<button class="btn" style="font-size:.62rem;padding:2px 8px;margin-left:8px;'
         + 'background:var(--danger);color:#fff;border-color:var(--danger)" onclick="lrObConfirm(true)">Yes</button>'
         + '<button class="btn sec" style="font-size:.62rem;padding:2px 8px;margin-left:4px" onclick="lrObConfirm(false)">No</button>'
         + '</div>';
     } else {
       html += '<div style="margin-bottom:10px">'
-        + '<button class="implied-tog' + (d.is_ob ? ' on' : '') + '" onclick="lrToggleOb()">OB: '
+        + '<button class="implied-tog' + (d.is_ob ? ' on' : '') + '" onclick="lrToggleOb()">Penalty: '
         + (d.is_ob ? 'Yes' : 'No') + '</button></div>';
     }
     html += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
