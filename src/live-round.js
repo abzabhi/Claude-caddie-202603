@@ -973,6 +973,8 @@ function _pdfBanner(playerName, hcp, logoDataUrl) {
 
 async function _pdfLogoDataUrl() {
   return new Promise(function(res) {
+    var link = document.querySelector('link[rel="apple-touch-icon"]');
+    if (!link) { res(''); return; }
     var img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
@@ -985,7 +987,7 @@ async function _pdfLogoDataUrl() {
       } catch(e) { res(''); }
     };
     img.onerror = function() { res(''); };
-    img.src = '/public/icon-192.png';
+    img.src = link.href;
   });
 }
 
