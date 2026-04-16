@@ -952,20 +952,36 @@ function _pdfSharedCSS() {
     + '</style>';
 }
 
-function _pdfBanner(playerName, hcp) {
+function _pdfBanner(playerName, hcp, logoDataUrl) {
   var right = playerName
     ? '<div class="pdf-banner-right">'
       + '<div class="pdf-banner-player">' + escHtml(playerName) + '</div>'
       + '<div class="pdf-banner-hcp">HCP ' + (hcp !== null && hcp !== undefined ? escHtml(String(hcp)) : '\u2014') + '</div>'
       + '</div>'
     : '';
+  var logoImg = logoDataUrl
+    ? '<img src="' + logoDataUrl + '" class="pdf-banner-logo" alt="Gordy">'
+    : '';
   return '<div class="pdf-banner">'
     + '<div class="pdf-banner-left">'
-    + '<img src="/icons/icon-192.png" class="pdf-banner-logo" alt="Gordy">'
+    + logoImg
     + '<div><div class="pdf-banner-title">Gordy</div>'
     + '<div class="pdf-banner-sub">The Virtual Caddy</div></div>'
     + '</div>'
     + right + '</div>';
+}
+
+async function _pdfLogoDataUrl() {
+  try {
+    var resp = await fetch('/icons/icon-192.png');
+    var blob = await resp.blob();
+    return await new Promise(function(res, rej) {
+      var r = new FileReader();
+      r.onload = function() { res(r.result); };
+      r.onerror = rej;
+      r.readAsDataURL(blob);
+    });
+  } catch(e) { return ''; }
 }
 
 /* Build caddie session section for PDF (bag + full hole-by-hole table) */
@@ -1075,7 +1091,8 @@ function _lrPdfSGHtml(mePlayer, holes) {
   return summary + breakdown;
 }
 
-function lrExportPdf(exportMode) {
+async function lrExportPdf(exportMode) {
+const logo     = await _pdfLogoDataUrl();
 const players  = lrState.players;
 const holes    = lrState.holes;
 const hasHcp   = lrHasAnyHandicap();
@@ -1174,7 +1191,7 @@ ${_pdfFontsLink}
 ${_pdfSharedCSS()}
 </head><body>
 <button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
-${_pdfBanner(meName, meHcp)}
+${_pdfBanner(meName, meHcp, logo)}
 <div class="hero">
 <div><div class="hero-title">\u26F3 ${escHtml(lrState.courseName)}</div>
 <div class="hero-meta">${escHtml(mode)} \u00B7 ${lrState.date} \u00B7 ${escHtml(lrState.conditions)} \u00B7 ${holes.length} holes</div></div>
@@ -2093,5 +2110,5 @@ Object.assign(window, {
   /* Caddie session linking */
   lrLinkSession, lrToggleSessionBag, lrRenderSessionPicker,
   /* Shared PDF helpers */
-  _lrRoundSG, _lrRoundFIR, _pdfSharedCSS, _pdfBanner, _pdfFontsLink,
+  _lrRoundSG, _lrRoundFIR, _pdfSharedCSS, _pdfBanner, _pdfFontsLink, _pdfLogoDataUrl,
 });
