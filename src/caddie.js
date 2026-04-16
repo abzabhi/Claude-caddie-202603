@@ -551,9 +551,10 @@ function importSessionResult(e){ _fileImport(e,undefined,'pasteResult'); }
 function importPastedResult(){ _pasteImport('pasteResult',undefined); }
 
 // -- Phase 5.1 - Session Scorecard PDF ----------------------------------------
-function exportSessionPdf(id) {
+async function exportSessionPdf(id) {
   const h = history.find(x=>x.id===id);
   if(!h) return;
+  const logo = window._pdfLogoDataUrl ? await window._pdfLogoDataUrl() : '';
   const lines = (h.text||'').split('\n');
 
   // Parse session text into sections
@@ -631,7 +632,7 @@ ${window._pdfSharedCSS?window._pdfSharedCSS():'<style>body{font-family:monospace
 </style>
 </head><body>
 <button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
-${window._pdfBanner?window._pdfBanner(profile.name||'',getHandicap()):''}
+${window._pdfBanner?window._pdfBanner(profile.name||'',getHandicap(),logo):''}
 <div class="hero">
   <div><div class="hero-title">\u26F3 ${escHtml(h.course||'Session')}</div><div class="hero-meta">${escHtml(meta)}</div></div>
   <div class="hero-date">${escHtml(h.date||'')}</div>
