@@ -621,28 +621,17 @@ function exportSessionPdf(id) {
   ].filter(Boolean).join(' \u00B7 ');
 
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Virtual Caddie Scorecard \u2014 ${escHtml(h.course||'Session')}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<title>Gordy \u2014 ${escHtml(h.course||'Session')}</title>
+${window._pdfFontsLink||''}
+${window._pdfSharedCSS?window._pdfSharedCSS():'<style>body{font-family:monospace;padding:24px;}</style>'}
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Mono',monospace,sans-serif;background:#f4efe6;color:#2c3a28;padding:24px;max-width:940px;margin:0 auto;font-size:.78rem;line-height:1.4;}
-@media print{body{background:#fff;padding:10px;font-size:.72rem;} .no-print{display:none;} [contenteditable]{outline:none;border-bottom:1px solid #ccc;min-height:1em;}}
-.hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:8px;padding:14px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
-.hero-title{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:#2d5127;}
-.hero-meta{font-size:.6rem;color:#8a9e82;margin-top:2px;}
-.hero-date{font-size:.6rem;color:#8a9e82;white-space:nowrap;}
-.card{background:#fff;border:1px solid #ddd5c4;border-radius:6px;padding:12px 14px;margin-bottom:10px;}
-h3{font-size:.56rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd5c4;}
-table{width:100%;border-collapse:collapse;}
-td,th{padding:3px 6px;border-bottom:1px solid #f0ebe0;vertical-align:middle;}
-th{font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:#8a9e82;font-weight:400;border-bottom:2px solid #ddd5c4;padding-bottom:4px;}
 .detail{font-size:.62rem;color:#5a6e52;margin-top:7px;line-height:1.6;}
 .strat{font-size:.68rem;color:#2c3a28;line-height:1.65;margin-bottom:3px;}
-.print-btn{display:inline-block;margin-bottom:12px;padding:5px 14px;background:#3d6b35;color:#fff;border:none;border-radius:4px;font-family:monospace;font-size:.68rem;cursor:pointer;letter-spacing:.04em;}
-.footer{text-align:center;font-size:.52rem;color:#8a9e82;margin-top:16px;letter-spacing:.1em;text-transform:uppercase;}
-</style></head><body>
+.hero-date{font-size:.6rem;color:#8a9e82;white-space:nowrap;}
+</style>
+</head><body>
 <button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
+${window._pdfBanner?window._pdfBanner(profile.name||'',getHandicap()):''}
 <div class="hero">
   <div><div class="hero-title">\u26F3 ${escHtml(h.course||'Session')}</div><div class="hero-meta">${escHtml(meta)}</div></div>
   <div class="hero-date">${escHtml(h.date||'')}</div>
@@ -662,7 +651,7 @@ ${stratLines.length?`<div class="card">
   ${fittingLine?`<div class="detail">${escHtml(fittingLine)}</div>`:''}
 </div>`:''}
 
-${holeLines.length?`<div class="card">
+${holeLines.length?`<div class="card page-break">
   <h3>Hole-by-Hole \u00B7 Score &amp; Notes</h3>
   <table>
     <thead><tr>
