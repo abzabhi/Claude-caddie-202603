@@ -972,16 +972,21 @@ function _pdfBanner(playerName, hcp, logoDataUrl) {
 }
 
 async function _pdfLogoDataUrl() {
-  try {
-    var resp = await fetch('/icons/icon-192.png');
-    var blob = await resp.blob();
-    return await new Promise(function(res, rej) {
-      var r = new FileReader();
-      r.onload = function() { res(r.result); };
-      r.onerror = rej;
-      r.readAsDataURL(blob);
-    });
-  } catch(e) { return ''; }
+  return new Promise(function(res) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      try {
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth || 192;
+        c.height = img.naturalHeight || 192;
+        c.getContext('2d').drawImage(img, 0, 0);
+        res(c.toDataURL('image/png'));
+      } catch(e) { res(''); }
+    };
+    img.onerror = function() { res(''); };
+    img.src = '/icons/icon-192.png';
+  });
 }
 
 /* Build caddie session section for PDF (bag + full hole-by-hole table) */
