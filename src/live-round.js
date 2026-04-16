@@ -111,6 +111,7 @@ if(val && val !== '') {
   teeRow.style.display = 'none';
   imprompt.style.display = '';
 }
+lrRenderSessionPicker();
 }
 
 function lrOnHoleCountChange() {
@@ -224,6 +225,8 @@ lrState = {
   curPlayer: 0,     // active player tab index
   netView: false,
   saved: false,
+  linkedSessionId: (function() { var s = document.getElementById('lrLinkedSession'); return s && s.value ? s.value : null; })(),
+  _sessionBagOpen: false,
 };
 
 lrShowScreen('lrHoleScreen');
@@ -380,6 +383,9 @@ if(shared) {
 
 /* Phase 4: advanced mode collapsible */
 scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
+
+/* Caddie session companion */
+scroll.innerHTML += _lrCaddieCompanionHtml();
 
 // Tally strip
 scroll.innerHTML += lrTallyStrip();
@@ -1725,6 +1731,186 @@ function lrToggleHoledOut() {
   _lrPersist();
 }
 
+// \u2500\u2500 Caddie Session Linking \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+/* Memoised parse cache -- invalidated when linkedSessionId changes */
+var _lrSessionCache = { id: null, data: null };
+
+function _lrParseSession(id) {
+  if (_lrSessionCache.id === id && _lrSessionCache.data) return _lrSessionCache.data;
+  var h = (typeof history !== 'undefined' ? history : []).find(function(x) { return x.id === id; });
+  if (!h || !h.text) { _lrSessionCache = { id: id, data: null }; return null; }
+  var lines = h.text.split('\n');
+  var bagLines = [], holeLines = [];
+  lines.forEach(function(raw) {
+    var l = raw.trim();
+    if (!l || l.startsWith('OPTIMISED BAG') || l.startsWith('Total:')) return;
+    if (l === 'COURSE STRATEGY' || l === 'HOLE-BY-HOLE') return;
+    if (/^H\d+\s*\|/.test(l)) { holeLines.push(l); return; }
+    if (/^\d+\.\s+/.test(l)) { bagLines.push(l); return; }
+  });
+  /* Parse hole lines into map keyed by hole number */
+  var holeMap = {};
+  holeLines.forEach(function(l) {
+    var p = l.split('|').map(function(s) { return s.trim(); });
+    var num = parseInt((p[0] || '').replace(/^H/, ''));
+    if (!num) return;
+    holeMap[num] = {
+      num:    num,
+      par:    (p[1] || '').replace('Par ', '').trim(),
+      yds:    (p[2] || '').replace(' yds', '').trim(),
+      strokes:(p[4] || '').trim(),
+      advice: p.slice(5).filter(Boolean).join(' \u00B7 ')
+    };
+  });
+  var data = { bagLines: bagLines, holeMap: holeMap, sessionTee: h.tee || '' };
+  _lrSessionCache = { id: id, data: data };
+  return data;
+}
+
+/* Returns array of candidate sessions matching courseName, newest first */
+function _lrMatchingSessions(courseName) {
+  if (typeof history === 'undefined') return [];
+  var cn = (courseName || '').toLowerCase().trim();
+  if (!cn) return [];
+  return history.filter(function(h) {
+    if (h.type !== 'optimisation' && h.type !== 'caddie' && h.type !== 'both') return false;
+    var hc = (h.course || '').toLowerCase().trim();
+    /* fuzzy: at least one word of course name matches */
+    return cn.split(' ').some(function(w) { return w.length > 2 && hc.includes(w); })
+        || hc.split(' ').some(function(w) { return w.length > 2 && cn.includes(w); });
+  }).sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+}
+
+/* Render the session picker dropdown for setup screen */
+function lrRenderSessionPicker() {
+  var row = document.getElementById('lrSessionLinkRow');
+  if (!row) return;
+  var courseId = document.getElementById('lrCourseSelect') && document.getElementById('lrCourseSelect').value;
+  var course = courseId ? (courses || []).find(function(c) { return c.id === courseId; }) : null;
+  if (!course) { row.style.display = 'none'; return; }
+  var matches = _lrMatchingSessions(course.name);
+  if (!matches.length) { row.style.display = 'none'; return; }
+  var teeVal = document.getElementById('lrTeeSelect') ? document.getElementById('lrTeeSelect').value : '';
+  var tee = course.tees && teeVal ? course.tees.find(function(t) { return t.id === teeVal; }) : null;
+  var teeName = tee ? tee.name : '';
+  var sel = document.getElementById('lrLinkedSession');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">\u2014 None \u2014</option>'
+    + matches.map(function(h) {
+        var warn = teeName && h.tee && h.tee !== teeName ? ' (\u26A0 ' + escHtml(h.tee) + ' tee)' : '';
+        return '<option value="' + escHtml(h.id) + '">' + escHtml(h.date) + ' \u00B7 ' + escHtml(h.course || '') + warn + '</option>';
+      }).join('');
+  row.style.display = '';
+}
+
+/* Link/unlink session during round -- called from inline picker */
+function lrLinkSession(id) {
+  if (!lrState) return;
+  lrState.linkedSessionId = id || null;
+  _lrSessionCache = { id: null, data: null }; /* invalidate cache */
+  lrRenderHole();
+  _lrPersist();
+}
+
+/* Toggle bag card open/closed */
+function lrToggleSessionBag() {
+  if (!lrState) return;
+  lrState._sessionBagOpen = !lrState._sessionBagOpen;
+  lrRenderHole();
+  _lrPersist();
+}
+
+/* Build the caddie companion HTML injected into the hole scroll */
+function _lrCaddieCompanionHtml() {
+  if (!lrState) return '';
+  var sid = lrState.linkedSessionId;
+
+  /* Mid-round link picker button */
+  var matches = _lrMatchingSessions(lrState.courseName || '');
+  var pickerHtml = '<div style="margin-top:8px;border-top:1px solid var(--br);padding-top:8px">'
+    + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+    + '<span style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">\uD83E\uDD16 Caddie Session</span>';
+
+  if (matches.length) {
+    var tee = lrState.tee || '';
+    pickerHtml += '<select style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.65rem;padding:3px 6px;outline:none"'
+      + ' onchange="lrLinkSession(this.value)">'
+      + '<option value="">\u2014 None \u2014</option>'
+      + matches.map(function(h) {
+          var warn = tee && h.tee && h.tee !== tee ? ' (\u26A0 ' + escHtml(h.tee) + ' tee)' : '';
+          var sel  = h.id === sid ? ' selected' : '';
+          return '<option value="' + escHtml(h.id) + '"' + sel + '>' + escHtml(h.date) + ' \u00B7 ' + escHtml(h.course || '') + warn + '</option>';
+        }).join('')
+      + '</select>';
+  } else if (sid) {
+    pickerHtml += '<button class="btn sec" style="font-size:.58rem;padding:2px 8px" onclick="lrLinkSession(\'\')">Unlink</button>';
+  } else {
+    pickerHtml += '<span style="font-size:.6rem;color:var(--tx3)">No matching sessions for this course</span>';
+  }
+  pickerHtml += '</div></div>';
+
+  if (!sid) return pickerHtml;
+
+  var data = _lrParseSession(sid);
+  if (!data) return pickerHtml;
+
+  var out = pickerHtml;
+
+  /* Tee mismatch warning */
+  if (data.sessionTee && lrState.tee && data.sessionTee !== lrState.tee) {
+    out += '<div style="font-size:.6rem;color:var(--danger);padding:4px 0">'
+      + '\u26A0 Session is for ' + escHtml(data.sessionTee) + ' tees \u2014 you are playing ' + escHtml(lrState.tee) + '</div>';
+  }
+
+  /* Optimised Bag card */
+  if (data.bagLines.length) {
+    var bagOpen = lrState._sessionBagOpen;
+    var arrow   = bagOpen ? '\u25B2' : '\u25BC';
+    out += '<div style="border:1px solid var(--br);border-radius:6px;margin-top:8px;overflow:hidden">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;'
+      + 'cursor:pointer;background:var(--sf)" onclick="lrToggleSessionBag()">'
+      + '<span style="font-size:.62rem;font-weight:600;color:var(--tx2)">\uD83C\uDF4E Optimised Bag</span>'
+      + '<span style="font-size:.6rem;color:var(--tx3)">' + arrow + '</span></div>';
+    if (bagOpen) {
+      out += '<div style="padding:6px 10px 8px">';
+      data.bagLines.forEach(function(l) {
+        var m = l.match(/^(\d+)\.\s+(.+?)\s+\u2014\s+([0-9\u2013\-]+ yds)\s+(.+)/);
+        if (m) {
+          out += '<div style="display:flex;gap:6px;font-size:.62rem;padding:2px 0;border-bottom:1px solid var(--br)">'
+            + '<span style="color:var(--tx3);width:16px">' + escHtml(m[1]) + '.</span>'
+            + '<span style="flex:1;color:var(--tx)">' + escHtml(m[2]) + '</span>'
+            + '<span style="color:var(--ac2);white-space:nowrap">' + escHtml(m[3]) + '</span>'
+            + '<span style="color:var(--tx3);font-size:.58rem;text-align:right;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(m[4]) + '</span>'
+            + '</div>';
+        } else {
+          out += '<div style="font-size:.62rem;color:var(--tx2);padding:2px 0">' + escHtml(l) + '</div>';
+        }
+      });
+      out += '</div>';
+    }
+    out += '</div>';
+  }
+
+  /* Hole Advice card */
+  var holeNum = lrState.holes[lrState.curHole] ? lrState.holes[lrState.curHole].n : null;
+  var advice  = holeNum ? data.holeMap[holeNum] : null;
+  if (advice) {
+    out += '<div style="border:1px solid var(--ac2);border-radius:6px;margin-top:8px;padding:8px 10px;background:var(--sf)">'
+      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ac2);margin-bottom:4px">'
+      + 'Hole ' + advice.num + (advice.par ? ' \u00B7 Par ' + escHtml(advice.par) : '')
+      + (advice.yds ? ' \u00B7 ' + escHtml(advice.yds) + ' yds' : '') + '</div>'
+      + (advice.strokes ? '<div style="font-size:.65rem;font-weight:600;color:var(--tx);margin-bottom:3px">'
+          + escHtml(advice.strokes) + '</div>' : '')
+      + (advice.advice ? '<div style="font-size:.62rem;color:var(--tx2);line-height:1.45">'
+          + escHtml(advice.advice) + '</div>' : '')
+      + '</div>';
+  }
+
+  return out;
+}
+
 // -- Expose to window (required for HTML onclick handlers) --
 Object.assign(window, {
   lrStartSetup, lrAddPlayer, lrRemovePlayer, lrToggleMe,
@@ -1745,4 +1931,6 @@ Object.assign(window, {
   lrSetShotMode, lrSetShotLie, lrSetFlightPath, lrSetClub, lrSetDist,
   lrObConfirm, lrSetOnGreenDist, lrAdjChipPutt, lrToggleHoledOut,
   lrGirPromptAnswer,
+  /* Caddie session linking */
+  lrLinkSession, lrToggleSessionBag, lrRenderSessionPicker,
 });
