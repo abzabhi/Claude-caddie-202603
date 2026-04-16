@@ -2458,6 +2458,7 @@ function resetInactivityTimer() {
 }
 
 function lockApp() {
+  sessionStorage.removeItem('vc:gateUnlocked');
   _appLocked = true;
   var ol = document.getElementById('lockOverlay');
   if (ol) ol.classList.add('visible');
