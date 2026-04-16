@@ -1,4 +1,4 @@
-import { uid, today, save, courses, rounds, profile, bag } from './store.js';
+import { uid, today, save, courses, rounds, history, profile, bag } from './store.js';
 import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
 import { calcDiff } from './geo.js';
 import { renderHandicap } from './rounds.js';
@@ -1897,7 +1897,7 @@ var _lrSessionCache = { id: null, data: null };
 
 function _lrParseSession(id) {
   if (_lrSessionCache.id === id && _lrSessionCache.data) return _lrSessionCache.data;
-  var h = (typeof history !== 'undefined' ? history : []).find(function(x) { return x.id === id; });
+  var h = (history || []).find(function(x) { return x.id === id; });
   if (!h || !h.text) { _lrSessionCache = { id: id, data: null }; return null; }
   var lines = h.text.split('\n');
   var bagLines = [], holeLines = [];
@@ -1929,7 +1929,7 @@ function _lrParseSession(id) {
 
 /* Returns array of candidate sessions matching courseName, newest first */
 function _lrMatchingSessions(courseName) {
-  if (typeof history === 'undefined') return [];
+  if (!history || !history.length) return [];
   var cn = (courseName || '').toLowerCase().trim();
   if (!cn) return [];
   return history.filter(function(h) {
