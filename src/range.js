@@ -345,7 +345,8 @@ function _renderShotLog(editingIdx) {
   if (!_rangeState || !_rangeState.shots.length) {
     return '<div class="hist-empty">No shots yet \u2014 log your first shot above.</div>';
   }
-  return _rangeState.shots.map(function(s, i) { return _shotRowHtml(s, i, editingIdx); }).join('');
+  var _shots = _rangeState.shots, _len = _shots.length;
+  return _shots.slice().reverse().map(function(s, i) { return _shotRowHtml(s, _len - 1 - i, editingIdx); }).join('');
 }
 
 // Session Summary  -  live, collapsible, single-select row drives distribution radial
@@ -512,7 +513,10 @@ function rangeInit() {
   _editingIndex = null;
   if (!_rangeState) {
     var clubs = _activeBag();
-    if (!_startClubId && clubs.length) _startClubId = clubs[0].id;
+    if (!_startClubId) {
+      var _savedClub = localStorage.getItem('gordy:rangeStartClub');
+      _startClubId = (_savedClub && clubs.find(function(c) { return c.id === _savedClub; })) ? _savedClub : (clubs[0] && clubs[0].id);
+    }
     _renderRoot(_renderStartScreen());
   } else {
     _renderRoot(_renderShotScreen());
@@ -563,6 +567,7 @@ function rangeSelectClub(clubId) {
     if (inp) inp.value = avg !== null ? avg : '';
   } else {
     _startClubId = clubId;
+    localStorage.setItem('gordy:rangeStartClub', clubId);
   }
   // Surgical shelf highlight update  -  no full re-render
   _activeBag().forEach(function(cl) {
