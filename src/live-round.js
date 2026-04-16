@@ -1216,11 +1216,8 @@ ${hasHcp?`<div class="page-break"></div>${buildTable(true,'Scorecard \u2014 Net'
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
-const blob = new Blob([html],{type:'text/html'});
-const url  = URL.createObjectURL(blob);
-const w    = window.open(url,'_blank');
-if(w) w.onunload=()=>URL.revokeObjectURL(url);
-else  URL.revokeObjectURL(url);
+const w = window.open('','_blank');
+if(w){ w.document.open(); w.document.write(html); w.document.close(); }
 }
 
 // \u2500\u2500 Discard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
