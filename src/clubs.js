@@ -1,5 +1,5 @@
 import { deriveStats, calcImplied, fmtDate } from './geo.js';
-import { CLUB_VARIANTS, TYPE_COLOR, BRANDS, STIFFNESS, CLUB_TYPES } from './constants.js';
+import { CLUB_VARIANTS, TYPE_COLOR,  BRANDS, STIFFNESS, CLUB_TYPES } from './constants.js';
 import { bag, profile, today, uid, save, setBag } from './store.js';
 
 export function getVariantDefault(type, variantId) {
