@@ -361,11 +361,8 @@ ${window._pdfBanner?window._pdfBanner(name,hcp,logo):''}
 <div class="footer">Gordy the Virtual Caddy \u00B7 Generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
-  const blob = new Blob([html],{type:'text/html'});
-  const url  = URL.createObjectURL(blob);
-  const w    = window.open(url,'_blank');
-  if(w) w.onunload=()=>URL.revokeObjectURL(url);
-  else  URL.revokeObjectURL(url);
+const w = window.open('','_blank');
+if(w){ w.document.open(); w.document.write(html); w.document.close(); }
 }
 
 function _rndLinkHTML(r){
