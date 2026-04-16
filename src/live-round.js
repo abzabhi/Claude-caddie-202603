@@ -985,7 +985,7 @@ async function _pdfLogoDataUrl() {
       } catch(e) { res(''); }
     };
     img.onerror = function() { res(''); };
-    img.src = '/icon-192.png';
+    img.src = '/icons/icon-192.png';
   });
 }
 
