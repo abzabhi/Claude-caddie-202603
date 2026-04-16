@@ -263,11 +263,58 @@ function _parseDataText(text) {
   return {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines};
 }
 
+// After sync replaces bag, remap active range session ids to the new bag's ids
+// by matching on stable club fields (brand|type|identifier|loft|model). Writes
+// gordy:activeRange back only if something changed. Missing matches are left
+// as-is (rangeInit tolerates; better than silently swapping to wrong club).
+function _remapActiveRangeClubIds(oldBag, newBag) {
+  var raw = localStorage.getItem('gordy:activeRange');
+  if (!raw) return;
+  var blob;
+  try { blob = JSON.parse(raw); } catch(e) { return; }
+  if (!blob || typeof blob !== 'object') return;
+
+  function k(c){ return (c.brand||'')+'|'+(c.type||'')+'|'+(c.identifier||'')+'|'+(c.loft||'')+'|'+(c.model||''); }
+  var oldById = {};
+  for (var a=0; a<oldBag.length; a++) { if (oldBag[a] && oldBag[a].id) oldById[oldBag[a].id] = oldBag[a]; }
+  var newByKey = {};
+  for (var b=0; b<newBag.length; b++) { if (newBag[b] && newBag[b].id) newByKey[k(newBag[b])] = newBag[b].id; }
+
+  function remap(id){
+    if (!id) return id;
+    var oc = oldById[id];
+    if (!oc) return id;
+    var nid = newByKey[k(oc)];
+    return nid || id;
+  }
+
+  var changed = false;
+  var r = remap(blob.clubId);
+  if (r !== blob.clubId) { blob.clubId = r; changed = true; }
+  if (Array.isArray(blob.club_bag_snapshot)) {
+    for (var i=0; i<blob.club_bag_snapshot.length; i++) {
+      var nr = remap(blob.club_bag_snapshot[i]);
+      if (nr !== blob.club_bag_snapshot[i]) { blob.club_bag_snapshot[i] = nr; changed = true; }
+    }
+  }
+  if (Array.isArray(blob.shots)) {
+    for (var j=0; j<blob.shots.length; j++) {
+      var sh = blob.shots[j];
+      if (!sh) continue;
+      var nr2 = remap(sh.clubId);
+      if (nr2 !== sh.clubId) { sh.clubId = nr2; changed = true; }
+    }
+  }
+  if (changed) {
+    try { localStorage.setItem('gordy:activeRange', JSON.stringify(blob)); } catch(e) {}
+  }
+}
+
 // Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
 // renderAll is called by gateUnlocked() after this returns.
 function dbLoadData(text) {
   const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
-  if(newBag.length) setBag(newBag);
+  if(newBag.length) { var _oldBag = bag.slice(); setBag(newBag); _remapActiveRangeClubIds(_oldBag, bag); }
   if(newRounds.length) setRounds(newRounds);
   if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
   if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
