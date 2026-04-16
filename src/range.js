@@ -182,7 +182,7 @@ function _activeBag() { return bag.filter(function(c) { return c.tested === true
 
 function _clubName(id) {
   var c = bag.find(function(x) { return x.id === id; });
-  return c ? (c.identifier || c.type || 'Club') : '(unknown)';
+  return c ? (c.identifier || c.type || 'Club') : '\u2014';
 }
 
 function _clubAvgYds(c) {
