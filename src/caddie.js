@@ -671,11 +671,8 @@ ${holeLines.length?`<div class="card page-break">
 <div class="footer">Virtual Caddie \u00B7 ${escHtml(h.course||'')} \u00B7 Generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
 </body></html>`;
 
-  const blob=new Blob([html],{type:'text/html'});
-  const url=URL.createObjectURL(blob);
-  const w=window.open(url,'_blank');
-  if(w) w.onunload=()=>URL.revokeObjectURL(url);
-  else  URL.revokeObjectURL(url);
+const w = window.open('','_blank');
+if(w){ w.document.open(); w.document.write(html); w.document.close(); }
 }
 
 // -- Phase 4.1 - Starter TXT --------------------------------------------------
