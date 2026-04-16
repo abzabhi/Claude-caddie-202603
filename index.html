@@ -830,6 +830,20 @@ body{
       </div>
     </div>
 
+    <!-- Export & Print card -->
+    <div class="card" style="margin-top:10px">
+      <div class="collapsible-hdr" onclick="toggleCard('export-card')" id="export-card-hdr">
+        <span>&#11123; Export &amp; Print</span><span class="chev">&#9660;</span>
+      </div>
+      <div id="export-card-body" style="display:none;padding-top:10px">
+        <p class="note" style="margin-bottom:10px">Export rounds as PDF. Simple includes the scorecard and leaderboard. Advanced prepends your strokes gained analysis and any linked caddie session.</p>
+        <div id="exportCardBody"></div>
+        <div style="margin-top:10px;border-top:1px solid var(--br);padding-top:8px">
+          <button class="btn sec" style="font-size:.62rem;padding:3px 10px" onclick="exportProfilePdf()">&#127970; Player Card PDF</button>
+        </div>
+      </div>
+    </div>
+
   </div>
   <div id="tab-clubs" class="panel">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -1682,6 +1696,10 @@ body{
           <div class="flbl">Tee</div>
           <select id="lrTeeSelect"></select>
         </div>
+        <div id="lrSessionLinkRow" class="field" style="display:none">
+          <div class="flbl">&#129302; Link Caddie Session <span style="font-weight:400;color:var(--tx3)">(optional)</span></div>
+          <select id="lrLinkedSession" style="width:100%"></select>
+        </div>
         <div id="lrImprompt">
           <div class="g2">
             <div class="field">
@@ -2025,7 +2043,7 @@ function showTab(id) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   if(event&&event.currentTarget) event.currentTarget.classList.add('active');
-  if(id==='profile') renderProfile();
+  if(id==='profile') { renderProfile(); if(window.renderExportCard) window.renderExportCard(); }
   if(id==='clubs') renderClubs();
   if(id==='courses') renderCourseList();
   if(id==='rounds') renderHandicap();
@@ -2046,7 +2064,7 @@ function showTabFromProfile(id) {
   if(id==='courses')  renderCourseList();
   if(id==='rounds')   renderHandicap();
   if(id==='sessions') { renderSessions(); if(window.renderRangeSessions) window.renderRangeSessions(); }
-  if(id==='profile')  renderProfile();
+  if(id==='profile')  { renderProfile(); if(window.renderExportCard) window.renderExportCard(); }
 }
 
 
