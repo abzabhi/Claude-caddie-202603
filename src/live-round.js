@@ -921,12 +921,169 @@ lrUpdatePill();
 }
 
 // \u2500\u2500 PDF export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function lrExportPdf() {
+// -- Shared PDF helpers -------------------------------------------------------
+var _pdfFontsLink = '<link rel="preconnect" href="https://fonts.googleapis.com">'
+  + '<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">';
+
+function _pdfSharedCSS() {
+  return '<style>'
+    + '*{box-sizing:border-box;margin:0;padding:0;}'
+    + 'body{font-family:\'DM Mono\',monospace,sans-serif;background:#f4efe6;color:#2c3a28;padding:24px;max-width:900px;margin:0 auto;font-size:.76rem;line-height:1.4;}'
+    + '@media print{body{background:#fff;padding:10px;font-size:.7rem;}.no-print{display:none;}.page-break{page-break-before:always;}[contenteditable]{outline:none;border-bottom:1px solid #ccc;min-height:1em;}}'
+    + '.pdf-banner{display:flex;justify-content:space-between;align-items:center;padding:10px 0 12px;border-bottom:2px solid #3d6b35;margin-bottom:14px;}'
+    + '.pdf-banner-left{display:flex;align-items:center;gap:10px;}'
+    + '.pdf-banner-logo{width:32px;height:32px;border-radius:6px;}'
+    + '.pdf-banner-title{font-family:\'Playfair Display\',serif;font-size:1rem;font-weight:700;color:#2d5127;letter-spacing:-.01em;}'
+    + '.pdf-banner-sub{font-size:.52rem;letter-spacing:.18em;text-transform:uppercase;color:#8a9e82;margin-top:2px;}'
+    + '.pdf-banner-right{text-align:right;}'
+    + '.pdf-banner-player{font-size:.72rem;font-weight:600;color:#2c3a28;}'
+    + '.pdf-banner-hcp{font-size:.56rem;color:#8a9e82;letter-spacing:.06em;margin-top:2px;}'
+    + '.hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:8px;padding:14px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}'
+    + '.hero-title{font-family:\'Playfair Display\',serif;font-size:1.1rem;font-weight:700;color:#2d5127;}'
+    + '.hero-meta{font-size:.6rem;color:#8a9e82;margin-top:3px;}'
+    + '.card{background:#fff;border:1px solid #ddd5c4;border-radius:6px;padding:12px 14px;margin-bottom:10px;}'
+    + 'h3{font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd5c4;}'
+    + 'table{width:100%;border-collapse:collapse;}'
+    + 'td,th{padding:3px 6px;border-bottom:1px solid #f0ebe0;vertical-align:middle;}'
+    + 'th{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:#8a9e82;font-weight:400;border-bottom:2px solid #ddd5c4;}'
+    + '.footer{text-align:center;font-size:.52rem;color:#8a9e82;margin-top:16px;letter-spacing:.1em;text-transform:uppercase;}'
+    + '.print-btn{display:inline-block;margin-bottom:12px;padding:5px 14px;background:#3d6b35;color:#fff;border:none;border-radius:4px;font-family:monospace;font-size:.68rem;cursor:pointer;letter-spacing:.04em;}'
+    + '.page-break{page-break-before:always;}'
+    + '</style>';
+}
+
+function _pdfBanner(playerName, hcp) {
+  var right = playerName
+    ? '<div class="pdf-banner-right">'
+      + '<div class="pdf-banner-player">' + escHtml(playerName) + '</div>'
+      + '<div class="pdf-banner-hcp">HCP ' + (hcp !== null && hcp !== undefined ? escHtml(String(hcp)) : '\u2014') + '</div>'
+      + '</div>'
+    : '';
+  return '<div class="pdf-banner">'
+    + '<div class="pdf-banner-left">'
+    + '<img src="/icons/icon-192.png" class="pdf-banner-logo" alt="Gordy">'
+    + '<div><div class="pdf-banner-title">Gordy</div>'
+    + '<div class="pdf-banner-sub">The Virtual Caddy</div></div>'
+    + '</div>'
+    + right + '</div>';
+}
+
+/* Build caddie session section for PDF (bag + full hole-by-hole table) */
+function _lrPdfCaddieSessionHtml(sid) {
+  var data = _lrParseSession(sid);
+  if (!data) return '';
+  var out = '';
+  if (data.bagLines && data.bagLines.length) {
+    var bRows = data.bagLines.map(function(l) {
+      var m = l.match(/^(\d+)\.\s+(.+?)\s+\u2014\s+([0-9\u2013\-]+ yds)\s+(.+)/);
+      if (!m) return '<tr><td colspan="4" style="color:#5a6e52">' + escHtml(l) + '</td></tr>';
+      return '<tr><td style="color:#2d5127;font-weight:600;width:24px">' + escHtml(m[1]) + '.</td>'
+        + '<td>' + escHtml(m[2]) + '</td>'
+        + '<td style="text-align:center;color:#3d6b35;white-space:nowrap">' + escHtml(m[3]) + '</td>'
+        + '<td style="color:#5a6e52;font-size:.63rem">' + escHtml(m[4]) + '</td></tr>';
+    }).join('');
+    out += '<div class="card"><h3>Optimised Bag</h3>'
+      + '<table><thead><tr><th>#</th><th>Club</th><th style="text-align:center">Range</th><th>Role</th></tr></thead>'
+      + '<tbody>' + bRows + '</tbody></table></div>';
+  }
+  var hKeys = Object.keys(data.holeMap).map(Number).sort(function(a,b){return a-b;});
+  if (hKeys.length) {
+    var hRows = hKeys.map(function(k) {
+      var h = data.holeMap[k];
+      var parN = parseInt(h.par)||0;
+      var bg = parN===3?'#edf3f7':parN===5?'#fff8ee':'#fff';
+      return '<tr style="background:' + bg + '">'
+        + '<td style="text-align:center;font-weight:700;color:#2d5127">' + escHtml(String(h.num||k)) + '</td>'
+        + '<td style="text-align:center">' + escHtml(h.par||'\u2014') + '</td>'
+        + '<td style="text-align:center">' + escHtml(h.yds||'\u2014') + '</td>'
+        + '<td style="font-size:.62rem;color:#3d6b35">' + escHtml(h.strokes||'') + '</td>'
+        + '<td style="font-size:.62rem">' + escHtml(h.advice||'') + '</td></tr>';
+    }).join('');
+    out += '<div class="card page-break"><h3>Hole-by-Hole Advice</h3>'
+      + '<table><thead><tr>'
+      + '<th style="width:32px;text-align:center">H</th>'
+      + '<th style="width:28px;text-align:center">Par</th>'
+      + '<th style="width:40px;text-align:center">Yds</th>'
+      + '<th style="width:80px">Strokes</th>'
+      + '<th>Advice</th></tr></thead>'
+      + '<tbody>' + hRows + '</tbody></table></div>';
+  }
+  return out;
+}
+
+/* Build SG summary + hole-by-hole breakdown for PDF */
+function _lrPdfSGHtml(mePlayer, holes) {
+  var hasSG = mePlayer.scores.some(function(s) {
+    return s.shots && s.shots.some(function(sh) { return sh.sg !== null && sh.sg !== undefined; });
+  });
+  if (!hasSG) return '';
+  var sg  = _lrRoundSG(mePlayer.scores, holes);
+  var fir = _lrRoundFIR(mePlayer.scores, holes);
+  var girHit = holes.filter(function(h,i) { return mePlayer.scores[i] && mePlayer.scores[i].gir === true; }).length;
+  var girOf  = holes.filter(function(h,i) { return mePlayer.scores[i] && mePlayer.scores[i].gir !== null && mePlayer.scores[i].gir !== undefined; }).length;
+  function sgC(v) { return v > 0 ? '#3d6b35' : v < 0 ? '#a03030' : '#8a9e82'; }
+  function sgF(v) { return (v > 0 ? '+' : '') + v.toFixed(2); }
+
+  var summary = '<div class="card">'
+    + '<h3>Strokes Gained \u2014 Summary</h3>'
+    + '<div style="font-size:1.1rem;font-weight:700;color:' + sgC(sg.total) + ';margin-bottom:8px">SG Total: ' + sgF(sg.total) + '</div>'
+    + '<table><thead><tr>'
+    + '<th style="text-align:center">OTT</th><th style="text-align:center">APP</th>'
+    + '<th style="text-align:center">ARG</th><th style="text-align:center">PUTT</th>'
+    + '</tr></thead><tbody><tr>'
+    + '<td style="text-align:center;color:' + sgC(sg.OTT)  + ';font-weight:600">' + sgF(sg.OTT)  + '</td>'
+    + '<td style="text-align:center;color:' + sgC(sg.APP)  + ';font-weight:600">' + sgF(sg.APP)  + '</td>'
+    + '<td style="text-align:center;color:' + sgC(sg.ARG)  + ';font-weight:600">' + sgF(sg.ARG)  + '</td>'
+    + '<td style="text-align:center;color:' + sgC(sg.PUTT) + ';font-weight:600">' + sgF(sg.PUTT) + '</td>'
+    + '</tr></tbody></table>'
+    + '<div style="font-size:.6rem;color:#8a9e82;margin-top:8px">'
+    + 'FIR: ' + fir.hit + '/' + fir.eligible
+    + (fir.pct !== null ? ' (' + Math.round(fir.pct * 100) + '%)' : '')
+    + ' \u00B7 GIR: ' + girHit + '/' + girOf
+    + (girOf > 0 ? ' (' + Math.round(girHit / girOf * 100) + '%)' : '')
+    + '</div></div>';
+
+  var hbhRows = holes.map(function(hole, i) {
+    var s = mePlayer.scores[i];
+    if (!s) return '';
+    var hsg = _lrAggregateSG(s.shots || [], hole.par);
+    var bg  = hole.par===3?'#edf3f7':hole.par===5?'#fff8ee':'#fff';
+    var d   = s.score !== null ? s.score - hole.par : null;
+    var dCls = d===null?'':d<=-2?'color:#c8860a':d===-1?'color:#3d6b35':d===1?'color:#b89a5a':d>=2?'color:#a03030':'';
+    var hasHoleSG = !!(s.shots && s.shots.some(function(sh) { return sh.sg !== null && sh.sg !== undefined; }));
+    return '<tr style="background:' + bg + '">'
+      + '<td style="text-align:center;font-weight:700">' + hole.n + '</td>'
+      + '<td style="text-align:center">' + hole.par + '</td>'
+      + '<td style="text-align:center;' + dCls + ';font-weight:' + (d!==null&&d<0?'700':'400') + '">' + (s.score!==null?s.score:'\u2014') + '</td>'
+      + '<td style="text-align:center;color:' + sgC(hsg.OTT)  + '">' + (hasHoleSG?sgF(hsg.OTT) :'\u2014') + '</td>'
+      + '<td style="text-align:center;color:' + sgC(hsg.APP)  + '">' + (hasHoleSG?sgF(hsg.APP) :'\u2014') + '</td>'
+      + '<td style="text-align:center;color:' + sgC(hsg.ARG)  + '">' + (hasHoleSG?sgF(hsg.ARG) :'\u2014') + '</td>'
+      + '<td style="text-align:center;color:' + sgC(hsg.PUTT) + '">' + (hasHoleSG?sgF(hsg.PUTT):'\u2014') + '</td>'
+      + '<td style="text-align:center;color:' + sgC(hsg.total) + ';font-weight:600">' + (hasHoleSG?sgF(hsg.total):'\u2014') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var breakdown = '<div class="card">'
+    + '<h3>Strokes Gained \u2014 Hole by Hole</h3>'
+    + '<table><thead><tr>'
+    + '<th style="text-align:center">H</th><th style="text-align:center">Par</th><th style="text-align:center">Score</th>'
+    + '<th style="text-align:center">OTT</th><th style="text-align:center">APP</th>'
+    + '<th style="text-align:center">ARG</th><th style="text-align:center">PUTT</th>'
+    + '<th style="text-align:center">Total</th>'
+    + '</tr></thead><tbody>' + hbhRows + '</tbody></table></div>';
+
+  return summary + breakdown;
+}
+
+function lrExportPdf(exportMode) {
 const players  = lrState.players;
 const holes    = lrState.holes;
 const hasHcp   = lrHasAnyHandicap();
 const mode     = LR_MODES[lrState.mode]?.label || lrState.mode;
 const totalPar = holes.reduce((t,h)=>t+h.par,0);
+const mePlayer = players.find(p=>p.isMe) || players[0] || null;
+const meName   = mePlayer ? mePlayer.name : '';
+const meHcp    = mePlayer ? mePlayer.handicap : null;
 
 function scoreRow(hole, scores, net) {
   const bg = hole.par===3?'#edf3f7':hole.par===5?'#fff8ee':'#fff';
@@ -998,31 +1155,33 @@ const leaderboard = [...players].sort((a,b)=>{
   return `<tr><td>${i+1}</td><td>${escHtml(p.name)}${p.isMe?' \u2605':''}</td><td style="text-align:center">${sc||'\u2014'}</td><td style="text-align:center;color:${d&&d<0?'#3d6b35':d&&d>0?'#a03030':'#2c3a28'}">${d!==null?lrRelLabel(d):'\u2014'}</td><td style="text-align:center">${p.handicap||'\u2014'}</td></tr>`;
 }).join('');
 
-const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GORDy Round \u2014 ${escHtml(lrState.courseName)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Mono',monospace;background:#f4efe6;color:#2c3a28;padding:20px;max-width:960px;margin:0 auto;font-size:.76rem;}
-@media print{body{background:#fff;padding:8px;font-size:.7rem;}.no-print{display:none;}.page-break{page-break-before:always;}}
-.hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:8px;padding:14px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;}
-.hero-title{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:#2d5127;}
-.hero-meta{font-size:.6rem;color:#8a9e82;margin-top:3px;}
-.card{background:#fff;border:1px solid #ddd5c4;border-radius:6px;padding:12px 14px;margin-bottom:10px;}
-h3{font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd5c4;}
-table{width:100%;border-collapse:collapse;}
-td,th{padding:3px 6px;border-bottom:1px solid #f0ebe0;vertical-align:middle;}
-th{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:#8a9e82;font-weight:400;border-bottom:2px solid #ddd5c4;}
-.print-btn{margin-bottom:12px;padding:5px 14px;background:#3d6b35;color:#fff;border:none;border-radius:4px;font-family:monospace;font-size:.68rem;cursor:pointer;}
-.footer{text-align:center;font-size:.5rem;color:#8a9e82;margin-top:16px;letter-spacing:.1em;text-transform:uppercase;}
-</style></head><body>
+// -- Advanced prefix: caddie session + SG analysis --
+var advancedPrefix = '';
+if (exportMode === 'advanced' && mePlayer) {
+  var _sid = lrState.linkedSessionId || null;
+  var _cHtml = _sid ? _lrPdfCaddieSessionHtml(_sid) : '';
+  var _sgHtml = _lrPdfSGHtml(mePlayer, holes);
+  if (_cHtml || _sgHtml) {
+    advancedPrefix = _cHtml
+      + (_cHtml && _sgHtml ? '<div class="page-break"></div>' : '')
+      + _sgHtml
+      + '<div class="page-break"></div>';
+  }
+}
+
+const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Gordy \u2014 ${escHtml(lrState.courseName)}</title>
+${_pdfFontsLink}
+${_pdfSharedCSS()}
+</head><body>
 <button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
+${_pdfBanner(meName, meHcp)}
 <div class="hero">
 <div><div class="hero-title">\u26F3 ${escHtml(lrState.courseName)}</div>
 <div class="hero-meta">${escHtml(mode)} \u00B7 ${lrState.date} \u00B7 ${escHtml(lrState.conditions)} \u00B7 ${holes.length} holes</div></div>
 <div style="text-align:right;font-size:.62rem;color:#8a9e82">${lrState.tee?lrState.tee+' tees':''}</div>
 </div>
 
-${buildTable(false,'Scorecard \u2014 Gross')}
+${advancedPrefix}${buildTable(false,'Scorecard \u2014 Gross')}
 
 ${hasHcp?`<div class="page-break"></div>${buildTable(true,'Scorecard \u2014 Net')}`:''}
 
@@ -1031,7 +1190,7 @@ ${hasHcp?`<div class="page-break"></div>${buildTable(true,'Scorecard \u2014 Net'
 <table><thead><tr><th>#</th><th>Player</th><th style="text-align:center">Gross</th><th style="text-align:center">vs Par</th><th style="text-align:center">HCP</th></tr></thead>
 <tbody>${leaderboard}</tbody></table></div>
 
-<div class="footer">GORDy the Virtual Caddy \u00B7 Round generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
+<div class="footer">Gordy the Virtual Caddy \u00B7 Round generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
@@ -1933,4 +2092,6 @@ Object.assign(window, {
   lrGirPromptAnswer,
   /* Caddie session linking */
   lrLinkSession, lrToggleSessionBag, lrRenderSessionPicker,
+  /* Shared PDF helpers */
+  _lrRoundSG, _lrRoundFIR, _pdfSharedCSS, _pdfBanner, _pdfFontsLink,
 });
