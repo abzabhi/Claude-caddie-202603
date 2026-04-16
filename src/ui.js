@@ -550,9 +550,10 @@ function renderDropdown() {
   }
 
   const sob=el('ddSignOutBlock');
-  if(sob) sob.innerHTML=kvMode()
-    ?`<button class="btn danger" style="width:100%;font-size:.68rem" onclick="signOutSync()">\uD83D\uDD13 Sign out of sync</button>`
-    :``;
+  if(sob) sob.innerHTML=(kvMode()
+    ?`<button class="btn danger" style="width:100%;font-size:.68rem;margin-bottom:4px" onclick="signOutSync()">\uD83D\uDD13 Sign out of sync</button>`
+    :'')+
+    `<button class="btn sec" style="width:100%;font-size:.68rem" onclick="signOut()">\u21A9 Sign out</button>`;
 }
 
 // -- Home course helpers ------------------------------------------------------
@@ -609,11 +610,17 @@ function acceptDisclaimer() {
   document.getElementById('discModal').style.display = 'none';
 }
 function confirmClearAll() {
-  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version'].forEach(k=>localStorage.removeItem(k));
+  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version',
+   'gordy:activeRound','gordy:activeRange','vc:rangeSessions'].forEach(k=>localStorage.removeItem(k));
   clearAll();
   document.getElementById('clearModal').style.display='none';
   if(window.renderBanner) window.renderBanner(); else document.getElementById('uploadBanner').style.display='flex';
   renderAll();
+  if(window.updateSessionPill) window.updateSessionPill();
+}
+function signOut() {
+  ['vc:gateUnlocked','vc:kvPass','vc:verify'].forEach(k=>sessionStorage.removeItem(k));
+  location.reload();
 }
 
 // -- Polish B: checklist, banner, AI steps, session linker --------------------
@@ -721,7 +728,7 @@ Object.assign(window, {
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
   updateCourseDropdowns, renderAll, serialise,
-  showDisclaimer, acceptDisclaimer, confirmClearAll,
+  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut,
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
   showAIStepsCard, hideAIStepsCard,
