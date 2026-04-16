@@ -262,7 +262,7 @@ function toggleRndSection(key){
   listEl.previousElementSibling?.querySelector('.chev')?.classList.toggle('open', open);
 }
 
-function rndRegenPdf(id, exportMode) {
+async function rndRegenPdf(id, exportMode) {
   const r = rounds.find(x=>x.id===id);
   if(!r) return;
   const savedState = lrState;
@@ -327,21 +327,22 @@ function rndRegenPdf(id, exportMode) {
     lrState = savedState;
     return;
   }
-  lrExportPdf(exportMode||'simple');
+  await lrExportPdf(exportMode||'simple');
   lrState = savedState;
 }
 
 /* Minimal summary PDF for score-only rounds (no hole data) */
-function _rndSummaryPdf(r) {
+async function _rndSummaryPdf(r) {
   const name = profile.name || 'Golfer';
   const hcp  = typeof getHandicap === 'function' ? getHandicap() : null;
+  const logo = window._pdfLogoDataUrl ? await window._pdfLogoDataUrl() : '';
   const meta = [r.tee?r.tee+' tees':'', r.notes||''].filter(Boolean).join(' \u00B7 ');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Gordy \u2014 ${escHtml(r.courseName||'Round')}</title>
 ${window._pdfFontsLink||''}
 ${window._pdfSharedCSS?window._pdfSharedCSS():'<style>body{font-family:monospace;padding:24px;}</style>'}
 </head><body>
 <button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
-${window._pdfBanner?window._pdfBanner(name,hcp):''}
+${window._pdfBanner?window._pdfBanner(name,hcp,logo):''}
 <div class="hero">
   <div><div class="hero-title">\u26F3 ${escHtml(r.courseName||'\u2014')}</div>
   <div class="hero-meta">${escHtml(meta)}</div></div>
@@ -641,7 +642,8 @@ function exportRoundTask(){
   downloadTask(`vc-round-task-${today()}.txt`, content);
 }
 
-function exportProfilePdf() {
+async function exportProfilePdf() {
+  const logo    = window._pdfLogoDataUrl ? await window._pdfLogoDataUrl() : '';
   const hcp     = getHandicap();
   const name    = profile.name || 'Golfer';
   const handed  = profile.handed || '';
@@ -718,7 +720,7 @@ ${window._pdfSharedCSS?window._pdfSharedCSS():'<style>body{font-family:monospace
 </style>
 </head><body>
 <button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
-${window._pdfBanner?window._pdfBanner(name,hcp):''}
+${window._pdfBanner?window._pdfBanner(name,hcp,logo):''}
 <div class="hero">
   <div class="avatar">${escHtml(name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase()||'\u26F3')}</div>
   <div style="flex:1">
