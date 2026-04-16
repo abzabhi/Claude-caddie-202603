@@ -82,9 +82,38 @@ function renderHandicap() {
           ${playerBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px">${playerBadges}</div>`:''}
           ${girStr||r.notes?`<div style="font-size:.58rem;color:var(--tx3)">${girStr}${escHtml(r.notes||'')}</div>`:''}
         </div>`:''}
+        ${(()=>{
+          const hasShotData = r.holes?.some(h=>h.shots?.some(sh=>sh.sg!==null&&sh.sg!==undefined));
+          if(!hasShotData) return '';
+          const sg = window._lrRoundSG ? window._lrRoundSG(r.holes, r.holes) : null;
+          const fir= window._lrRoundFIR? window._lrRoundFIR(r.holes, r.holes): null;
+          const girHit = r.holes?.filter(h=>h.gir===true).length||0;
+          const girOf  = r.holes?.filter(h=>h.gir!==null&&h.gir!==undefined).length||0;
+          if(!sg) return '';
+          const sgColor = sg.total>0?'var(--ac2)':sg.total<0?'var(--danger)':'var(--tx3)';
+          const sgFmt = v=>(v>0?'+':'')+v.toFixed(2);
+          const catColor = v=>v>0?'var(--ac2)':v<0?'var(--danger)':'var(--tx3)';
+          return `<div style="border:1px solid var(--br);border-radius:4px;margin:4px 0 6px;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;cursor:pointer;background:var(--sf)" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+              <span style="font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3)">SG</span>
+              <span style="font-size:.72rem;font-weight:700;color:${sgColor}">${sgFmt(sg.total)}</span>
+              <span style="font-size:.54rem;color:var(--tx3);margin-left:auto">\u25BC</span>
+            </div>
+            <div style="display:none;padding:6px 8px 4px">
+              <div style="display:flex;gap:10px;font-size:.6rem;margin-bottom:4px">
+                <span>OTT <strong style="color:${catColor(sg.OTT)}">${sgFmt(sg.OTT)}</strong></span>
+                <span>APP <strong style="color:${catColor(sg.APP)}">${sgFmt(sg.APP)}</strong></span>
+                <span>ARG <strong style="color:${catColor(sg.ARG)}">${sgFmt(sg.ARG)}</strong></span>
+                <span>PUTT <strong style="color:${catColor(sg.PUTT)}">${sgFmt(sg.PUTT)}</strong></span>
+              </div>
+              <div style="font-size:.58rem;color:var(--tx3)">FIR: ${fir?fir.hit+'/'+fir.eligible:'\u2014'} \u00B7 GIR: ${girHit}/${girOf}</div>
+            </div>
+          </div>`;
+        })()}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndToggleLink('${r.id}')">\uD83D\uDD17 Sessions</button>
-          ${isMulti?`<button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndRegenPdf('${r.id}')">\uD83D\uDCC4 PDF</button>`:''}
+          <button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndRegenPdf('${r.id}')">\uD83D\uDCC4 PDF</button>
+          ${r.holes?.some(h=>h.shots?.some(sh=>sh.sg!==null&&sh.sg!==undefined))?`<button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndRegenPdf('${r.id}','advanced')">\uD83D\uDCC4 PDF+</button>`:''}
           ${hasDetail?`<button class="btn sec" style="font-size:.6rem;padding:3px 9px" onclick="rndToggleDetail('${r.id}')">\u25BC Detail</button>`:''}
           <button style="background:var(--danger);color:white;border:1px solid var(--danger);border-radius:4px;cursor:pointer;font-size:.72rem;padding:3px 9px;margin-left:auto" onclick="confirmDeleteRound('${r.id}')">\u2715 Delete</button>
         </div>
@@ -233,46 +262,109 @@ function toggleRndSection(key){
   listEl.previousElementSibling?.querySelector('.chev')?.classList.toggle('open', open);
 }
 
-function rndRegenPdf(id) {
+function rndRegenPdf(id, exportMode) {
   const r = rounds.find(x=>x.id===id);
-  if(!r||!r.players?.length) return;
+  if(!r) return;
   const savedState = lrState;
-  const totalPar = parseInt(r.par)||72;
   const holeCount = r.holes?.length || 18;
+  /* Build players array -- solo rounds have no r.players, use profile as single player */
+  const hasPlayers = r.players?.length >= 1;
+  const soloScores = r.holes?.length
+    ? r.holes.map(h=>({
+        score:             +h.score||null,
+        putts:             +h.putts||null,
+        gir:               h.gir,
+        fir:               h.fir               !== undefined ? h.fir               : null,
+        notes:             h.notes||'',
+        shots:             Array.isArray(h.shots) ? h.shots : [],
+        on_green_distance: h.on_green_distance  !== undefined ? h.on_green_distance : null,
+        chip_putt_count:   h.chip_putt_count    !== undefined ? h.chip_putt_count   : null,
+        holed_out:         h.holed_out           || false,
+      }))
+    : Array.from({length:holeCount},()=>({score:null,putts:null,gir:null,notes:''}));
   lrState = {
-    courseName: r.courseName||'',
-    tee: r.tee||'',
-    date: r.date||today(),
-    conditions: r.notes||'calm',
-    mode: 'stroke',
-    rating: r.rating||'',
-    slope: r.slope||'',
+    courseName:      r.courseName||'',
+    tee:             r.tee||'',
+    date:            r.date||today(),
+    conditions:      r.conditions||r.notes||'calm',
+    mode:            'stroke',
+    rating:          r.rating||'',
+    slope:           r.slope||'',
+    linkedSessionId: r.sessionIds?.[0]||null,
     holes: r.holes?.length
       ? r.holes.map(h=>({n:+h.n,par:+h.par||4,yards:+h.yards||0,handicap:0}))
       : Array.from({length:holeCount},(_,i)=>({n:i+1,par:4,yards:0,handicap:0})),
-    players: r.players.map(p=>({
-      name: p.name||'Player',
-      isMe: p.isMe||false,
-      handicap: p.handicap||null,
-      scores: r.holes?.length
-        ? r.holes.map(h=>({
-            score:             +h.score||null,
-            putts:             +h.putts||null,
-            gir:               h.gir,
-            notes:             h.notes||'',
-            /* Phase 4 fields -- preserved through replay */
-            fir:               h.fir               !== undefined ? h.fir               : null,
-            shots:             Array.isArray(h.shots) ? h.shots : [],
-            on_green_distance: h.on_green_distance  !== undefined ? h.on_green_distance : null,
-            chip_putt_count:   h.chip_putt_count    !== undefined ? h.chip_putt_count   : null,
-            holed_out:         h.holed_out           || false,
-          }))
-        : Array.from({length:holeCount},()=>({score:null,putts:null,gir:null,notes:''})),
-    })),
+    players: hasPlayers
+      ? r.players.map(p=>({
+          name:     p.name||'Player',
+          isMe:     p.isMe||false,
+          handicap: p.handicap||null,
+          scores: r.holes?.length
+            ? r.holes.map(h=>({
+                score:             +h.score||null,
+                putts:             +h.putts||null,
+                gir:               h.gir,
+                fir:               h.fir               !== undefined ? h.fir               : null,
+                notes:             h.notes||'',
+                shots:             Array.isArray(h.shots) ? h.shots : [],
+                on_green_distance: h.on_green_distance  !== undefined ? h.on_green_distance : null,
+                chip_putt_count:   h.chip_putt_count    !== undefined ? h.chip_putt_count   : null,
+                holed_out:         h.holed_out           || false,
+              }))
+            : Array.from({length:holeCount},()=>({score:null,putts:null,gir:null,notes:''})),
+        }))
+      : [{
+          name:     profile.name || 'Golfer',
+          isMe:     true,
+          handicap: r.handicap||null,
+          scores:   soloScores,
+        }],
     netView: false,
   };
-  lrExportPdf();
+  /* Solo round with no hole-by-hole: show summary card only */
+  if (!r.holes?.length) {
+    _rndSummaryPdf(r);
+    lrState = savedState;
+    return;
+  }
+  lrExportPdf(exportMode||'simple');
   lrState = savedState;
+}
+
+/* Minimal summary PDF for score-only rounds (no hole data) */
+function _rndSummaryPdf(r) {
+  const name = profile.name || 'Golfer';
+  const hcp  = typeof getHandicap === 'function' ? getHandicap() : null;
+  const meta = [r.tee?r.tee+' tees':'', r.notes||''].filter(Boolean).join(' \u00B7 ');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Gordy \u2014 ${escHtml(r.courseName||'Round')}</title>
+${window._pdfFontsLink||''}
+${window._pdfSharedCSS?window._pdfSharedCSS():'<style>body{font-family:monospace;padding:24px;}</style>'}
+</head><body>
+<button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
+${window._pdfBanner?window._pdfBanner(name,hcp):''}
+<div class="hero">
+  <div><div class="hero-title">\u26F3 ${escHtml(r.courseName||'\u2014')}</div>
+  <div class="hero-meta">${escHtml(meta)}</div></div>
+  <div style="text-align:right;font-size:.62rem;color:#8a9e82">${escHtml(r.date||'')}</div>
+</div>
+<div class="card">
+  <h3>Round Summary</h3>
+  <table><tbody>
+    <tr><td style="color:#8a9e82;width:120px">Score</td><td><strong>${r.score||'\u2014'}</strong></td></tr>
+    <tr><td style="color:#8a9e82">Differential</td><td><strong>${r.diff!==null&&r.diff!==undefined?r.diff:'\u2014'}</strong></td></tr>
+    ${r.par?`<tr><td style="color:#8a9e82">Par</td><td>${r.par}</td></tr>`:''}
+    ${r.tee?`<tr><td style="color:#8a9e82">Tee</td><td>${escHtml(r.tee)}</td></tr>`:''}
+    ${r.rating?`<tr><td style="color:#8a9e82">Rating / Slope</td><td>${r.rating}${r.slope?' / '+r.slope:''}</td></tr>`:''}
+  </tbody></table>
+</div>
+<div class="footer">Gordy the Virtual Caddy \u00B7 Generated ${new Date().toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'})}</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+  const blob = new Blob([html],{type:'text/html'});
+  const url  = URL.createObjectURL(blob);
+  const w    = window.open(url,'_blank');
+  if(w) w.onunload=()=>URL.revokeObjectURL(url);
+  else  URL.revokeObjectURL(url);
 }
 
 function _rndLinkHTML(r){
@@ -610,13 +702,10 @@ function exportProfilePdf() {
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
-<title>Virtual Caddie \u2014 ${escHtml(name)}</title>
+<title>Gordy \u2014 ${escHtml(name)}</title>
+${window._pdfFontsLink||''}
+${window._pdfSharedCSS?window._pdfSharedCSS():'<style>body{font-family:monospace;padding:24px;}</style>'}
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'DM Mono',monospace,sans-serif;background:#f4efe6;color:#2c3a28;padding:32px;max-width:720px;margin:0 auto;}
-  @media print{body{background:#fff;padding:16px;}}
-  .card{background:#fff;border:1px solid #ddd5c4;border-radius:8px;padding:18px;margin-bottom:14px;}
-  .hero{background:linear-gradient(135deg,#e8f0e5,#fff);border:2px solid #3d6b35;border-radius:10px;padding:24px;margin-bottom:16px;display:flex;align-items:center;gap:20px;}
   .avatar{width:60px;height:60px;border-radius:50%;background:#3d6b35;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:700;flex-shrink:0;}
   .hero-name{font-size:1.5rem;font-weight:700;color:#2d5127;letter-spacing:-.01em;}
   .hero-sub{font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:#8a9e82;margin-top:3px;}
@@ -624,14 +713,12 @@ function exportProfilePdf() {
   .hcp-num{font-size:3rem;font-weight:700;color:#2d5127;line-height:1;}
   .hcp-lbl{font-size:.55rem;letter-spacing:.14em;text-transform:uppercase;color:#8a9e82;}
   .trend{font-size:.72rem;margin-top:4px;}
-  h3{font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:#8a9e82;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #ddd5c4;}
-  table{width:100%;border-collapse:collapse;font-size:.72rem;}
-  td{padding:4px 6px;border-bottom:1px solid #f0ebe0;}
-  tr:last-child td{border-bottom:none;}
-  .footer{text-align:center;font-size:.56rem;color:#8a9e82;margin-top:20px;letter-spacing:.1em;text-transform:uppercase;}
   .meta{font-size:.65rem;color:#5a6e52;margin-bottom:12px;}
+  .print-btn{display:inline-block;margin-bottom:12px;padding:5px 14px;background:#3d6b35;color:#fff;border:none;border-radius:4px;font-family:monospace;font-size:.68rem;cursor:pointer;}
 </style>
 </head><body>
+<button class="print-btn no-print" onclick="window.print()">\uD83D\uDDA8 Print / Save PDF</button>
+${window._pdfBanner?window._pdfBanner(name,hcp):''}
 <div class="hero">
   <div class="avatar">${escHtml(name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase()||'\u26F3')}</div>
   <div style="flex:1">
@@ -680,13 +767,54 @@ ${rounds.length ? `
   else  URL.revokeObjectURL(url);
 }
 
+function renderExportCard() {
+  const el = document.getElementById('exportCardBody');
+  if (!el) return;
+  const sorted = [...rounds].sort((a,b)=>b.date.localeCompare(a.date));
+  if (!sorted.length) {
+    el.innerHTML = '<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">No rounds saved yet.</div>';
+    return;
+  }
+  const rowsHtml = sorted.map(r=>{
+    const hasSG = r.holes?.some(h=>h.shots?.some(sh=>sh.sg!==null&&sh.sg!==undefined));
+    return `<label style="display:flex;align-items:center;gap:8px;font-size:.65rem;padding:3px 0;cursor:pointer">
+      <input type="checkbox" class="exp-chk" value="${r.id}" style="flex-shrink:0">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.courseName||'\u2014')}</span>
+      <span style="color:var(--tx3);white-space:nowrap">${fmtDate(r.date)}</span>
+      <span style="color:var(--tx2);white-space:nowrap">${r.score||'\u2014'}</span>
+      ${hasSG?'<span style="font-size:.52rem;color:var(--ac2);white-space:nowrap">SG</span>':''}
+    </label>`;
+  }).join('');
+  el.innerHTML = `<div style="max-height:200px;overflow-y:auto;border:1px solid var(--br);border-radius:4px;padding:4px 8px;margin-bottom:8px">${rowsHtml}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:.65rem;cursor:pointer">
+        <input type="radio" name="expMode" value="simple" checked> Simple
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:.65rem;cursor:pointer">
+        <input type="radio" name="expMode" value="advanced"> Advanced (SG + Caddie)
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" style="font-size:.65rem;padding:4px 12px" onclick="runExportCard()">\uD83D\uDCC4 Export Selected</button>
+      <button class="btn sec" style="font-size:.65rem;padding:4px 10px" onclick="document.querySelectorAll('.exp-chk').forEach(c=>c.checked=true)">All</button>
+      <button class="btn sec" style="font-size:.65rem;padding:4px 10px" onclick="document.querySelectorAll('.exp-chk').forEach(c=>c.checked=false)">None</button>
+    </div>`;
+}
+
+function runExportCard() {
+  const checked = [...document.querySelectorAll('.exp-chk:checked')].map(c=>c.value);
+  if (!checked.length) { alert('Select at least one round.'); return; }
+  const mode = document.querySelector('input[name="expMode"]:checked')?.value || 'simple';
+  checked.forEach(id => rndRegenPdf(id, mode));
+}
+
 export {
   renderHandicap, onRoundCourseSelect, onRoundTeeSelect, updateDiffPreview,
   addRound, deleteRound, updateRound, toggleRndSection, rndRegenPdf,
   _rndLinkHTML, _rndDetailHTML, rndToggleDetail, rndToggleLink, rndDetailView,
   rndSaveLinks, toggleRoundMode, _buildRoundHoleGrid, _updateRndSubtotals,
   rndGridView, rndGirCycle, toggleRndLinker, _buildRndLinker,
-  exportRoundTask, exportProfilePdf
+  exportRoundTask, exportProfilePdf, renderExportCard
 };
 
 Object.assign(window, {
@@ -694,6 +822,6 @@ Object.assign(window, {
   addRound, deleteRound, confirmDeleteRound, updateRound, toggleRndSection, rndRegenPdf,
   rndToggleCard, rndToggleDetail, rndToggleLink, rndDetailView, rndSaveLinks,
   toggleRoundMode, rndGridView, rndGirCycle, toggleRndLinker,
-  exportRoundTask, exportProfilePdf
+  exportRoundTask, exportProfilePdf, renderExportCard, runExportCard, _rndSummaryPdf
 });
 Object.assign(window, { addRound, exportProfilePdf, exportRoundTask, onRoundCourseSelect, onRoundTeeSelect, toggleRndLinker, toggleRndSection, toggleRoundMode, updateDiffPreview });
