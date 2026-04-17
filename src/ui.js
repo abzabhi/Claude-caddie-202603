@@ -561,9 +561,9 @@ function renderPerfSummary() {
     if(hasSGFn){
       var sg=window._lrRoundSG(r.holes,r.holes);
       if(sg&&sg.total!==null&&sg.total!==undefined){
-        sgTotals.total+=sg.total||0;sgTotals.ott+=sg.ott||0;
-        sgTotals.app+=sg.app||0;sgTotals.arg+=sg.arg||0;
-        sgTotals.putt+=sg.putt||0;sgRounds++;
+        sgTotals.total+=sg.total||0;sgTotals.ott+=sg.OTT||0;
+        sgTotals.app+=sg.APP||0;sgTotals.arg+=sg.ARG||0;
+        sgTotals.putt+=sg.PUTT||0;sgRounds++;
       }
     }
   });
