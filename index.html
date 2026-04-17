@@ -758,9 +758,10 @@ body{
       <div class="stat-card" onclick="showTabFromProfile('rounds')" style="cursor:pointer" title="Go to Rounds tab"><div class="stat-num" id="statRounds">0</div><div class="stat-lbl">Rounds Logged</div></div>
       <div class="stat-card" onclick="showTabFromProfile('clubs')" style="cursor:pointer" title="Go to Clubs tab"><div class="stat-num" id="statClubSessions">0</div><div class="stat-lbl">Club Sessions</div></div>
     </div>
-    <div class="stats-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+    <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px;">
       <div class="stat-card" onclick="showTabFromProfile('courses')" style="cursor:pointer" title="Go to Courses tab"><div class="stat-num" id="statCourses">0</div><div class="stat-lbl">Courses Saved</div></div>
       <div class="stat-card" onclick="showTabFromProfile('clubs')" style="cursor:pointer" title="Go to Clubs tab"><div class="stat-num" id="statActiveClubs">0</div><div class="stat-lbl">Active Clubs</div></div>
+      <div class="stat-card" onclick="showTabFromProfile('sessions')" style="cursor:pointer" title="Go to Sessions tab"><div class="stat-num" id="statRangeSessions">0</div><div class="stat-lbl">Range Sessions</div></div>
     </div>
 
     <div class="card">
@@ -814,6 +815,16 @@ body{
     </div>
 
     <!-- gistSettingsCard2 removed -- was unused sync card overflow target (A1 fix) -->
+
+    <!-- Performance Summary card -->
+    <div class="card" style="margin-top:10px">
+      <div class="collapsible-hdr" onclick="toggleCard('perf-summary-card')" id="perf-summary-card-hdr">
+        <span>&#128200; Performance Summary</span><span class="chev">&#9660;</span>
+      </div>
+      <div id="perf-summary-card-body" style="display:none;padding-top:10px">
+        <div id="perf-summary-body"></div>
+      </div>
+    </div>
 
     <!-- Data Management — collapsible, closed by default -->
     <div class="card">
