@@ -739,39 +739,38 @@ function renderPerfSummary() {
   // Range display
   html+='<div style="font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);font-weight:700;padding:10px 0 6px;border-top:1px solid var(--br);margin-top:4px">Range</div>';
   if(clubEntries.length){
-    // Table header
-    html+='<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:2px 0;border-bottom:1px solid var(--br);margin-bottom:2px">';
-    html+='<span style="font-size:.5rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3)">Club</span>';
-    html+='<span style="font-size:.5rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3);text-align:center">Bull\u00B7Inn\u00B7Out</span>';
-    html+='<span style="font-size:.5rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3);text-align:center">\u2191\u00B7\u21B0\u00B7\u21B1</span>';
-    html+='<span style="font-size:.5rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3);text-align:right">Shots</span>';
-    html+='</div>';
+    var sep='<span style="color:var(--br);margin:0 3px">|</span>';
     clubEntries.forEach(function(e){
       var d=e.disp, hasStats=e.count>=5&&d;
-      var accStr='\u2014', fpStr='\u2014';
+      html+='<div style="padding:4px 0;border-bottom:1px solid var(--br)">';
+      html+='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:0;font-size:.58rem;color:var(--tx3)">';
+      html+='<span style="color:var(--tx2);font-weight:600;margin-right:6px">'+e.name+'</span>';
       if(hasStats){
         var innerTot=d.inner.reduce(function(n,v){return n+v;},0);
         var outerTot=d.outer.reduce(function(n,v){return n+v;},0);
         var grandTot=d.bull+innerTot+outerTot;
         var fpTot=d.fp.str+d.fp.ltr+d.fp.rtl;
-        if(grandTot) accStr=Math.round(d.bull/grandTot*100)+'%\u00B7'+Math.round(innerTot/grandTot*100)+'%\u00B7'+Math.round(outerTot/grandTot*100)+'%';
-        if(fpTot) fpStr=Math.round(d.fp.str/fpTot*100)+'%\u00B7'+Math.round(d.fp.ltr/fpTot*100)+'%\u00B7'+Math.round(d.fp.rtl/fpTot*100)+'%';
+        if(grandTot){
+          html+=sep;
+          html+='<span style="margin:0 6px">Bull '+Math.round(d.bull/grandTot*100)+'% | Inn '+Math.round(innerTot/grandTot*100)+'% | Out '+Math.round(outerTot/grandTot*100)+'%</span>';
+        }
+        if(fpTot){
+          html+=sep;
+          html+='<span style="margin:0 6px">Str '+Math.round(d.fp.str/fpTot*100)+'% | LtR '+Math.round(d.fp.ltr/fpTot*100)+'% | RtL '+Math.round(d.fp.rtl/fpTot*100)+'%</span>';
+        }
       }
-      html+='<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:4px 8px;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)">';
-      html+='<span style="font-size:.62rem;color:var(--tx3)">'+e.name+'</span>';
-      html+='<span style="font-size:.58rem;color:var(--tx3);text-align:center;font-family:monospace">'+accStr+'</span>';
-      html+='<span style="font-size:.58rem;color:var(--tx3);text-align:center;font-family:monospace">'+fpStr+'</span>';
-      html+='<span style="font-size:.58rem;color:var(--tx2);text-align:right">'+e.count+'</span>';
+      html+=sep+'<span style="margin-left:6px">'+e.count+' shots</span>';
       html+='</div>';
       if(hasStats){
         var miss=_dominantMiss(d), tag=_shotTag(d,miss);
         if((miss&&miss!=='\u2014')||(tag&&tag!=='\u2014')){
-          html+='<div style="display:flex;gap:8px;padding:1px 0 4px;border-bottom:1px solid var(--br)">';
-          if(miss&&miss!=='\u2014') html+='<span style="font-size:.53rem;color:var(--tx3)">Miss: '+miss+'</span>';
-          if(tag&&tag!=='\u2014') html+='<span style="font-size:.55rem;font-weight:600;color:var(--tx2)">'+tag+'</span>';
+          html+='<div style="font-size:.55rem;color:var(--tx3);margin-top:2px">';
+          if(miss&&miss!=='\u2014') html+='Miss: '+miss;
+          if(tag&&tag!=='\u2014') html+=' &nbsp;<span style="font-weight:600;color:var(--tx2)">'+tag+'</span>';
           html+='</div>';
         }
       }
+      html+='</div>';
     });
   } else {
     html+='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">No range sessions yet.</div>';
