@@ -490,6 +490,7 @@ function renderProfile() {
   if(el('statCourses'))       el('statCourses').textContent       = courses.length;
   if(el('statSessions'))      el('statSessions').textContent      = history.length;
   if(el('statClubSessions'))  el('statClubSessions').textContent  = totalClubSessions;
+  if(el('statRangeSessions')) el('statRangeSessions').textContent = rangeSessions.length;
   // Club type breakdown
   const breakdown = el('clubTypeBreakdown');
   if(breakdown) {
@@ -511,7 +512,161 @@ function renderProfile() {
         </div>`).join('');
     }
   }
+  renderPerfSummary();
   window.renderGistSettings();
+}
+
+function renderPerfSummary() {
+  var body = document.getElementById('perf-summary-body');
+  if (!body) return;
+
+  var firHit=0,firElig=0,girHit=0,girElig=0;
+  var puttTotal=0,puttRounds=0,totalPuttHoles=0;
+  var onePuttCount=0,threePuttCount=0;
+  var puttsOnGIR=0,puttsOnGIRCount=0;
+  var scrambleHit=0,scrambleElig=0;
+  var birdiesOrBetter=0,bogeysOrWorse=0;
+  var parGroups={3:{s:0,n:0},4:{s:0,n:0},5:{s:0,n:0}};
+  var sgTotals={total:0,ott:0,app:0,arg:0,putt:0};
+  var sgRounds=0;
+  var hasSGFn=!!window._lrRoundSG;
+
+  rounds.forEach(function(r){
+    if(!r.holes||!r.holes.length) return;
+    var rPutts=0,rHasPutts=false;
+    r.holes.forEach(function(h){
+      if(h.fir!==null&&h.fir!==undefined){firElig++;if(h.fir===true)firHit++;}
+      if(h.gir!==null&&h.gir!==undefined){girElig++;if(h.gir===true)girHit++;}
+      if(h.putts!==null&&h.putts!==undefined){
+        var pt=+h.putts;
+        rPutts+=pt;rHasPutts=true;totalPuttHoles++;
+        if(pt===1)onePuttCount++;
+        if(pt>=3)threePuttCount++;
+        if(h.gir===true){puttsOnGIR+=pt;puttsOnGIRCount++;}
+      }
+      var par=parseInt(h.par)||0;
+      var sc=(h.score!==null&&h.score!==undefined)?+h.score:null;
+      if(par>=3&&par<=5&&sc!==null){
+        parGroups[par].s+=(sc-par);parGroups[par].n++;
+        var d=sc-par;
+        if(d<=-1)birdiesOrBetter++;
+        if(d>=1)bogeysOrWorse++;
+      }
+      if(h.gir===false&&sc!==null&&par>=3){
+        scrambleElig++;
+        if(sc<=par)scrambleHit++;
+      }
+    });
+    if(rHasPutts){puttTotal+=rPutts;puttRounds++;}
+    if(hasSGFn){
+      var sg=window._lrRoundSG(r.holes,r.holes);
+      if(sg&&sg.total!==null&&sg.total!==undefined){
+        sgTotals.total+=sg.total||0;sgTotals.ott+=sg.ott||0;
+        sgTotals.app+=sg.app||0;sgTotals.arg+=sg.arg||0;
+        sgTotals.putt+=sg.putt||0;sgRounds++;
+      }
+    }
+  });
+
+  var clubMap={};
+  rangeSessions.forEach(function(s){
+    if(!s.shots) return;
+    s.shots.forEach(function(sh){
+      var cid=sh.clubId;
+      clubMap[cid]=(clubMap[cid]||0)+1;
+    });
+  });
+  var clubEntries=Object.keys(clubMap).map(function(cid){
+    var c=bag.find(function(x){return x.id===cid;});
+    return {name:c?(c.identifier||c.type):cid,count:clubMap[cid]};
+  }).sort(function(a,b){return b.count-a.count;});
+
+  if(!rounds.length&&!rangeSessions.length){
+    body.innerHTML='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">Play some rounds to see your stats.</div>';
+    return;
+  }
+
+  var pct=function(a,b){return b>0?Math.round(a/b*100)+'%':'\u2014';};
+  var fix=function(v){return v.toFixed(1);};
+  var sgFmt=function(v){return (v>0?'+':'')+v.toFixed(2);};
+  var sgCol=function(v){return v>0?'var(--ac2)':v<0?'var(--danger)':'var(--tx2)';};
+  var lbl=function(t){return '<div style="font-size:.52rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);margin-bottom:1px">'+t+'</div>';};
+  var bigVal=function(v,col){return '<div style="font-size:.66rem;color:'+(col||'var(--tx2)')+';font-weight:600">'+v+'</div>';};
+  var statRow=function(l,v,vc){return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--br)"><span style="font-size:.6rem;color:var(--tx3)">'+l+'</span><span style="font-size:.62rem;color:'+(vc||'var(--tx2)')+';font-weight:600">'+v+'</span></div>';};
+  var secHdr=function(t){return '<div style="font-size:.52rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);padding:8px 0 4px;border-top:1px solid var(--br);margin-top:4px">'+t+'</div>';};
+  var pholder=function(t){return '<div style="font-size:.6rem;font-style:italic;color:var(--tx3);padding:5px 0">'+t+'</div>';};
+
+  var html='';
+  html+='<div style="font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tx2);font-weight:600;padding-bottom:6px">On the Course</div>';
+
+  if(rounds.length){
+    // Quick-glance row
+    var firStr=firElig>0?firHit+'/'+firElig+' ('+pct(firHit,firElig)+')':'\u2014';
+    var girStr=girElig>0?girHit+'/'+girElig+' ('+pct(girHit,girElig)+')':'\u2014';
+    var puttStr=puttRounds>0?fix(puttTotal/puttRounds):'\u2014';
+    var qc=function(l,v,border){return '<div style="flex:1;text-align:center;padding:6px 4px'+(border?';border-right:1px solid var(--br)':'')+'">'+ lbl(l)+bigVal(v)+'</div>';};
+    html+='<div style="display:flex;border:1px solid var(--br);border-radius:5px;overflow:hidden;margin-bottom:10px">';
+    html+=qc('FIR',firStr,true);
+    html+=qc('GIR',girStr,true);
+    html+=qc('Avg Putts',puttStr,false);
+    html+='</div>';
+
+    // SG
+    if(hasSGFn&&sgRounds>0){
+      html+=secHdr('Strokes Gained');
+      html+='<div style="text-align:center;padding:4px 0 8px">';
+      html+='<div style="font-size:.52rem;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase">Total &middot; '+sgRounds+' round'+(sgRounds!==1?'s':'')+'</div>';
+      html+='<div style="font-size:.9rem;font-weight:700;color:'+sgCol(sgTotals.total)+'">'+sgFmt(sgTotals.total)+'</div>';
+      html+='</div>';
+      html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:8px">';
+      [['OTT',sgTotals.ott],['APP',sgTotals.app],['ARG',sgTotals.arg],['PUTT',sgTotals.putt]].forEach(function(pair){
+        html+='<div style="text-align:center;border:1px solid var(--br);border-radius:4px;padding:5px 2px">'+lbl(pair[0])+'<span style="font-size:.64rem;font-weight:600;color:'+sgCol(pair[1])+'">'+sgFmt(pair[1])+'</span></div>';
+      });
+      html+='</div>';
+    }
+
+    // Course Management
+    html+=secHdr('Course Management');
+    if(parGroups[3].n||parGroups[4].n||parGroups[5].n){
+      html+='<div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 6px;align-items:center;margin-bottom:8px">';
+      html+='<div style="font-size:.52rem;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3)">Avg vs par</div>';
+      [3,4,5].forEach(function(p){html+='<div style="font-size:.52rem;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);text-align:center">Par '+p+'</div>';});
+      html+='<div></div>';
+      [3,4,5].forEach(function(p){
+        var g=parGroups[p];
+        var avg=g.n>0?g.s/g.n:null;
+        var col=avg===null?'var(--tx3)':avg<0?'var(--ac2)':avg>0?'var(--danger)':'var(--tx2)';
+        html+='<div style="text-align:center;font-size:.66rem;font-weight:600;color:'+col+'">'+(avg===null?'\u2014':(avg>0?'+':'')+fix(avg))+'</div>';
+      });
+      html+='</div>';
+    }
+    if(birdiesOrBetter||bogeysOrWorse){
+      html+=statRow('Birdies &amp; better',birdiesOrBetter||'\u2014','var(--ac2)');
+      html+=statRow('Bogeys &amp; worse',bogeysOrWorse||'\u2014','var(--danger)');
+    }
+    if(totalPuttHoles>0){
+      html+=statRow('1-putt %',pct(onePuttCount,totalPuttHoles));
+      html+=statRow('3-putt %',pct(threePuttCount,totalPuttHoles));
+    }
+    if(puttsOnGIRCount>0)html+=statRow('Avg putts / GIR',fix(puttsOnGIR/puttsOnGIRCount));
+    if(scrambleElig>0)html+=statRow('Scrambling',scrambleHit+'/'+scrambleElig+' ('+pct(scrambleHit,scrambleElig)+')');
+    html+=pholder('Approach &amp; Tee \u2014 coming soon');
+  } else {
+    html+='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">Play some rounds to see your stats.</div>';
+  }
+
+  // Range
+  html+=secHdr('Range');
+  if(clubEntries.length){
+    clubEntries.forEach(function(e){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)"><span style="font-size:.62rem;color:var(--tx2)">'+e.name+'</span><span style="font-size:.62rem;color:var(--tx3)">'+e.count+' shots</span></div>';
+    });
+    html+=pholder('Implied Bias \u2014 coming soon');
+  } else {
+    html+='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">No range sessions yet.</div>';
+  }
+
+  body.innerHTML=html;
 }
 
 // -- Tab navigation (programmatic) --------------------------------------------
