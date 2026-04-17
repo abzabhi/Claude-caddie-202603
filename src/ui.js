@@ -568,19 +568,33 @@ function renderPerfSummary() {
     }
   });
 
-  var clubMap={};
+  var clubMap={}, clubDispMap={};
   rangeSessions.forEach(function(s){
     if(!s.clubSummary) return;
     s.clubSummary.forEach(function(entry){
       var cid=entry.clubId;
       var count=(entry.targets||[]).reduce(function(n,t){return n+(t.shotCount||0);},0);
       clubMap[cid]=(clubMap[cid]||0)+count;
+      if(!clubDispMap[cid]) clubDispMap[cid]={bull:0,inner:[0,0,0,0,0,0,0,0],outer:[0,0,0,0,0,0,0,0],fp:{str:0,ltr:0,rtl:0}};
+      var d=clubDispMap[cid];
+      (entry.targets||[]).forEach(function(t){
+        if(!t.dispersion) return;
+        var dp=t.dispersion;
+        d.bull+=dp.bull.total||0;
+        d.fp.str+=dp.bull.flightPaths.straight||0;
+        d.fp.ltr+=dp.bull.flightPaths['left-to-right']||0;
+        d.fp.rtl+=dp.bull.flightPaths['right-to-left']||0;
+        for(var i=0;i<8;i++){
+          if(dp.inner[i]){d.inner[i]+=dp.inner[i].total||0;d.fp.str+=dp.inner[i].flightPaths.straight||0;d.fp.ltr+=dp.inner[i].flightPaths['left-to-right']||0;d.fp.rtl+=dp.inner[i].flightPaths['right-to-left']||0;}
+          if(dp.outer[i]){d.outer[i]+=dp.outer[i].total||0;d.fp.str+=dp.outer[i].flightPaths.straight||0;d.fp.ltr+=dp.outer[i].flightPaths['left-to-right']||0;d.fp.rtl+=dp.outer[i].flightPaths['right-to-left']||0;}
+        }
+      });
     });
   });
   var clubEntries=Object.keys(clubMap).map(function(cid){
     var c=bag.find(function(x){return x.id===cid;});
     var storedName=rangeSessions.reduce(function(n,s){if(n)return n;var e=s.clubSummary&&s.clubSummary.find(function(x){return x.clubId===cid;});return e?e.clubName:null;},null);
-    return {name:c?(c.identifier||c.type):storedName||cid,count:clubMap[cid]};
+    return {name:c?(c.identifier||c.type):storedName||cid,count:clubMap[cid],disp:clubDispMap[cid]||null};
   }).sort(function(a,b){return b.count-a.count;});
 
   if(!rounds.length&&!rangeSessions.length){
@@ -657,13 +671,108 @@ function renderPerfSummary() {
     html+='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">Play some rounds to see your stats.</div>';
   }
 
-  // Range
+  // Range derived stat helpers
+  var _bucketNames=['Long','Long-Right','Right','Short-Right','Short','Short-Left','Left','Long-Left'];
+  var _tagLookup=function(path,miss,sev){
+    if(!miss||miss==='\u2014') return 'Target';
+    if(path==='Str'){
+      if(miss==='Right'||miss==='Long-Right') return 'Push';
+      if(miss==='Left'||miss==='Long-Left') return 'Pull';
+      if(miss==='Short') return 'Chunk/Thin';
+      return '\u2014';
+    }
+    if(path==='LtR'){
+      if(miss==='Right'||miss==='Long-Right') return sev==='Inner'?'Fade':'Slice';
+      if(miss==='Left'||miss==='Long-Left') return 'Double Cross (LtR)';
+      return '\u2014';
+    }
+    if(path==='RtL'){
+      if(miss==='Left'||miss==='Long-Left') return sev==='Inner'?'Draw':'Hook';
+      if(miss==='Right'||miss==='Long-Right') return 'Double Cross (RtL)';
+      return '\u2014';
+    }
+    return '\u2014';
+  };
+  var _dominantMiss=function(d){
+    var buckets=[];
+    for(var i=0;i<8;i++) buckets.push({i:i,n:(d.inner[i]||0)+(d.outer[i]||0),outerN:d.outer[i]||0});
+    buckets.sort(function(a,b){return b.n-a.n;});
+    if(!buckets[0].n) return '\u2014';
+    if(buckets[0].n>buckets[1].n) return _bucketNames[buckets[0].i];
+    var topN=buckets[0].n, tied=buckets.filter(function(b){return b.n===topN;});
+    if(tied.length===2){
+      var ai=tied[0].i, bi=tied[1].i;
+      if(tied[0].outerN!==tied[1].outerN) return _bucketNames[tied[0].outerN>tied[1].outerN?tied[0].i:tied[1].i];
+      var diff=Math.abs(ai-bi);
+      if(diff===4){
+        var an=_bucketNames[ai],bn=_bucketNames[bi];
+        return ((an==='Right'||bn==='Right')||(an==='Left'||bn==='Left'))?'Two-Way Miss (L/R)':'Two-Way Miss (Dist)';
+      }
+      var mn=Math.min(ai,bi),mx=Math.max(ai,bi);
+      var adj=(mx-mn===1)||(mn===0&&mx===7);
+      if(adj){
+        var combos={0:{'1':'Broad Long-Right'},1:{'2':'Broad Right'},2:{'3':'Broad Short-Right'},3:{'4':'Broad Short'},4:{'5':'Broad Short-Left'},5:{'6':'Broad Left'},6:{'7':'Broad Long-Left'}};
+        var wrap=(mn===0&&mx===7)?'Broad Long':null;
+        return wrap||(combos[mn]&&combos[mn][mx])||_bucketNames[buckets[0].i];
+      }
+    }
+    return _bucketNames[buckets[0].i];
+  };
+  var _shotTag=function(d,miss){
+    var innerTot=d.inner.reduce(function(n,v){return n+v;},0);
+    var outerTot=d.outer.reduce(function(n,v){return n+v;},0);
+    var grandTot=d.bull+innerTot+outerTot;
+    if(!grandTot) return '\u2014';
+    if(d.bull/grandTot>0.5||!miss||miss==='\u2014') return 'Target';
+    var sev=innerTot>=outerTot?'Inner':'Outer';
+    var fp=d.fp, fpTot=fp.str+fp.ltr+fp.rtl;
+    if(!fpTot) return '\u2014';
+    var paths=[['Str',fp.str],['LtR',fp.ltr],['RtL',fp.rtl]];
+    paths.sort(function(a,b){return b[1]-a[1];});
+    if(paths[0][1]>paths[1][1]) return _tagLookup(paths[0][0],miss,sev);
+    if(miss.indexOf('Two-Way')===0) return 'Two-Way Miss';
+    var sevW={'Hook':3,'Slice':3,'Pull':2,'Push':2,'Draw':1,'Fade':1};
+    var t1=_tagLookup(paths[0][0],miss,sev), t2=_tagLookup(paths[1][0],miss,sev);
+    return (sevW[t1]||0)>=(sevW[t2]||0)?t1:t2;
+  };
+
+  // Range display
   html+=secHdr('Range');
   if(clubEntries.length){
     clubEntries.forEach(function(e){
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--br)"><span style="font-size:.62rem;color:var(--tx2)">'+e.name+'</span><span style="font-size:.62rem;color:var(--tx3)">'+e.count+' shots</span></div>';
+      html+='<div style="padding:5px 0 4px;border-bottom:1px solid var(--br)">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:baseline">';
+      html+='<span style="font-size:.64rem;color:var(--tx2);font-weight:600">'+e.name+'</span>';
+      html+='<span style="font-size:.6rem;color:var(--tx3)">'+e.count+' shots</span>';
+      html+='</div>';
+      if(e.count>=5&&e.disp){
+        var d=e.disp;
+        var innerTot=d.inner.reduce(function(n,v){return n+v;},0);
+        var outerTot=d.outer.reduce(function(n,v){return n+v;},0);
+        var grandTot=d.bull+innerTot+outerTot;
+        var fpTot=d.fp.str+d.fp.ltr+d.fp.rtl;
+        if(grandTot){
+          html+='<div style="display:flex;gap:10px;margin-top:3px">';
+          html+='<span style="font-size:.55rem;color:var(--tx3)">\u25CF Bull '+Math.round(d.bull/grandTot*100)+'%</span>';
+          html+='<span style="font-size:.55rem;color:var(--tx3)">Inner '+Math.round(innerTot/grandTot*100)+'%</span>';
+          html+='<span style="font-size:.55rem;color:var(--tx3)">Outer '+Math.round(outerTot/grandTot*100)+'%</span>';
+          html+='</div>';
+        }
+        if(fpTot){
+          html+='<div style="display:flex;gap:10px;margin-top:2px">';
+          html+='<span style="font-size:.55rem;color:var(--tx3)">\u2192 Str '+Math.round(d.fp.str/fpTot*100)+'%</span>';
+          html+='<span style="font-size:.55rem;color:var(--tx3)">LtR '+Math.round(d.fp.ltr/fpTot*100)+'%</span>';
+          html+='<span style="font-size:.55rem;color:var(--tx3)">RtL '+Math.round(d.fp.rtl/fpTot*100)+'%</span>';
+          html+='</div>';
+        }
+        var miss=_dominantMiss(d), tag=_shotTag(d,miss);
+        html+='<div style="display:flex;gap:8px;align-items:center;margin-top:3px">';
+        if(miss&&miss!=='\u2014') html+='<span style="font-size:.55rem;color:var(--tx3)">Miss: '+miss+'</span>';
+        if(tag&&tag!=='\u2014') html+='<span style="font-size:.6rem;font-weight:600;color:var(--tx2)">'+tag+'</span>';
+        html+='</div>';
+      }
+      html+='</div>';
     });
-    html+=pholder('Implied Bias \u2014 coming soon');
   } else {
     html+='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">No range sessions yet.</div>';
   }
