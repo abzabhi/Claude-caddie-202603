@@ -570,10 +570,11 @@ function renderPerfSummary() {
 
   var clubMap={};
   rangeSessions.forEach(function(s){
-    if(!s.shots) return;
-    s.shots.forEach(function(sh){
-      var cid=sh.clubId;
-      clubMap[cid]=(clubMap[cid]||0)+1;
+    if(!s.clubSummary) return;
+    s.clubSummary.forEach(function(entry){
+      var cid=entry.clubId;
+      var count=(entry.targets||[]).reduce(function(n,t){return n+(t.shotCount||0);},0);
+      clubMap[cid]=(clubMap[cid]||0)+count;
     });
   });
   var clubEntries=Object.keys(clubMap).map(function(cid){
