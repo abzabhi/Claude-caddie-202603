@@ -579,7 +579,8 @@ function renderPerfSummary() {
   });
   var clubEntries=Object.keys(clubMap).map(function(cid){
     var c=bag.find(function(x){return x.id===cid;});
-    return {name:c?(c.identifier||c.type):cid,count:clubMap[cid]};
+    var storedName=rangeSessions.reduce(function(n,s){if(n)return n;var e=s.clubSummary&&s.clubSummary.find(function(x){return x.clubId===cid;});return e?e.clubName:null;},null);
+    return {name:c?(c.identifier||c.type):storedName||cid,count:clubMap[cid]};
   }).sort(function(a,b){return b.count-a.count;});
 
   if(!rounds.length&&!rangeSessions.length){
