@@ -338,3 +338,16 @@ export function vizEllipsePath(cx, cy, rxR, rxL, ryU, ryD, tilt) {
   ].join(' ');
 }
 export function fmtDate(iso) { if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${m}/${d}/${y.slice(2)}`; }
+
+/* SLUG1 -- deterministic stable key: brand|type|identifier|loft|stiffness
+   normalized lowercase, spaces->'-', non-alphanum stripped.
+   Written at creation + backfilled on load(). Never reassigned post-create.
+   Placed here (not clubs.js) to avoid circular import with store.js.
+   Read-side still uses legacy keys until Pass 2. */
+export function clubSlug(c) {
+  if(!c) return '';
+  var norm = function(v) {
+    return String(v==null?'':v).toLowerCase().trim().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');
+  };
+  return [norm(c.brand), norm(c.type), norm(c.identifier), norm(c.loft), norm(c.stiffness)].join('|');
+}
