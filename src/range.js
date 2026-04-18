@@ -11,9 +11,11 @@ import {
   ZONE_SEGMENT_LABELS, ZONE_RING_RADII,
   FLIGHT_PATHS, VIZ_COLORS
 } from './constants.js';
-import { deriveStats, fmtDate, clubSlug } from './geo.js';
+import { deriveStats, fmtDate, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 
+/* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
+*/
 
 // -----------------------------------------------------------------------------
 // Module state
@@ -632,7 +634,7 @@ function rangeRecordShot() {
     radial_ring:    _pendingRing,
     radial_segment: _pendingSegment,
     flight_path:    _pendingFlight,
-    timestamp:      _localISO(),
+    timestamp:      localISO(), /* CLEAN11 */
     timestampDelta: Math.floor((Date.now() - _sessionStart) / 1000),
     yardage:        _rangeState.targetYardage,
     entryType:      SESSION_TYPES.RANGE

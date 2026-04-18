@@ -50,6 +50,7 @@ function _doProcessDataText(text) {
   let section=null, cur=null, currentCourse=null, currentTee=null, currentEntry=null;
   const newCourses=[], newHistory=[];
   let newProfile={}, newHcpMode=null, newManualHcp=null, newNoteLines=[];
+  const newRangeSessions=[]; /* CLEAN5 -- rangeSessions was silently dropped on legacy TXT import */
   for(const raw of lines) {
     const line=raw.trim();
     if(!line||line.startsWith('#')) continue;
@@ -60,6 +61,11 @@ function _doProcessDataText(text) {
     if(line==='=== HANDICAP ==='){section='handicap';continue;}
     if(line==='=== FLIGHT_REF ==='){section='flightref';continue;}
     if(line==='=== HISTORY ==='){section='history';continue;}
+    if(line==='=== RANGE_SESSIONS ==='){section='rangeSessions';continue;} /* CLEAN5 */
+    if(section==='rangeSessions'&&line.startsWith('RANGE_SESSION | ')){ /* CLEAN5 */
+      try { const s=JSON.parse(line.slice('RANGE_SESSION | '.length)); if(s&&s.sessionId) newRangeSessions.push(s); } catch {}
+      continue;
+    }
     if(section==='profile') {
       const p=line.split('|').map(s=>s.trim());
       if(p[0]==='NAME')        newProfile.name         =p[1]||'';
@@ -166,6 +172,8 @@ function _doProcessDataText(text) {
     const existingIds = new Set(history.map(h=>h.id));
     newHistory.forEach(h=>{ if(!existingIds.has(h.id)) history.unshift(h); });
   }
+  /* CLEAN5 -- restore rangeSessions on legacy TXT import (was silently dropped) */
+  if(newRangeSessions.length){const ids=new Set(rangeSessions.map(s=>s.sessionId)); newRangeSessions.forEach(s=>{if(!ids.has(s.sessionId)) rangeSessions.push(s);});}
   document.getElementById('uploadBanner').style.display='none';
   save(); renderAll();
   alert('Data imported successfully.');

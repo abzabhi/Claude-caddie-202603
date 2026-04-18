@@ -640,6 +640,8 @@ function exportRoundTask(){
 }
 
 async function exportProfilePdf() {
+  /* CLEAN9 -- open window synchronously before any await to preserve user-gesture context on mobile */
+  const pdfWin = window.open('', '_blank');
   const logo    = window._pdfLogoDataUrl ? await window._pdfLogoDataUrl() : '';
   const hcp     = getHandicap();
   const name    = profile.name || 'Golfer';
@@ -759,11 +761,8 @@ ${rounds.length ? `
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
-  const blob = new Blob([html], {type:'text/html'});
-  const url  = URL.createObjectURL(blob);
-  const w    = window.open(url, '_blank');
-  if(w) w.onunload = () => URL.revokeObjectURL(url);
-  else  URL.revokeObjectURL(url);
+  /* CLEAN9 -- write directly to pre-opened window; avoids blob URL popup block on mobile */
+  if(pdfWin){ pdfWin.document.open(); pdfWin.document.write(html); pdfWin.document.close(); }
 }
 
 function renderExportCard() {

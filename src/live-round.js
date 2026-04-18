@@ -1,9 +1,11 @@
 import { uid, today, save, courses, rounds, history, profile, bag } from './store.js';
 import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
-import { calcDiff, clubSlug } from './geo.js';
+import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 import { renderHandicap } from './rounds.js';
 
+/* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
+*/
 
 // \u2500\u2500 Live Round Tracker \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // lrState shape:
@@ -1762,7 +1764,7 @@ function lrRecordShot() {
   if (!lrState || !_lrShotDraft) return;
   if (_lrObConfirmPending) return; /* must confirm OB first */
   var d       = _lrShotDraft;
-  d.timestamp = _localISO();
+  d.timestamp = localISO(); /* CLEAN11 */
   var pi      = lrState.curPlayer;
   var holeIdx = lrState.curHole;
   var s       = lrState.players[pi].scores[holeIdx];

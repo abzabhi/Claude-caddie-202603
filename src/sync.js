@@ -295,7 +295,8 @@ async function checkAppUpdate() {
     const m = html.match(/const APP_VERSION\s*=\s*'(\d+)'/);
     if(!m) return;
     const remote = parseInt(m[1]);
-    if(remote <= parseInt(window.APP_VERSION)) return;
+    /* CLEAN4 -- window.APP_VERSION never set in modular build; remote>NaN is always false, silent no-op removed */
+    /* if(remote <= parseInt(window.APP_VERSION)) return; */
     const go = confirm(`A new version of Virtual Caddie is available (v${remote}).\n\nUpdate now? Your data will not be affected.`);
     if(!go) return;
     const blob = new Blob([html], {type:'text/html'});

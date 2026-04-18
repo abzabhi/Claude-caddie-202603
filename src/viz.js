@@ -1,9 +1,11 @@
 import { calcVizMaxRange } from './clubs.js';
-import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath } from './geo.js';
+import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath, localISO } from './geo.js'; /* CLEAN11 */
 import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLIGHT_DATA, BIAS_DATA, ZONE_RING_RADII } from './constants.js';
 import { vizGetDisp } from './dispersion.js';
 
+/* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
+*/
 import { bag, courses, history, rounds, profile, save, rangeSessions } from './store.js';
 
 export let vizMode='coverage', vizDisplayMode='both', vizSelectedClubs=new Set();
@@ -445,7 +447,7 @@ export function saveManualBag(){
   const bm=_buildBagMap();
   if(!bm.length){alert('Select at least one club in Bag Coverage first.');return;}
   const entry={
-    id:uid(), date:_localISO().slice(0,10),
+    id:uid(), date:localISO().slice(0,10), /* CLEAN11 */
     type:'manual',
     course:vizActiveCourse.name||'',
     tee:vizActiveTee?.name||'',
@@ -467,7 +469,7 @@ export function saveManualPlan(){
   const hm=_buildHoleMapFromEdits();
   if(!Object.keys(hm).length){alert('Plan at least one hole path in the Path Planner first.');return;}
   const entry={
-    id:uid(), date:_localISO().slice(0,10),
+    id:uid(), date:localISO().slice(0,10), /* CLEAN11 */
     type:'manual',
     course:vizActiveCourse.name||'',
     tee:vizActiveTee?.name||'',

@@ -351,3 +351,9 @@ export function clubSlug(c) {
   };
   return [norm(c.brand), norm(c.type), norm(c.identifier), norm(c.loft), norm(c.stiffness)].join('|');
 }
+
+/* CLEAN11 -- localISO centralised from live-round.js, range.js, viz.js (definitions were identical) */
+export function localISO() {
+  var n=new Date(), p=function(x){return x<10?'0'+x:''+x;};
+  return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+}
