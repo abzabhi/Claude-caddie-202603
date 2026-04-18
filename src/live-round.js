@@ -1,6 +1,6 @@
 import { uid, today, save, courses, rounds, history, profile, bag } from './store.js';
 import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
-import { calcDiff } from './geo.js';
+import { calcDiff, clubSlug } from './geo.js';
 import { renderHandicap } from './rounds.js';
 
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
@@ -1773,6 +1773,11 @@ function lrRecordShot() {
   d.clubName = (function() {
     var c = bag && bag.find(function(x) { return x.id === d.clubId; });
     return c ? (c.identifier || c.type) : (d.clubId || '');
+  })();
+  /* SLUG1 -- stamp slug at record time; read-side flip deferred to Pass 2 */
+  d.clubSlug = (function() {
+    var c = bag && bag.find(function(x) { return x.id === d.clubId; });
+    return c ? (c.slug || clubSlug(c)) : '';
   })();
   if (isEdit) {
     s.shots[_lrEditingIndex] = Object.assign({}, d);
