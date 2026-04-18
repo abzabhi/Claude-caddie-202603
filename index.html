@@ -447,6 +447,8 @@ body{
 .checklist-icon{font-size:.9rem;color:var(--tx3);min-width:16px;}
 .ai-step-row{font-size:.68rem;color:var(--tx2);padding:3px 0;}
 </style>
+<!-- CLEAN10 -- DOMPurify for sanitising user-authored strings before innerHTML assignment -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" integrity="sha512-dn5ClFMnAoB/BdYMh7vDaBpxECaTqz3lXjdOPsQi8OHRD2h+mGKOHTHlJvXrLMOXmAPlNAGI0q9OnnGbCWalw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 <div id="offlineBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:var(--sand);color:var(--gold);text-align:center;font-family:'DM Mono',monospace;font-size:.62rem;padding:5px;letter-spacing:.08em">
@@ -2682,8 +2684,9 @@ window._queueBackgroundSync = _queueBackgroundSync;
 // --- PWA: Receive background sync trigger from service worker ---
 navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'BACKGROUND_SYNC') {
-    if (window.dbPush && sessionStorage.getItem('vc:kvId')) {
-      window.dbPush();
+    /* CLEAN2 -- dbPush never existed; alias to dbPushFull which is the live export */
+    if (typeof window.dbPushFull === 'function' && sessionStorage.getItem('vc:kvId')) {
+      window.dbPushFull();
     }
   }
 });
