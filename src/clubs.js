@@ -306,13 +306,38 @@ export function updateSession(cid, sid, field, val) {
 }
 
 export function deleteClubSession(cid, sid) {
-  const c = bag.find(x=>x.id===cid); if(!c) return;
-  c.sessions = c.sessions.filter(s=>s.id!==sid);
+  /* UI-α-strip — inline strip pattern (matches confirmDeleteRound); deliberate, not modal */
+  if(document.getElementById('cs-confirm-'+sid)) return;
+  var panel = document.getElementById('cpanel-'+cid);
+  if(!panel) {
+    /* fallback: direct delete if DOM not present */
+    const c=bag.find(x=>x.id===cid); if(!c) return;
+    c.sessions=c.sessions.filter(s=>s.id!==sid); save(); renderClubs(); return;
+  }
+  var strip = document.createElement('div');
+  strip.id = 'cs-confirm-'+sid;
+  strip.style.cssText = 'padding:6px 0 2px;font-size:.65rem;display:flex;gap:8px;align-items:center;border-top:1px solid var(--br);margin-top:6px;flex-wrap:wrap';
+  strip.innerHTML = '<span style="color:var(--danger)">Delete this session?</span>' +
+    '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.6rem;padding:2px 8px" onclick="_doDeleteClubSession(\''+cid+'\',\''+sid+'\')">Delete</button>' +
+    '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="document.getElementById(\'cs-confirm-'+sid+'\').remove()">Cancel</button>';
+  panel.appendChild(strip);
+}
+
+export function _doDeleteClubSession(cid, sid) {
+  const c=bag.find(x=>x.id===cid); if(!c) return;
+  c.sessions=c.sessions.filter(s=>s.id!==sid);
   save(); renderClubs();
   setTimeout(()=>{ const p=document.getElementById('cpanel-'+cid); if(p){p.style.display='block';const r=document.getElementById('crow-'+cid);r?.classList.add('open');const btn=r?.querySelector('.expbtn');if(btn)btn.textContent='\u25B2';}},50);
 }
 
-export function deleteClub(id) { setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
+/* UI-α2 */
+export function deleteClub(id) {
+  showConfirmModal(
+    'Delete Club',
+    'Delete this club and all its sessions? This cannot be undone.',
+    function() { setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
+  );
+}
 
 export function addClub() {
   const simple = !clubDetailMode();
@@ -360,13 +385,17 @@ export function addPutter() {
 }
 
 export function replacePutter(id) {
-  if(!confirm('Remove this putter? You can add a new one after.')) return;
-  setBag(bag.filter(c=>c.id!==id)); save(); renderClubs();
+  /* UI-α3 */
+  showConfirmModal(
+    'Remove Putter',
+    'Remove this putter? You can add a new one after.',
+    function() { setBag(bag.filter(c=>c.id!==id)); save(); renderClubs(); }
+  );
 }
 
 Object.assign(window, {
   toggleClub, toggleActive, updateClub, addSession, updateSession,
-  deleteClubSession, deleteClub, addClub, addPutter, replacePutter, toggleClubMode,
+  deleteClubSession, _doDeleteClubSession, deleteClub, addClub, addPutter, replacePutter, toggleClubMode,
   onTypeChange, onVariantChange, addSessionSimple, toggleImplied, renderClubs,
   _clubRange, calcVizMaxRange
 });

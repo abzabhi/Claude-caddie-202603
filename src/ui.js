@@ -34,8 +34,17 @@ function exportData() { saveData(); }
 function processDataText(text) {
   const hasExisting = bag.length || courses.length || rounds.length || history.length;
   if(hasExisting) {
-    if(!confirm('This will replace your current data.\n\nAre you sure? This cannot be undone.')) return;
+    /* UI-α5 */
+    showConfirmModal(
+      'Replace Current Data',
+      'This will replace your current data. This cannot be undone. Are you sure?',
+      function() { _doProcessDataText(text); }
+    );
+    return;
   }
+  _doProcessDataText(text);
+}
+function _doProcessDataText(text) {
   const lines = text.split('\n');
   const newBag=[], newRounds=[];
   let section=null, cur=null, currentCourse=null, currentTee=null, currentEntry=null;
@@ -379,29 +388,41 @@ function dbLoadData(text) {
   save();
 }
 
+function _doMergeOverwrite(newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines) {
+  if(newBag.length) setBag(newBag);
+  if(newRounds.length) setRounds(newRounds);
+  if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
+  if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
+  if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
+  if(newCourses.length){
+    newCourses.forEach(ic=>{
+      const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
+      const existing=courses.find(c=>c.id===ic.id);
+      if(!existing) courses.push(ic);
+      else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) { replaceCourse(ic); }
+    });
+  }
+  if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
+  document.getElementById('uploadBanner').style.display='none';
+  save(); renderAll(); alert('Data overwritten successfully.');
+}
+
 // mode: 'append' | 'merge' | 'overwrite'
 function mergeDataText(text, mode) {
   const {newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
 
   if(mode==='overwrite') {
     const hasExisting=bag.length||courses.length||rounds.length||history.length;
-    if(hasExisting&&!confirm('OVERWRITE will replace ALL your current data.\n\nThis cannot be undone. Are you sure?')) return;
-    if(newBag.length) setBag(newBag);
-    if(newRounds.length) setRounds(newRounds);
-    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
-    if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
-    if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
-    if(newCourses.length){
-      newCourses.forEach(ic=>{
-        const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
-        const existing=courses.find(c=>c.id===ic.id);
-        if(!existing) courses.push(ic);
-        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) { replaceCourse(ic); }
-      });
+    /* UI-α6 */
+    if(hasExisting) {
+      showConfirmModal(
+        'Overwrite All Data',
+        'OVERWRITE will replace ALL your current data. This cannot be undone. Are you sure?',
+        function() { _doMergeOverwrite(newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines); }
+      );
+      return;
     }
-    if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
-    document.getElementById('uploadBanner').style.display='none';
-    save(); renderAll(); alert('Data overwritten successfully.');
+    _doMergeOverwrite(newBag,newRounds,newCourses,newHistory,newProfile,newHcpMode,newManualHcp,newNoteLines);
     return;
   }
 
@@ -413,11 +434,18 @@ function mergeDataText(text, mode) {
     if(!toAdd.length&&!histToAdd.length){
       alert('Append: nothing new to add \u2014 all rounds and sessions already present.'); return;
     }
-    if(!confirm(`Append will add ${toAdd.length} new round(s) and ${histToAdd.length} new session(s).\n\nNo existing data will be changed. Continue?`)) return;
-    rounds.push(...toAdd);
-    histToAdd.forEach(h=>history.unshift(h));
-    save(); renderAll();
-    alert(`Appended: ${toAdd.length} round(s), ${histToAdd.length} session(s).`);
+    /* UI-α7 */
+    showConfirmModal(
+      'Append Data',
+      'Append will add ' + toAdd.length + ' new round(s) and ' + histToAdd.length + ' new session(s). No existing data will be changed. Continue?',
+      function() {
+        rounds.push(...toAdd);
+        histToAdd.forEach(h=>history.unshift(h));
+        save(); renderAll();
+        alert('Appended: '+toAdd.length+' round(s), '+histToAdd.length+' session(s).');
+      },
+      false
+    );
     return;
   }
 
@@ -443,9 +471,12 @@ function mergeDataText(text, mode) {
     });
     let msg=`Merge summary:\n\u2022 ${roundsAdded} round(s) added\n\u2022 ${histAdded} session(s) added\n\u2022 ${coursesAdded} course(s) added, ${coursesUpdated} updated`;
     if(clubConflicts.length) msg+=`\n\u2022 ${clubConflicts.length} club(s) skipped (conflict \u2014 existing kept):\n  ${clubConflicts.join(', ')}`;
-    if(!confirm(msg+'\n\nSave and apply?')) return;
-    save(); renderAll();
-    alert('Merge saved.');
+    /* UI-α8 */
+    showConfirmModal(
+      'Save Merge',
+      msg + '\n\nSave and apply?',
+      function() { save(); renderAll(); alert('Merge saved.'); }
+    );
     return;
   }
 }
@@ -959,6 +990,42 @@ export function renderAll() {
 }
 
 // -- Modals -------------------------------------------------------------------
+
+/* UI-α1 — shared confirm modal; reuses .disc-overlay/.disc-box pattern */
+function showConfirmModal(title, message, onConfirm, danger) {
+  if (danger === undefined) danger = true;
+  var m = document.getElementById('confirmModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'confirmModal';
+    m.className = 'disc-overlay';
+    m.style.display = 'none';
+    m.innerHTML =
+      '<div class="disc-box" style="max-width:420px">' +
+        '<div id="confirmModal-title" class="disc-title"></div>' +
+        '<div class="disc-section"><div id="confirmModal-msg" class="disc-body" style="line-height:1.7"></div></div>' +
+        '<div class="disc-footer" style="display:flex;gap:8px;justify-content:flex-end">' +
+          '<button class="btn sec" id="confirmModal-cancel">Cancel</button>' +
+          '<button class="btn" id="confirmModal-ok">Confirm</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(m);
+  }
+  document.getElementById('confirmModal-title').textContent = title;
+  document.getElementById('confirmModal-msg').textContent = message;
+  var okBtn = document.getElementById('confirmModal-ok');
+  okBtn.style.background = danger ? 'var(--danger)' : '';
+  okBtn.style.borderColor = danger ? 'var(--danger)' : '';
+  okBtn.style.color = danger ? '#fff' : '';
+  okBtn.textContent = 'Confirm';
+  var cancelBtn = document.getElementById('confirmModal-cancel');
+  var close = function() { m.style.display = 'none'; };
+  okBtn.onclick = function() { close(); onConfirm(); };
+  cancelBtn.onclick = close;
+  m.onclick = function(e) { if (e.target === m) close(); };
+  m.style.display = 'flex';
+}
+
 function showDisclaimer() {
   document.getElementById('discModal').style.display = 'flex';
 }
@@ -1086,6 +1153,7 @@ Object.assign(window, {
   onHomeClubSelect, onHomeClubInput,
   updateCourseDropdowns, renderAll, serialise,
   showDisclaimer, acceptDisclaimer, confirmClearAll, signOut,
+  showConfirmModal,
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
   showAIStepsCard, hideAIStepsCard,

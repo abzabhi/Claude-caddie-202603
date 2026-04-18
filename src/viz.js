@@ -1057,6 +1057,40 @@ export function vizDispToggleAllRounds(){
   renderVizDisp();
 }
 
+/* UI-γ2 — bulk select/deselect for club shelf; mirrors vizDispToggleAllSessions pattern */
+export function vizDispToggleAllClubs(){
+  var keys=Object.keys((function(){
+    var map={};
+    (rangeSessions||[]).filter(function(s){ return s.committed&&vizDispSelectedSessions.has(s.sessionId); }).forEach(function(s){
+      (s.clubSummary||[]).forEach(function(cs){
+        var key=cs.clubSlug||cs.clubName||cs.clubId; if(key) map[key]=1;
+      });
+    });
+    (rounds||[]).forEach(function(r,idx){
+      if(!vizDispSelectedRounds.has(idx)) return;
+      (r.holes||[]).forEach(function(h){
+        (h.shots||[]).forEach(function(shot){
+          if(!shot.radial_ring) return;
+          var key=shot.clubSlug||(shot.clubName)||''; if(key) map[key]=1;
+        });
+      });
+    });
+    return map;
+  })());
+  var allSelected=keys.length>0&&keys.every(function(k){ return vizDispSelectedKeys.has(k); });
+  if(allSelected){ vizDispSelectedKeys=new Set(); }
+  else { vizDispSelectedKeys=new Set(keys); }
+  keys.forEach(function(key){
+    var on=vizDispSelectedKeys.has(key);
+    var safeId='vdclub-'+key.replace(/[^a-zA-Z0-9]/g,'-');
+    var lbl=document.getElementById(safeId);
+    if(lbl){ lbl.style.background=on?'var(--gr3)':'var(--bg)'; lbl.style.borderColor=on?'var(--gr2)':'var(--br)'; }
+  });
+  var btn=document.getElementById('vizDispClubAllBtn');
+  if(btn) btn.textContent=vizDispSelectedKeys.size===0?'All':'None';
+  renderVizDisp();
+}
+
 Object.assign(window, {
   onVizModeChange, onVizClubSrcChange, onVizOptSessionChange,
   onVizCourseChange, onVizTeeChange, onVizHoleSessionChange,
@@ -1064,5 +1098,6 @@ Object.assign(window, {
   setVizDisplay, setVizYard, vizSelectHole,
   vizToggleClub, vizTogglePath, vizTogglePlanner, vizUpdatePath,
   vizDispToggleSession, vizDispToggleClub, vizDispSetYardage, vizDispToggleRound,
-  vizDispToggleAllSessions, vizDispToggleAllRounds
+  vizDispToggleAllSessions, vizDispToggleAllRounds,
+  vizDispToggleAllClubs /* UI-γ3 */
 });

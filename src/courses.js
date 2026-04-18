@@ -291,17 +291,23 @@ function confirmAddTee() {
 
 function deleteTee(id) {
   if(editCourseData.tees.length<=1){alert('A course must have at least one tee.');return;}
-  if(!confirm('Delete this tee and its hole data?')) return;
-  editCourseData.tees = editCourseData.tees.filter(t=>t.id!==id);
-  if(currentEditTeeId===id) {
-    currentEditTeeId = editCourseData.tees[0].id;
-    const t = editCourseData.tees[0];
-    editCourseData.holes = t.holes.map(h=>({...h}));
-    document.getElementById('cRating').value=t.rating;
-    document.getElementById('cSlope').value=t.slope;
-    document.getElementById('cYardage').value=t.yardage;
-  }
-  renderTeeButtons(); renderHoleTable();
+  /* UI-α4 */
+  showConfirmModal(
+    'Delete Tee',
+    'Delete this tee and its hole data?',
+    function() {
+      editCourseData.tees = editCourseData.tees.filter(t=>t.id!==id);
+      if(currentEditTeeId===id) {
+        currentEditTeeId = editCourseData.tees[0].id;
+        const t = editCourseData.tees[0];
+        editCourseData.holes = t.holes.map(h=>({...h}));
+        document.getElementById('cRating').value=t.rating;
+        document.getElementById('cSlope').value=t.slope;
+        document.getElementById('cYardage').value=t.yardage;
+      }
+      renderTeeButtons(); renderHoleTable();
+    }
+  );
 }
 
 function selectEditTee(id) {
