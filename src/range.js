@@ -11,7 +11,7 @@ import {
   ZONE_SEGMENT_LABELS, ZONE_RING_RADII,
   FLIGHT_PATHS, VIZ_COLORS
 } from './constants.js';
-import { deriveStats, fmtDate } from './geo.js';
+import { deriveStats, fmtDate, clubSlug } from './geo.js';
 
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
 
@@ -243,7 +243,12 @@ function _buildClubSummary(shots) {
   Object.keys(groups).forEach(function(key) {
     var g   = groups[key];
     var cid = g.clubId;
-    if (!clubMap[cid]) { clubMap[cid] = { clubId: cid, clubName: _clubName(cid), targets: [] }; }
+    if (!clubMap[cid]) {
+      /* SLUG1 -- stamp slug alongside clubId/clubName for stable cross-session key */
+      var _cRef = bag.find(function(x){ return x.id === cid; });
+      var _cSlug = _cRef ? (_cRef.slug || clubSlug(_cRef)) : (g.shots[0] && g.shots[0].clubSlug) || '';
+      clubMap[cid] = { clubId: cid, clubSlug: _cSlug, clubName: _clubName(cid), targets: [] };
+    }
 
     // Initialise dispersion structure with all 8 segments
     var disp = {
@@ -623,6 +628,7 @@ function rangeRecordShot() {
     sessionId:      _rangeState.sessionId,
     sessionType:    SESSION_TYPES.RANGE,
     clubId:         _rangeState.clubId,
+    clubSlug:       (function(){ var _c=bag.find(function(x){return x.id===_rangeState.clubId;}); return _c?(_c.slug||clubSlug(_c)):''; })(), /* SLUG1 */
     radial_ring:    _pendingRing,
     radial_segment: _pendingSegment,
     flight_path:    _pendingFlight,
