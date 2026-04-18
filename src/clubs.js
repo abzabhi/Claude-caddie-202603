@@ -1,4 +1,4 @@
-import { deriveStats, calcImplied, fmtDate } from './geo.js';
+import { deriveStats, calcImplied, fmtDate, clubSlug } from './geo.js';
 import { CLUB_VARIANTS, TYPE_COLOR,  BRANDS, STIFFNESS, CLUB_TYPES } from './constants.js';
 import { bag, profile, today, uid, save, setBag } from './store.js';
 
@@ -327,6 +327,7 @@ export function addClub() {
     confidence: simple ? 3 : 4,
     bias:'Straight', tested:true, sessions:[]
   };
+  c.slug = clubSlug(c); /* SLUG1 */
   bag.push(c);
   save(); renderClubs();
   setTimeout(()=>{
@@ -352,7 +353,9 @@ export function calcVizMaxRange() {
 }
 
 export function addPutter() {
-  bag.push({ id:uid(), brand:'', type:'Putter', identifier:'Putter', stiffness:'', shaftLength:'', tested:'PUTTER', confidence:4, bias:'Straight', yardType:'', loft:'', model:'', sessions:[] });
+  var p = { id:uid(), brand:'', type:'Putter', identifier:'Putter', stiffness:'', shaftLength:'', tested:'PUTTER', confidence:4, bias:'Straight', yardType:'', loft:'', model:'', sessions:[] };
+  p.slug = clubSlug(p); /* SLUG1 */
+  bag.push(p);
   save(); renderClubs();
 }
 
