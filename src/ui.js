@@ -5,7 +5,7 @@
 import { bag, courses, rounds, history, profile, rangeSessions,
          save, today, uid, serialise,
          setBag, setRounds, setProfile, replaceCourse, clearAll } from './store.js';
-import { calcDiff } from './geo.js';
+import { calcDiff, clubSlug } from './geo.js';
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
 import { renderCourseList } from './courses.js';
@@ -65,6 +65,7 @@ function processDataText(text) {
     if(section==='clubs'&&line.startsWith('CLUB |')) {
       const p=line.split('|').map(s=>s.trim());
       cur={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',confidence:p[7]?parseInt(p[7]):4,bias:p[8]||'Straight',yardType:p[9]||'',loft:p[10]||'',model:p[11]||'',sessions:[]};
+      cur.slug=p[12]||clubSlug(cur); /* SLUG1 */
       newBag.push(cur);
     } else if(section==='clubs'&&line.startsWith('COMPUTED |')) {
       // pre-computed export values -- skip, app recomputes from raw sessions
@@ -196,6 +197,7 @@ function _parseDataText(text) {
     if(section==='clubs'&&line.startsWith('CLUB |')){
       const p=line.split('|').map(s=>s.trim());
       cur={id:uid(),brand:p[1]||'',type:p[2]||'Iron',identifier:p[3]||'',stiffness:p[4]||'Regular',shaftLength:p[5]||'',tested:p[6]==='YES'||p[6]==='PUTTER',confidence:p[7]?parseInt(p[7]):4,bias:p[8]||'Straight',yardType:p[9]||'',loft:p[10]||'',model:p[11]||'',sessions:[]};
+      cur.slug=p[12]||clubSlug(cur); /* SLUG1 */
       newBag.push(cur);
     } else if(section==='clubs'&&line.startsWith('SESSION |')&&cur){
       const p=line.split('|').map(s=>s.trim());
