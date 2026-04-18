@@ -1,5 +1,5 @@
 import { FLIGHT_DATA } from './constants.js';
-import { calcHandicap } from './geo.js';
+import { calcHandicap, clubSlug } from './geo.js';
 
 export let bag = [], courses = [], rounds = [], history = [], rangeSessions = [];
 export let profile = {};
@@ -26,6 +26,8 @@ export function load() {
   try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); const rsParsed=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; rangeSessions.splice(0,rangeSessions.length,...rsParsed); } catch { rangeSessions.splice(0,rangeSessions.length); }
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
+  /* SLUG1 -- backfill stable slug on any legacy club missing it */
+  for(var _si=0;_si<bag.length;_si++){ if(!bag[_si].slug) bag[_si].slug=clubSlug(bag[_si]); }
   courses=courses.filter(x=>x&&x.id);
   rounds=rounds.filter(x=>x&&x.id);
 }
@@ -60,7 +62,7 @@ export function serialise() {
   bag.forEach(c => {
     const opt = c.type==='Putter'?'PUTTER':c.tested?'YES':'NO';
     lines.push('');
-    lines.push('CLUB | '+[c.brand||'',c.type,c.identifier||'',c.stiffness,c.shaftLength||'',opt,c.confidence??4,c.bias||'Straight',c.yardType||'',c.loft||'',c.model||''].join(' | '));
+    lines.push('CLUB | '+[c.brand||'',c.type,c.identifier||'',c.stiffness,c.shaftLength||'',opt,c.confidence??4,c.bias||'Straight',c.yardType||'',c.loft||'',c.model||'',c.slug||clubSlug(c)].join(' | ')); /* SLUG1 */
     (c.sessions||[]).forEach(s=>lines.push('  SESSION | '+s.date+' | '+s.min+' | '+s.max+(s.notes?(' | '+s.notes):'')));
   });
   lines.push(''); lines.push('=== COURSES ===');
