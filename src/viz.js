@@ -796,51 +796,58 @@ function _buildDispRoundShelf(){
 function _buildDispClubShelf(){
   var shelf=document.getElementById('vizDispClubShelf');
   if(!shelf) return;
-  // Key by clubName — stable across sessions regardless of clubId changes
-  var nameMap={};
+  /* SLUG2b -- key by slug (fallback clubName for legacy entries). Name resolved at render. */
+  var slugMap={};
+  function _keyFor(cs){ return cs.clubSlug||cs.clubName||cs.clubId; }
+  function _nameFor(key, fallback){
+    var c=bag.find(function(x){return x.slug===key;});
+    if(c) return c.identifier||c.type;
+    return fallback||key;
+  }
   (rangeSessions||[]).filter(function(s){ return s.committed&&vizDispSelectedSessions.has(s.sessionId); }).forEach(function(s){
     (s.clubSummary||[]).forEach(function(cs){
-      var name=cs.clubName||cs.clubId;
-      if(!nameMap[name]) nameMap[name]={ clubName:name, totalShots:0 };
-      (cs.targets||[]).forEach(function(t){ nameMap[name].totalShots+=t.shotCount||0; });
+      var key=_keyFor(cs);
+      if(!slugMap[key]) slugMap[key]={ key:key, displayName:_nameFor(key, cs.clubName), totalShots:0 };
+      (cs.targets||[]).forEach(function(t){ slugMap[key].totalShots+=t.shotCount||0; });
     });
   });
-  // Round pass — aggregate by clubName from selected rounds
+  // Round pass — aggregate by slug from selected rounds (fallback clubName)
   (rounds||[]).forEach(function(r,idx){
     if(!vizDispSelectedRounds.has(idx)) return;
     (r.holes||[]).forEach(function(h){
       (h.shots||[]).forEach(function(shot){
         if(!shot.radial_ring) return;
-        var name=_lrShotClubName(shot);
-        if(!nameMap[name]) nameMap[name]={ clubName:name, totalShots:0 };
-        nameMap[name].totalShots++;
+        var key=shot.clubSlug||_lrShotClubName(shot);
+        if(!slugMap[key]) slugMap[key]={ key:key, displayName:_nameFor(key, _lrShotClubName(shot)), totalShots:0 };
+        slugMap[key].totalShots++;
       });
     });
   });
-  var names=Object.keys(nameMap);
-  if(!names.length){
+  var keys=Object.keys(slugMap);
+  if(!keys.length){
     shelf.innerHTML='<span style="font-size:.62rem;color:var(--tx3)">No sessions selected.</span>';
     vizDispSelectedKeys=new Set();
     return;
   }
-  vizDispSelectedKeys=new Set(names);
-  shelf.innerHTML=names.map(function(name,i){
-    var cm=nameMap[name];
+  vizDispSelectedKeys=new Set(keys);
+  shelf.innerHTML=keys.map(function(key,i){
+    var cm=slugMap[key];
     var col=VIZ_COLORS[i%VIZ_COLORS.length];
-    var safeId='vdclub-'+name.replace(/[^a-zA-Z0-9]/g,'-');
-    return '<label onclick="vizDispToggleClub(\''+name.replace(/'/g,"\\'")+'\')" id="'+safeId+'"'+
+    var safeId='vdclub-'+key.replace(/[^a-zA-Z0-9]/g,'-');
+    return '<label onclick="vizDispToggleClub(\''+key.replace(/'/g,"\\'")+'\')" id="'+safeId+'"'+
       ' style="display:flex;align-items:center;gap:5px;padding:4px 9px;'+
       'background:var(--gr3);border:1px solid var(--gr2);'+
       'border-radius:4px;cursor:pointer;font-size:.62rem;transition:all .15s">'+
       '<div style="width:8px;height:8px;border-radius:2px;background:'+col+';flex-shrink:0"></div>'+
-      escHtml(name)+
+      escHtml(cm.displayName)+
       ' <span style="color:var(--tx3);font-size:.56rem">'+cm.totalShots+' shot'+(cm.totalShots!==1?'s':'')+'</span>'+
       '</label>';
   }).join('');
 }
 
-// Aggregate dispersion counts by clubName across selected sessions, optionally filtered to one yardage
-function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
+// Aggregate dispersion counts by key (slug preferred, clubName fallback) across selected sessions, optionally filtered to one yardage
+/* SLUG2b -- param renamed clubName->key; matches clubSlug first, then clubName */
+function _aggregateDispCounts(key, selectedSessions, yardageFilter){
   var counts={ bull:0 };
   var i;
   for(i=0;i<8;i++){ counts['inner-'+i]=0; counts['outer-'+i]=0; }
@@ -849,8 +856,8 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
   for(i=0;i<8;i++){ fpCounts['inner-'+i]={straight:0,'left-to-right':0,'right-to-left':0}; fpCounts['outer-'+i]={straight:0,'left-to-right':0,'right-to-left':0}; }
   var totalShots=0;
   selectedSessions.forEach(function(s){
-    // Match by clubName — handles ID instability across sessions
-    var cs=(s.clubSummary||[]).find(function(x){ return (x.clubName||x.clubId)===clubName; });
+    /* SLUG2b -- match by clubSlug first, fall back to clubName for legacy entries */
+    var cs=(s.clubSummary||[]).find(function(x){ return (x.clubSlug||x.clubName||x.clubId)===key; });
     if(!cs) return;
     (cs.targets||[]).forEach(function(t){
       if(yardageFilter!==null && yardageFilter!==undefined && t.yardage!==yardageFilter) return;
@@ -870,7 +877,9 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
     (r.holes||[]).forEach(function(h){
       (h.shots||[]).forEach(function(shot){
         if(!shot.radial_ring) return;
-        if(_lrShotClubName(shot)!==clubName) return;
+        /* SLUG2b -- match shot by clubSlug first, fall back to clubName */
+        var shotKey=shot.clubSlug||_lrShotClubName(shot);
+        if(shotKey!==key) return;
         totalShots++;
         var ring=shot.radial_ring, seg=shot.radial_segment;
         if(ring==='bull'){ counts.bull++; }
@@ -886,8 +895,9 @@ function _aggregateDispCounts(clubName, selectedSessions, yardageFilter){
   return { counts:counts, fp:fp, totalShots:totalShots, fpCounts:fpCounts };
 }
 
-function _buildDispCardInner(clubName, selectedSessions, yardageFilter){
-  var agg=_aggregateDispCounts(clubName, selectedSessions, yardageFilter);
+function _buildDispCardInner(key, selectedSessions, yardageFilter){
+  /* SLUG2b -- param renamed clubName->key */
+  var agg=_aggregateDispCounts(key, selectedSessions, yardageFilter);
   var counts=agg.counts, fp=agg.fp, totalShots=agg.totalShots;
   var heatMax=Math.max.apply(null,Object.values(counts).concat([1]));
   var innerTotal=0, outerTotal=0, i;
@@ -903,19 +913,19 @@ function _buildDispCardInner(clubName, selectedSessions, yardageFilter){
     : 'No shot data';
   var yardageSet={};
   selectedSessions.forEach(function(s){
-    var cs=(s.clubSummary||[]).find(function(x){ return (x.clubName||x.clubId)===clubName; });
+    var cs=(s.clubSummary||[]).find(function(x){ return (x.clubSlug||x.clubName||x.clubId)===key; });
     if(!cs) return;
     (cs.targets||[]).forEach(function(t){ yardageSet[t.yardage]=true; });
   });
   var yardages=Object.keys(yardageSet).map(Number).sort(function(a,b){ return a-b; });
   var yardageChips='';
   if(yardages.length>1){
-    var safeName=clubName.replace(/'/g,"\\'");
+    var safeKey=key.replace(/'/g,"\\'");
     var chips=[{val:null,label:'All'}].concat(yardages.map(function(y){ return {val:y,label:y+'y'}; }));
     yardageChips='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px">'+
       chips.map(function(ch){
         var on=(yardageFilter===null||yardageFilter===undefined)?ch.val===null:ch.val===yardageFilter;
-        return '<button onclick="vizDispSetYardage(\''+safeName+'\','+(ch.val===null?'null':ch.val)+')"'+
+        return '<button onclick="vizDispSetYardage(\''+safeKey+'\','+(ch.val===null?'null':ch.val)+')"'+
           ' style="padding:2px 8px;font-size:.58rem;border-radius:4px;cursor:pointer;'+
           'background:'+(on?'var(--gr3)':'var(--bg)')+';border:1px solid '+(on?'var(--gr2)':'var(--br)')+'">'+
           ch.label+'</button>';
@@ -940,34 +950,43 @@ export function renderVizDisp(){
     out.innerHTML='<div class="card"><div class="hist-empty">No clubs selected.</div></div>';
     return;
   }
+  /* SLUG2b -- resolve slug -> display name for sort + render */
+  function _nameForKey(key){
+    var c=bag.find(function(x){return x.slug===key;});
+    if(c) return c.identifier||c.type;
+    return key;
+  }
   var cards=[];
   var sortedKeys=Array.from(vizDispSelectedKeys).sort(function(a,b){
-    var ka=_dispClubSortKey(a),kb=_dispClubSortKey(b);
-    return ka!==kb?ka-kb:a.localeCompare(b);
+    var na=_nameForKey(a), nb=_nameForKey(b);
+    var ka=_dispClubSortKey(na),kb=_dispClubSortKey(nb);
+    return ka!==kb?ka-kb:na.localeCompare(nb);
   });
-  sortedKeys.forEach(function(clubName){
-    var yardageFilter=vizDispYardageFilter[clubName]!==undefined?vizDispYardageFilter[clubName]:null;
-    var totalAll=_aggregateDispCounts(clubName,selectedSessions,null).totalShots;
-    var safeId=clubName.replace(/[^a-zA-Z0-9]/g,'-');
+  sortedKeys.forEach(function(key){
+    var yardageFilter=vizDispYardageFilter[key]!==undefined?vizDispYardageFilter[key]:null;
+    var totalAll=_aggregateDispCounts(key,selectedSessions,null).totalShots;
+    var safeId=key.replace(/[^a-zA-Z0-9]/g,'-');
+    var displayName=_nameForKey(key);
     cards.push(
       '<div class="card" style="margin-bottom:10px" id="vdcard-'+safeId+'">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-          '<div style="font-family:\'Playfair Display\',serif;font-size:.95rem;color:var(--ac2)">'+escHtml(clubName)+'</div>'+
+          '<div style="font-family:\'Playfair Display\',serif;font-size:.95rem;color:var(--ac2)">'+escHtml(displayName)+'</div>'+
           '<span style="font-size:.58rem;padding:2px 7px;background:var(--gr3);border:1px solid var(--gr2);border-radius:4px;color:var(--ac)">'+totalAll+' shot'+(totalAll!==1?'s':'')+'</span>'+
         '</div>'+
-        '<div id="vdcardinner-'+safeId+'">'+_buildDispCardInner(clubName,selectedSessions,yardageFilter)+'</div>'+
+        '<div id="vdcardinner-'+safeId+'">'+_buildDispCardInner(key,selectedSessions,yardageFilter)+'</div>'+
       '</div>'
     );
   });
   out.innerHTML=cards.length?cards.join(''):'<div class="card"><div class="hist-empty">No matching data for selection.</div></div>';
 }
 
-export function vizDispSetYardage(clubName, yardageFilter){
-  vizDispYardageFilter[clubName]=yardageFilter===null||yardageFilter==='null'?null:+yardageFilter;
+export function vizDispSetYardage(key, yardageFilter){
+  /* SLUG2b -- param renamed clubName->key */
+  vizDispYardageFilter[key]=yardageFilter===null||yardageFilter==='null'?null:+yardageFilter;
   var selectedSessions=(rangeSessions||[]).filter(function(s){ return s.committed&&vizDispSelectedSessions.has(s.sessionId); });
-  var safeId=clubName.replace(/[^a-zA-Z0-9]/g,'-');
+  var safeId=key.replace(/[^a-zA-Z0-9]/g,'-');
   var inner=document.getElementById('vdcardinner-'+safeId);
-  if(inner) inner.innerHTML=_buildDispCardInner(clubName,selectedSessions,vizDispYardageFilter[clubName]);
+  if(inner) inner.innerHTML=_buildDispCardInner(key,selectedSessions,vizDispYardageFilter[key]);
 }
 
 export function vizDispToggleSession(sessionId){
@@ -980,11 +999,12 @@ export function vizDispToggleSession(sessionId){
   renderVizDisp();
 }
 
-export function vizDispToggleClub(clubName){
-  if(vizDispSelectedKeys.has(clubName)) vizDispSelectedKeys.delete(clubName);
-  else vizDispSelectedKeys.add(clubName);
-  var on=vizDispSelectedKeys.has(clubName);
-  var safeId='vdclub-'+clubName.replace(/[^a-zA-Z0-9]/g,'-');
+export function vizDispToggleClub(key){
+  /* SLUG2b -- param renamed clubName->key */
+  if(vizDispSelectedKeys.has(key)) vizDispSelectedKeys.delete(key);
+  else vizDispSelectedKeys.add(key);
+  var on=vizDispSelectedKeys.has(key);
+  var safeId='vdclub-'+key.replace(/[^a-zA-Z0-9]/g,'-');
   var lbl=document.getElementById(safeId);
   if(lbl){ lbl.style.background=on?'var(--gr3)':'var(--bg)'; lbl.style.borderColor=on?'var(--gr2)':'var(--br)'; }
   renderVizDisp();
