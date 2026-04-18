@@ -126,7 +126,7 @@ function getFavCourseId() {
     if(aFav&&!bFav)  return -1; if(bFav&&!aFav)  return 1;
     return (a.name||'').localeCompare(b.name||'');
   });
-  document.getElementById('courseCards').innerHTML = DOMPurify.sanitize(sorted.map(c=>{
+  document.getElementById('courseCards').innerHTML = sorted.map(c=>{
     const isHome = c.id===homeId;
     const isFav  = c.id===favId && c.id!==homeId;
     const pinHTML = isHome ? `<span class="course-pin home">\uD83C\uDFE0 Home</span>`
@@ -150,7 +150,7 @@ function getFavCourseId() {
           </div>
         </div>
       </div>`;
-  }).join('')); /* CLEAN10 -- DOMPurify wraps user-authored course name/city strings */
+  }).join(''); /* CLEAN10-REVERTED -- DOMPurify strips onclick attrs; course card is app-generated template */
   const dl2 = document.getElementById('savedCoursesList');
   if(dl2) dl2.innerHTML = courses.map(c=>`<option value="${c.name}">`).join('');
   updateCourseSelects();
