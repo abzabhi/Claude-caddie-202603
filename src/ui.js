@@ -265,58 +265,103 @@ function _parseDataText(text) {
   return {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines};
 }
 
-// After sync replaces bag, remap active range session ids to the new bag's ids
-// by matching on stable club fields (brand|type|identifier|loft|model). Writes
-// gordy:activeRange back only if something changed. Missing matches are left
-// as-is (rangeInit tolerates; better than silently swapping to wrong club).
-function _remapActiveRangeClubIds(oldBag, newBag) {
-  var raw = localStorage.getItem('gordy:activeRange');
-  if (!raw) return;
-  var blob;
-  try { blob = JSON.parse(raw); } catch(e) { return; }
-  if (!blob || typeof blob !== 'object') return;
-
-  function k(c){ return (c.brand||'')+'|'+(c.type||'')+'|'+(c.identifier||'')+'|'+(c.loft||'')+'|'+(c.model||''); }
+// After sync replaces bag, remap club references to the new bag's ids
+// by matching on stable slug (preferred) or legacy composite key.
+// Scope: gordy:activeRange, gordy:activeRound, saved rounds[] shot records.
+// Missing matches left as-is (fallback paths tolerate better than silent swap).
+/* SLUG2 -- renamed from _remapActiveRangeClubIds; extended scope */
+function _remapClubRefs(oldBag, newBag) {
+  function kLegacy(c){ return (c.brand||'')+'|'+(c.type||'')+'|'+(c.identifier||'')+'|'+(c.loft||'')+'|'+(c.model||''); }
   var oldById = {};
   for (var a=0; a<oldBag.length; a++) { if (oldBag[a] && oldBag[a].id) oldById[oldBag[a].id] = oldBag[a]; }
-  var newByKey = {};
-  for (var b=0; b<newBag.length; b++) { if (newBag[b] && newBag[b].id) newByKey[k(newBag[b])] = newBag[b].id; }
+  var newBySlug = {}, newByLegacy = {};
+  for (var b=0; b<newBag.length; b++) {
+    var nb = newBag[b]; if (!nb || !nb.id) continue;
+    if (nb.slug) newBySlug[nb.slug] = nb.id;
+    newByLegacy[kLegacy(nb)] = nb.id;
+  }
 
   function remap(id){
     if (!id) return id;
     var oc = oldById[id];
     if (!oc) return id;
-    var nid = newByKey[k(oc)];
+    // Slug-first: if old club had a slug, match by slug on new bag
+    if (oc.slug && newBySlug[oc.slug]) return newBySlug[oc.slug];
+    // Fallback: legacy composite key
+    var nid = newByLegacy[kLegacy(oc)];
     return nid || id;
   }
 
-  var changed = false;
-  var r = remap(blob.clubId);
-  if (r !== blob.clubId) { blob.clubId = r; changed = true; }
-  if (Array.isArray(blob.club_bag_snapshot)) {
-    for (var i=0; i<blob.club_bag_snapshot.length; i++) {
-      var nr = remap(blob.club_bag_snapshot[i]);
-      if (nr !== blob.club_bag_snapshot[i]) { blob.club_bag_snapshot[i] = nr; changed = true; }
+  // -------- gordy:activeRange --------
+  var rawR = localStorage.getItem('gordy:activeRange');
+  if (rawR) {
+    var blobR; try { blobR = JSON.parse(rawR); } catch(e) { blobR = null; }
+    if (blobR && typeof blobR === 'object') {
+      var changedR = false;
+      var rr = remap(blobR.clubId);
+      if (rr !== blobR.clubId) { blobR.clubId = rr; changedR = true; }
+      if (Array.isArray(blobR.club_bag_snapshot)) {
+        for (var i=0; i<blobR.club_bag_snapshot.length; i++) {
+          var nr = remap(blobR.club_bag_snapshot[i]);
+          if (nr !== blobR.club_bag_snapshot[i]) { blobR.club_bag_snapshot[i] = nr; changedR = true; }
+        }
+      }
+      if (Array.isArray(blobR.shots)) {
+        for (var j=0; j<blobR.shots.length; j++) {
+          var sh = blobR.shots[j]; if (!sh) continue;
+          var nr2 = remap(sh.clubId);
+          if (nr2 !== sh.clubId) { sh.clubId = nr2; changedR = true; }
+        }
+      }
+      if (changedR) { try { localStorage.setItem('gordy:activeRange', JSON.stringify(blobR)); } catch(e) {} }
     }
   }
-  if (Array.isArray(blob.shots)) {
-    for (var j=0; j<blob.shots.length; j++) {
-      var sh = blob.shots[j];
-      if (!sh) continue;
-      var nr2 = remap(sh.clubId);
-      if (nr2 !== sh.clubId) { sh.clubId = nr2; changed = true; }
+
+  // -------- gordy:activeRound --------
+  var rawAR = localStorage.getItem('gordy:activeRound');
+  if (rawAR) {
+    var blobAR; try { blobAR = JSON.parse(rawAR); } catch(e) { blobAR = null; }
+    if (blobAR && Array.isArray(blobAR.players)) {
+      var changedAR = false;
+      for (var pi=0; pi<blobAR.players.length; pi++) {
+        var scores = blobAR.players[pi] && blobAR.players[pi].scores;
+        if (!Array.isArray(scores)) continue;
+        for (var si=0; si<scores.length; si++) {
+          var sc = scores[si]; if (!sc || !Array.isArray(sc.shots)) continue;
+          for (var shi=0; shi<sc.shots.length; shi++) {
+            var shot = sc.shots[shi]; if (!shot) continue;
+            var nr3 = remap(shot.clubId);
+            if (nr3 !== shot.clubId) { shot.clubId = nr3; changedAR = true; }
+          }
+        }
+      }
+      if (changedAR) { try { localStorage.setItem('gordy:activeRound', JSON.stringify(blobAR)); } catch(e) {} }
     }
   }
-  if (changed) {
-    try { localStorage.setItem('gordy:activeRange', JSON.stringify(blob)); } catch(e) {}
+
+  // -------- saved rounds[] --------
+  // Mutates in place; caller (dbLoadData) calls save() afterwards.
+  for (var ri=0; ri<rounds.length; ri++) {
+    var rd = rounds[ri]; if (!rd || !Array.isArray(rd.holes)) continue;
+    for (var hi=0; hi<rd.holes.length; hi++) {
+      var hole = rd.holes[hi]; if (!hole || !Array.isArray(hole.shots)) continue;
+      for (var shi2=0; shi2<hole.shots.length; shi2++) {
+        var sh2 = hole.shots[shi2]; if (!sh2) continue;
+        var nr4 = remap(sh2.clubId);
+        if (nr4 !== sh2.clubId) sh2.clubId = nr4;
+      }
+    }
   }
 }
+
+/* SLUG2 -- legacy name preserved as alias; callers may still reference it */
+function _remapActiveRangeClubIds(oldBag, newBag) { return _remapClubRefs(oldBag, newBag); }
 
 // Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
 // renderAll is called by gateUnlocked() after this returns.
 function dbLoadData(text) {
   const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
-  if(newBag.length) { var _oldBag = bag.slice(); setBag(newBag); _remapActiveRangeClubIds(_oldBag, bag); }
+  if(newBag.length) { var _oldBag = bag.slice(); setBag(newBag); _remapClubRefs(_oldBag, bag); } /* SLUG2 */
   if(newRounds.length) setRounds(newRounds);
   if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
   if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
@@ -574,7 +619,8 @@ function renderPerfSummary() {
   rangeSessions.forEach(function(s){
     if(!s.clubSummary) return;
     s.clubSummary.forEach(function(entry){
-      var cid=entry.clubId;
+      /* SLUG2 -- slug-first key; clubId fallback for legacy entries */
+      var cid=entry.clubSlug||entry.clubId;
       var count=(entry.targets||[]).reduce(function(n,t){return n+(t.shotCount||0);},0);
       clubMap[cid]=(clubMap[cid]||0)+count;
       if(!clubDispMap[cid]) clubDispMap[cid]={bull:0,inner:[0,0,0,0,0,0,0,0],outer:[0,0,0,0,0,0,0,0],fp:{str:0,ltr:0,rtl:0}};
@@ -594,8 +640,9 @@ function renderPerfSummary() {
     });
   });
   var clubEntries=Object.keys(clubMap).map(function(cid){
-    var c=bag.find(function(x){return x.id===cid;});
-    var storedName=rangeSessions.reduce(function(n,s){if(n)return n;var e=s.clubSummary&&s.clubSummary.find(function(x){return x.clubId===cid;});return e?e.clubName:null;},null);
+    /* SLUG2 -- slug lookup first, then legacy id lookup */
+    var c=bag.find(function(x){return x.slug===cid;})||bag.find(function(x){return x.id===cid;});
+    var storedName=rangeSessions.reduce(function(n,s){if(n)return n;var e=s.clubSummary&&s.clubSummary.find(function(x){return (x.clubSlug||x.clubId)===cid;});return e?e.clubName:null;},null);
     return {name:c?(c.identifier||c.type):storedName||cid,count:clubMap[cid],disp:clubDispMap[cid]||null};
   }).sort(function(a,b){return b.count-a.count;});
 
