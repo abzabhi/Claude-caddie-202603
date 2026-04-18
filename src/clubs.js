@@ -110,12 +110,13 @@ export function renderClubs() {
   if(lbl)  lbl.textContent = on?'On':'Off';
   const mBtn = document.getElementById('clubModeBtn');
   if(mBtn) { mBtn.textContent = clubDetailMode()?'Detailed':'Simple'; mBtn.classList.toggle('on', clubDetailMode()); }
-  document.getElementById('clubList').innerHTML = DOMPurify.sanitize(playing.length /* CLEAN10 */
+  /* CLEAN10-REVERTED -- DOMPurify strips onclick/onchange from clubRowHTML; template is app-generated not user-raw */
+  document.getElementById('clubList').innerHTML = playing.length
     ? playing.map(c=>clubRowHTML(c,false)).join('')
-    : '<div class="hist-empty">No clubs yet. Use \uFF0B Add Club or tap \uD83E\uDD16 Get AI Help to build your bag.</div>');
-  document.getElementById('putterSlot').innerHTML = DOMPurify.sanitize(putter /* CLEAN10 */
+    : '<div class="hist-empty">No clubs yet. Use \uFF0B Add Club or tap \uD83E\uDD16 Get AI Help to build your bag.</div>';
+  document.getElementById('putterSlot').innerHTML = putter
     ? clubRowHTML(putter, true)
-    : '<button class="add-club-btn" style="margin-top:6px" onclick="addPutter()">\uFF0B Add Putter</button>');
+    : '<button class="add-club-btn" style="margin-top:6px" onclick="addPutter()">\uFF0B Add Putter</button>';
 }
 
 export function clubRowHTML(c, isPutter) {
