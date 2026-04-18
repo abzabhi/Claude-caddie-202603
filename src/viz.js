@@ -709,7 +709,8 @@ function _buildDispRadialSVG(heatCounts, heatMax, fpCounts){
 }
 
 function _lrShotClubName(shot){
-  var c=bag.find(function(x){ return x.id===shot.clubId; });
+  /* SLUG2 -- slug-first lookup; clubId fallback; stored clubName fallback */
+  var c=(shot.clubSlug&&bag.find(function(x){return x.slug===shot.clubSlug;}))||bag.find(function(x){return x.id===shot.clubId;});
   return c?(c.identifier||c.type):(shot.clubName||(shot.clubId||'Unknown'));
 }
 
