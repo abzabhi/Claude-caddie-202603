@@ -2,7 +2,7 @@
 // AI caddie session, export/import, and text processing.
 // Depends on: geo.js, store.js, dispersion.js, clubs.js
 
-import { fmtDate, deriveStats, calcImplied, calcPlayHcp, tierIndex, calcDiff } from './geo.js';
+import { fmtDate, deriveStats, calcImplied, calcPlayHcp, tierIndex, calcDiff, aggregateObservedDispersion } from './geo.js'; /* ASKB-5 */
 import { uid, today, save, bag, courses, rounds, history, profile, removeHistory, rangeSessions, removeRangeSession } from './store.js';
 import { getDispersion } from './dispersion.js';
 import { getYardLabel } from './clubs.js';
@@ -274,6 +274,33 @@ function exportForAI() {
       }
     }
   });
+
+  /* ASKB-5 -- OBSERVED DISPERSION section (Tier 3+ only).
+     Source=both: export is data-complete regardless of viz toggle; AI gets fullest picture.
+     One line per eligible club (sampleSize >= 5). Uses identifier (not slug) for AI contract consistency. */
+  if (+optTier >= 3) {
+    const observedLines = [];
+    bag.forEach(function(c){
+      if (c.tested !== true || !c.slug) return;
+      const obs = aggregateObservedDispersion(c.slug, {
+        source: 'both',
+        minShots: 5,
+        rangeSessions: rangeSessions || [],
+        rounds: rounds || [],
+        bag: bag
+      });
+      if (!obs) return;
+      const fm = obs.flightPathMix;
+      observedLines.push('OBSERVED | ' + c.identifier + ' | n=' + obs.sampleSize +
+        ' | miss=' + obs.missDirection +
+        ' | str=' + fm.str + '%,ltr=' + fm.ltr + '%,rtl=' + fm.rtl + '%' +
+        ' | tag=' + obs.shotTag);
+    });
+    if (observedLines.length) {
+      L.push('', '--- OBSERVED DISPERSION ---');
+      observedLines.forEach(function(ln){ L.push(ln); });
+    }
+  }
 
   L.push('', '--- COURSES ---');
   if(course) {
