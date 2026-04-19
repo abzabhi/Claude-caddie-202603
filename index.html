@@ -1390,6 +1390,16 @@ body{
         <div style="font-size:.62rem;color:var(--tx3);margin-bottom:8px">
           Select range sessions and/or rounds, then clubs to compare dispersion.
         </div>
+        <!-- ASKB-4 -- shared observed-source toggle (applies to dispersion tab + coverage + hole planner via Block 4 handler) -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div class="flbl" style="margin-bottom:0">Observed Source</div>
+          <div style="display:flex;gap:3px">
+            <button class="implied-tog"    id="askbSrc-rounds" onclick="askbSetSource('rounds')" style="font-size:.58rem;padding:2px 8px">Rounds</button>
+            <button class="implied-tog"    id="askbSrc-range"  onclick="askbSetSource('range')"  style="font-size:.58rem;padding:2px 8px">Range</button>
+            <button class="implied-tog on" id="askbSrc-both"   onclick="askbSetSource('both')"   style="font-size:.58rem;padding:2px 8px">Both</button>
+          </div>
+        </div>
+        <div style="font-size:.56rem;color:var(--tx3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--br)">Controls which shots feed observed overlay (min 5 per source).</div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <div class="flbl" style="margin-bottom:0">Range Sessions</div>
           <button class="implied-tog" id="vizDispSessionAllBtn" onclick="vizDispToggleAllSessions()" style="font-size:.58rem;padding:2px 8px">All</button>
@@ -1414,7 +1424,20 @@ body{
       </div>
 
       <!-- Shared: yardage mode + fairway + range + display -->
+      <!-- ASKB-3 -- crowd-caution banner; applies to coverage + hole planner where multiple observed markers can stack. -->
+      <div id="askbCrowdNote" style="font-size:.56rem;color:var(--tx3);padding:6px 8px;margin-top:8px;background:var(--bg);border:1px dashed var(--br);border-radius:4px;line-height:1.45">
+        Tip: keep combined shapes (expected ellipses + observed heatmaps) to roughly 16 or fewer for readability &mdash; e.g., full bag expected-only, full bag observed-only, or 8 clubs showing both.
+      </div>
       <div id="vizSharedControls" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
+        <!-- ASKB-4 -- observed-source toggle mirrored here for coverage + hole planner -->
+        <div class="field">
+          <div class="flbl">Observed</div>
+          <div style="display:flex;gap:3px">
+            <button class="implied-tog"    id="askbSrc2-rounds" onclick="askbSetSource('rounds')" style="font-size:.62rem;padding:2px 6px">Rounds</button>
+            <button class="implied-tog"    id="askbSrc2-range"  onclick="askbSetSource('range')"  style="font-size:.62rem;padding:2px 6px">Range</button>
+            <button class="implied-tog on" id="askbSrc2-both"   onclick="askbSetSource('both')"   style="font-size:.62rem;padding:2px 6px">Both</button>
+          </div>
+        </div>
         <div class="field">
           <div class="flbl">Yardage</div>
           <div style="display:flex;gap:3px">
