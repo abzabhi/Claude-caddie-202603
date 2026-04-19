@@ -1260,19 +1260,17 @@ export function vizRenderObservedMarker(cx, cy, refR, obs, strokeHex) {
 }
 
 /* ASKB-3 helper -- resolve observed aggregate for a club using askbShow.rounds/range.
-   Returns null if both sources off, no slug, or <5 shots across selected sources. */
+   Slug-only per SLUG1 contract. Returns null if both sources off, no slug, or <5 shots. */
 export function askbGetObserved(club) {
   if (!club) return null;
   if (!askbShow.rounds && !askbShow.range) return null;
-  var slug = club.slug;
-  if (!slug) return null;
+  if (!club.slug) return null;
   var src = (askbShow.rounds && askbShow.range) ? 'both' : (askbShow.rounds ? 'rounds' : 'range');
-  return aggregateObservedDispersion(slug, {
+  return aggregateObservedDispersion(club.slug, {
     source: src,
     minShots: 5,
     rangeSessions: rangeSessions || [],
-    rounds: rounds || [],
-    bag: bag || []
+    rounds: rounds || []
   });
 }
 
