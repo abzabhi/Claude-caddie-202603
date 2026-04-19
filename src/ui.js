@@ -4,7 +4,7 @@
 
 import { bag, courses, rounds, history, profile, rangeSessions,
          save, today, uid, serialise,
-         setBag, setRounds, setProfile, replaceCourse, clearAll } from './store.js';
+         setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs } from './store.js'; /* SLUG1c */
 import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag } from './geo.js'; /* ASKB-1 */
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
@@ -175,6 +175,7 @@ function _doProcessDataText(text) {
   /* CLEAN5 -- restore rangeSessions on legacy TXT import (was silently dropped) */
   if(newRangeSessions.length){const ids=new Set(rangeSessions.map(s=>s.sessionId)); newRangeSessions.forEach(s=>{if(!ids.has(s.sessionId)) rangeSessions.push(s);});}
   document.getElementById('uploadBanner').style.display='none';
+  reconcileSlugs(); /* SLUG1c -- reconcile after bag/rounds/sessions written */
   save(); renderAll();
   alert('Data imported successfully.');
 }
@@ -393,6 +394,7 @@ function dbLoadData(text) {
   }
   if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
   if(newRangeSessions.length){const ids=new Set(rangeSessions.map(s=>s.sessionId)); newRangeSessions.forEach(s=>{if(!ids.has(s.sessionId)) rangeSessions.push(s);});}
+  reconcileSlugs(); /* SLUG1c -- reconcile after sync pull rebuilds bag from blob */
   save();
 }
 
@@ -412,6 +414,7 @@ function _doMergeOverwrite(newBag,newRounds,newCourses,newHistory,newProfile,new
   }
   if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
   document.getElementById('uploadBanner').style.display='none';
+  reconcileSlugs(); /* SLUG1c -- reconcile after overwrite rebuilds bag */
   save(); renderAll(); alert('Data overwritten successfully.');
 }
 
@@ -449,6 +452,7 @@ function mergeDataText(text, mode) {
       function() {
         rounds.push(...toAdd);
         histToAdd.forEach(h=>history.unshift(h));
+        reconcileSlugs(); /* SLUG1c -- reconcile after append adds rounds */
         save(); renderAll();
         alert('Appended: '+toAdd.length+' round(s), '+histToAdd.length+' session(s).');
       },
@@ -483,7 +487,7 @@ function mergeDataText(text, mode) {
     showConfirmModal(
       'Save Merge',
       msg + '\n\nSave and apply?',
-      function() { save(); renderAll(); alert('Merge saved.'); }
+      function() { reconcileSlugs(); save(); renderAll(); alert('Merge saved.'); } /* SLUG1c */
     );
     return;
   }
