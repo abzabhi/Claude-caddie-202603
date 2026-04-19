@@ -91,7 +91,7 @@ export function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interv
     if(d._club){
       const obs=askbGetObserved(d._club);
       if(obs){
-        const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale;
+        const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale * 0.85; /* ASKB-FIX -- -15% radial size */
         annots+=vizRenderObservedMarker(cx,carryY,refR,obs,col);
       }
     }
@@ -210,7 +210,7 @@ export function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
         /* ASKB-3 -- observed overlay centred on straight-shot target (cx, carryY), simple radius. */
         const obs=askbGetObserved(club);
         if(obs){
-          const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale;
+          const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale * 0.85; /* ASKB-FIX -- -15% radial size */
           annots+=vizRenderObservedMarker(cx,carryY,refR,obs,col);
         }
       }
@@ -1205,7 +1205,7 @@ export function vizRenderObservedMarker(cx, cy, refR, obs, strokeHex) {
   }
   var heatR = function(n) {
     if (!n) return 'rgba(255,255,255,0)';
-    return 'rgba(160,30,30,' + (0.20 + (n / heatMax) * 0.55).toFixed(2) + ')';
+    return 'rgba(160,30,30,' + (0.18 + (n / heatMax) * 0.72).toFixed(2) + ')'; /* ASKB-FIX -- alpha range matched to dispersion tab _buildDispRadialSVG (was 0.20+0.55) */
   };
   var arc = function(r1, r2, startDeg, endDeg) {
     var rad = function(a){ return (a - 90) * Math.PI / 180; };
