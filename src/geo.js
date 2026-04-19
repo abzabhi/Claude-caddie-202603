@@ -430,19 +430,14 @@ export function shotTag(d, miss) {
 /* ASKB-1 -- aggregate observed dispersion for a club across rangeSessions and/or rounds.
    Pure: all state passed as args (geo.js contract).
    Returns null if sampleSize < minShots (no cross-source padding).
-   clubSlug is the stable identifier (SLUG1). clubId/name fallback for legacy entries is handled by callers. */
+   Slug-only match per SLUG1 contract. Callers must pass a valid stable slug. */
 export function aggregateObservedDispersion(clubSlug, options) {
   var opts = options || {};
   var source       = opts.source   || 'both';   // 'rounds' | 'range' | 'both'
   var minShots     = opts.minShots != null ? opts.minShots : 5;
   var rangeSessions = opts.rangeSessions || [];
   var rounds       = opts.rounds   || [];
-  var bag          = opts.bag      || [];
   if (!clubSlug) return null;
-
-  // Resolve club for legacy-id matching (range sessions may have clubSlug OR clubId)
-  var clubObj = bag.find(function(c){ return c.slug === clubSlug; });
-  var legacyId = clubObj ? clubObj.id : null;
 
   // Aggregate into {bull, inner[8], outer[8], fp{str,ltr,rtl}} and fpCounts per segment
   var d = { bull:0, inner:[0,0,0,0,0,0,0,0], outer:[0,0,0,0,0,0,0,0], fp:{ str:0, ltr:0, rtl:0 } };
@@ -466,8 +461,7 @@ export function aggregateObservedDispersion(clubSlug, options) {
     rangeSessions.forEach(function(s) {
       if (!s || !s.committed || !s.clubSummary) return;
       s.clubSummary.forEach(function(cs) {
-        var match = cs.clubSlug === clubSlug || (legacyId && cs.clubId === legacyId);
-        if (!match) return;
+        if (cs.clubSlug !== clubSlug) return;
         (cs.targets || []).forEach(function(t) {
           sampleSize += t.shotCount || 0;
           var dp = t.dispersion; if (!dp) return;
@@ -503,8 +497,7 @@ export function aggregateObservedDispersion(clubSlug, options) {
       r.holes.forEach(function(h) {
         (h.shots || []).forEach(function(shot) {
           if (!shot || !shot.radial_ring) return;
-          var match = shot.clubSlug === clubSlug || (legacyId && shot.clubId === legacyId);
-          if (!match) return;
+          if (shot.clubSlug !== clubSlug) return;
           sampleSize++;
           var ring = shot.radial_ring, seg = shot.radial_segment;
           var segKey = null;
