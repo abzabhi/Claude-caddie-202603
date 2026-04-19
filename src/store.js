@@ -27,9 +27,43 @@ export function load() {
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
   /* SLUG1 -- backfill stable slug on any legacy club missing it */
-  for(var _si=0;_si<bag.length;_si++){ if(!bag[_si].slug) bag[_si].slug=clubSlug(bag[_si]); }
+  var _slugDirty=false;
+  for(var _si=0;_si<bag.length;_si++){ if(!bag[_si].slug){ bag[_si].slug=clubSlug(bag[_si]); _slugDirty=true; } }
+  /* SLUG1b -- one-time retro-backfill for historical session + round-shot data.
+     Walks rangeSessions[].clubSummary[] and rounds[].holes[].shots[], fills
+     clubSlug by looking up clubId against current bag. Unmatched -> left empty
+     (don't guess). Persists via save() only if something changed. */
+  var _bagById={};
+  for(var _bi=0;_bi<bag.length;_bi++){ if(bag[_bi].id) _bagById[bag[_bi].id]=bag[_bi]; }
+  for(var _rsi=0;_rsi<rangeSessions.length;_rsi++){
+    var _cs=rangeSessions[_rsi] && rangeSessions[_rsi].clubSummary;
+    if(!Array.isArray(_cs)) continue;
+    for(var _ei=0;_ei<_cs.length;_ei++){
+      var _entry=_cs[_ei];
+      if(_entry && !_entry.clubSlug){
+        var _cRef=_bagById[_entry.clubId];
+        if(_cRef){ _entry.clubSlug=_cRef.slug||clubSlug(_cRef); _slugDirty=true; }
+      }
+    }
+  }
+  for(var _ri=0;_ri<rounds.length;_ri++){
+    var _holes=rounds[_ri] && rounds[_ri].holes;
+    if(!Array.isArray(_holes)) continue;
+    for(var _hi=0;_hi<_holes.length;_hi++){
+      var _shots=_holes[_hi] && _holes[_hi].shots;
+      if(!Array.isArray(_shots)) continue;
+      for(var _shi=0;_shi<_shots.length;_shi++){
+        var _sh=_shots[_shi];
+        if(_sh && !_sh.clubSlug){
+          var _sc=_bagById[_sh.clubId];
+          if(_sc){ _sh.clubSlug=_sc.slug||clubSlug(_sc); _slugDirty=true; }
+        }
+      }
+    }
+  }
   courses=courses.filter(x=>x&&x.id);
   rounds=rounds.filter(x=>x&&x.id);
+  if(_slugDirty) save();
 }
 
 // Mutation helpers -- use at import sites instead of direct binding reassignment
