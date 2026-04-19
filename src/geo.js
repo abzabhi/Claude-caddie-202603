@@ -357,3 +357,178 @@ export function localISO() {
   var n=new Date(), p=function(x){return x<10?'0'+x:''+x;};
   return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
 }
+
+/* ASKB-1 -- shared miss/tag/flight-path derivation extracted from ui.js renderPerfSummary.
+   Operates on a {bull, inner[8], outer[8], fp{str,ltr,rtl}} aggregate. Pure. */
+export var BUCKET_NAMES = ['Long','Long-Right','Right','Short-Right','Short','Short-Left','Left','Long-Left'];
+
+export function tagLookup(path, miss, sev) {
+  if (!miss || miss === '\u2014') return 'Target';
+  if (path === 'Str') {
+    if (miss === 'Right' || miss === 'Long-Right') return 'Push';
+    if (miss === 'Left'  || miss === 'Long-Left')  return 'Pull';
+    if (miss === 'Short') return 'Chunk/Thin';
+    return '\u2014';
+  }
+  if (path === 'LtR') {
+    if (miss === 'Right' || miss === 'Long-Right') return sev === 'Inner' ? 'Fade' : 'Slice';
+    if (miss === 'Left'  || miss === 'Long-Left')  return 'Double Cross (LtR)';
+    return '\u2014';
+  }
+  if (path === 'RtL') {
+    if (miss === 'Left'  || miss === 'Long-Left')  return sev === 'Inner' ? 'Draw' : 'Hook';
+    if (miss === 'Right' || miss === 'Long-Right') return 'Double Cross (RtL)';
+    return '\u2014';
+  }
+  return '\u2014';
+}
+
+export function dominantMiss(d) {
+  var buckets = [], i;
+  for (i = 0; i < 8; i++) buckets.push({ i: i, n: (d.inner[i]||0) + (d.outer[i]||0), outerN: d.outer[i]||0 });
+  buckets.sort(function(a,b){ return b.n - a.n; });
+  if (!buckets[0].n) return '\u2014';
+  if (buckets[0].n > buckets[1].n) return BUCKET_NAMES[buckets[0].i];
+  var topN = buckets[0].n, tied = buckets.filter(function(b){ return b.n === topN; });
+  if (tied.length === 2) {
+    var ai = tied[0].i, bi = tied[1].i;
+    if (tied[0].outerN !== tied[1].outerN) return BUCKET_NAMES[tied[0].outerN > tied[1].outerN ? tied[0].i : tied[1].i];
+    var diff = Math.abs(ai - bi);
+    if (diff === 4) {
+      var an = BUCKET_NAMES[ai], bn = BUCKET_NAMES[bi];
+      return ((an === 'Right' || bn === 'Right') || (an === 'Left' || bn === 'Left')) ? 'Two-Way Miss (L/R)' : 'Two-Way Miss (Dist)';
+    }
+    var mn = Math.min(ai, bi), mx = Math.max(ai, bi);
+    var adj = (mx - mn === 1) || (mn === 0 && mx === 7);
+    if (adj) {
+      var combos = {0:{'1':'Broad Long-Right'},1:{'2':'Broad Right'},2:{'3':'Broad Short-Right'},3:{'4':'Broad Short'},4:{'5':'Broad Short-Left'},5:{'6':'Broad Left'},6:{'7':'Broad Long-Left'}};
+      var wrap = (mn === 0 && mx === 7) ? 'Broad Long' : null;
+      return wrap || (combos[mn] && combos[mn][mx]) || BUCKET_NAMES[buckets[0].i];
+    }
+  }
+  return BUCKET_NAMES[buckets[0].i];
+}
+
+export function shotTag(d, miss) {
+  var innerTot = d.inner.reduce(function(n,v){ return n + v; }, 0);
+  var outerTot = d.outer.reduce(function(n,v){ return n + v; }, 0);
+  var grandTot = d.bull + innerTot + outerTot;
+  if (!grandTot) return '\u2014';
+  if (d.bull / grandTot > 0.5 || !miss || miss === '\u2014') return 'Target';
+  var sev = innerTot >= outerTot ? 'Inner' : 'Outer';
+  var fp = d.fp, fpTot = fp.str + fp.ltr + fp.rtl;
+  if (!fpTot) return '\u2014';
+  var paths = [['Str',fp.str],['LtR',fp.ltr],['RtL',fp.rtl]];
+  paths.sort(function(a,b){ return b[1] - a[1]; });
+  if (paths[0][1] > paths[1][1]) return tagLookup(paths[0][0], miss, sev);
+  if (miss.indexOf('Two-Way') === 0) return 'Two-Way Miss';
+  var sevW = { Hook:3, Slice:3, Pull:2, Push:2, Draw:1, Fade:1 };
+  var t1 = tagLookup(paths[0][0], miss, sev), t2 = tagLookup(paths[1][0], miss, sev);
+  return (sevW[t1]||0) >= (sevW[t2]||0) ? t1 : t2;
+}
+
+/* ASKB-1 -- aggregate observed dispersion for a club across rangeSessions and/or rounds.
+   Pure: all state passed as args (geo.js contract).
+   Returns null if sampleSize < minShots (no cross-source padding).
+   clubSlug is the stable identifier (SLUG1). clubId/name fallback for legacy entries is handled by callers. */
+export function aggregateObservedDispersion(clubSlug, options) {
+  var opts = options || {};
+  var source       = opts.source   || 'both';   // 'rounds' | 'range' | 'both'
+  var minShots     = opts.minShots != null ? opts.minShots : 5;
+  var rangeSessions = opts.rangeSessions || [];
+  var rounds       = opts.rounds   || [];
+  var bag          = opts.bag      || [];
+  if (!clubSlug) return null;
+
+  // Resolve club for legacy-id matching (range sessions may have clubSlug OR clubId)
+  var clubObj = bag.find(function(c){ return c.slug === clubSlug; });
+  var legacyId = clubObj ? clubObj.id : null;
+
+  // Aggregate into {bull, inner[8], outer[8], fp{str,ltr,rtl}} and fpCounts per segment
+  var d = { bull:0, inner:[0,0,0,0,0,0,0,0], outer:[0,0,0,0,0,0,0,0], fp:{ str:0, ltr:0, rtl:0 } };
+  var fpCounts = { bull:{straight:0,'left-to-right':0,'right-to-left':0} };
+  var i;
+  for (i = 0; i < 8; i++) {
+    fpCounts['inner-'+i] = { straight:0, 'left-to-right':0, 'right-to-left':0 };
+    fpCounts['outer-'+i] = { straight:0, 'left-to-right':0, 'right-to-left':0 };
+  }
+  var sampleSize = 0;
+
+  var addFp = function(segKey, fpName) {
+    if (fpName === 'straight')            d.fp.str++;
+    else if (fpName === 'left-to-right')  d.fp.ltr++;
+    else if (fpName === 'right-to-left')  d.fp.rtl++;
+    if (fpCounts[segKey] && fpCounts[segKey][fpName] !== undefined) fpCounts[segKey][fpName]++;
+  };
+
+  // Range pass -- session.clubSummary already bucketed
+  if (source === 'range' || source === 'both') {
+    rangeSessions.forEach(function(s) {
+      if (!s || !s.committed || !s.clubSummary) return;
+      s.clubSummary.forEach(function(cs) {
+        var match = cs.clubSlug === clubSlug || (legacyId && cs.clubId === legacyId);
+        if (!match) return;
+        (cs.targets || []).forEach(function(t) {
+          sampleSize += t.shotCount || 0;
+          var dp = t.dispersion; if (!dp) return;
+          d.bull += dp.bull.total || 0;
+          var fps = dp.bull.flightPaths || {};
+          Object.keys(fps).forEach(function(k){ if (fpCounts.bull[k] !== undefined) fpCounts.bull[k] += fps[k]||0; });
+          d.fp.str += fps.straight || 0;
+          d.fp.ltr += fps['left-to-right'] || 0;
+          d.fp.rtl += fps['right-to-left'] || 0;
+          for (var j = 0; j < 8; j++) {
+            if (dp.inner[j]) {
+              d.inner[j] += dp.inner[j].total || 0;
+              var ifps = dp.inner[j].flightPaths || {};
+              d.fp.str += ifps.straight || 0; d.fp.ltr += ifps['left-to-right'] || 0; d.fp.rtl += ifps['right-to-left'] || 0;
+              Object.keys(ifps).forEach(function(k){ if (fpCounts['inner-'+j][k] !== undefined) fpCounts['inner-'+j][k] += ifps[k]||0; });
+            }
+            if (dp.outer[j]) {
+              d.outer[j] += dp.outer[j].total || 0;
+              var ofps = dp.outer[j].flightPaths || {};
+              d.fp.str += ofps.straight || 0; d.fp.ltr += ofps['left-to-right'] || 0; d.fp.rtl += ofps['right-to-left'] || 0;
+              Object.keys(ofps).forEach(function(k){ if (fpCounts['outer-'+j][k] !== undefined) fpCounts['outer-'+j][k] += ofps[k]||0; });
+            }
+          }
+        });
+      });
+    });
+  }
+
+  // Rounds pass -- raw shots
+  if (source === 'rounds' || source === 'both') {
+    rounds.forEach(function(r) {
+      if (!r || !r.holes) return;
+      r.holes.forEach(function(h) {
+        (h.shots || []).forEach(function(shot) {
+          if (!shot || !shot.radial_ring) return;
+          var match = shot.clubSlug === clubSlug || (legacyId && shot.clubId === legacyId);
+          if (!match) return;
+          sampleSize++;
+          var ring = shot.radial_ring, seg = shot.radial_segment;
+          var segKey = null;
+          if (ring === 'bull') { d.bull++; segKey = 'bull'; }
+          else if (ring === 'inner' && seg != null) { d.inner[+seg]++; segKey = 'inner-'+seg; }
+          else if (ring === 'outer' && seg != null) { d.outer[+seg]++; segKey = 'outer-'+seg; }
+          if (shot.flight_path && segKey) addFp(segKey, shot.flight_path);
+        });
+      });
+    });
+  }
+
+  if (sampleSize < minShots) return null;
+
+  var miss = dominantMiss(d);
+  var tag  = shotTag(d, miss);
+  var fpTot = d.fp.str + d.fp.ltr + d.fp.rtl;
+  var pct = function(n){ return fpTot > 0 ? Math.round(n / fpTot * 100) : 0; };
+  return {
+    sampleSize: sampleSize,
+    missDirection: miss,
+    flightPathMix: { str: pct(d.fp.str), ltr: pct(d.fp.ltr), rtl: pct(d.fp.rtl) },
+    shotTag: tag,
+    bucketCounts: d,
+    fpCounts: fpCounts
+  };
+}
