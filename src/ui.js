@@ -1060,7 +1060,7 @@ function confirmClearAll() {
   if(window.updateSessionPill) window.updateSessionPill();
 }
 function signOut() {
-  ['vc:gateUnlocked','vc:kvPass','vc:verify'].forEach(k=>sessionStorage.removeItem(k));
+  ['vc:gateUnlocked','vc:kvPass','vc:verify','vc:siteVerify'].forEach(k=>sessionStorage.removeItem(k)); /* GUEST2 */
   location.reload();
 }
 
