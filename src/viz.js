@@ -1,5 +1,5 @@
 import { calcVizMaxRange } from './clubs.js';
-import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath, localISO } from './geo.js'; /* CLEAN11 */
+import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath, localISO, aggregateObservedDispersion } from './geo.js'; /* CLEAN11 */ /* ASKB-1 */
 import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLIGHT_DATA, BIAS_DATA, ZONE_RING_RADII } from './constants.js';
 import { vizGetDisp } from './dispersion.js';
 
@@ -22,6 +22,12 @@ export let vizDispSelectedKeys     = new Set();
 export let vizDispInitDone         = false;
 export let vizDispYardageFilter    = {}; // clubId -> yardage number | null (null = All)
 export let vizDispSelectedRounds   = new Set(); // Set of history[] indices
+
+/* ASKB-4 -- shared observed-source state (rounds | range | both). Persisted to vc:askb:source. */
+export let askbSource = (function(){
+  try { var v = localStorage.getItem('vc:askb:source'); return v==='rounds'||v==='range'||v==='both' ? v : 'both'; }
+  catch(e) { return 'both'; }
+})();
 
 export function setVizInitDone(v) { vizInitDone = v; }
 export function vizRenderEllipse(uid,cx,cy,rxR,rxL,ryU,ryD,tilt,hex,pR,pL,pS,pLn,mode){
@@ -69,6 +75,15 @@ export function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interv
     const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
     chips.push({label:d.label,col,p:Math.round(pFw*100)});
     legs.push({label:`${d.label} · ${d.carry}y · ±${d.latH}y`,col});
+    /* ASKB-3 -- observed overlay centred on straight-shot target (cx, carryY), NOT biased ellipse centre.
+       refR = simple average of lateral + depth extents (no tilt/asymmetry). Drift vs expected is the feature. */
+    if(d._club){
+      const obs=askbGetObserved(d._club);
+      if(obs){
+        const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale;
+        annots+=vizRenderObservedMarker(cx,carryY,refR,obs,col);
+      }
+    }
   });
   // Range tick marks at user-defined interval
   const tickInt=interval||25;
@@ -178,6 +193,12 @@ export function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
       if(si===clubs.length-1){
         const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
         chips.push({label:'P'+(pi+1)+' \xb7 '+clubs.map(c=>c.identifier||c.type).join('\u2192'),col:baseCol,p:Math.round(pFw*100)});
+        /* ASKB-3 -- observed overlay centred on straight-shot target (cx, carryY), simple radius. */
+        const obs=askbGetObserved(club);
+        if(obs){
+          const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale;
+          annots+=vizRenderObservedMarker(cx,carryY,refR,obs,col);
+        }
       }
       legs.push({label:'P'+(pi+1)+' \xb7 '+d.label+' \xb7 '+Math.round(yft)+'y',col});
     });
@@ -232,7 +253,8 @@ export function renderViz(){
       const entry=history.find(h=>h.id===document.getElementById('vizOptSessionSelect')?.value);
       clubs=entry?vizClubsFromEntry(entry):bag.filter(c=>c.tested&&c.type!=='Putter');
     }
-    const disps=clubs.map(c=>vizGetDisp(c,hcp,handed,profile.yardType||'Total',vizYardMode)).filter(Boolean);
+    /* ASKB-3 -- attach club back-ref to disp so vizDrawCanvas can resolve observed overlay. */
+    const disps=clubs.map(c=>{ const d=vizGetDisp(c,hcp,handed,profile.yardType||'Total',vizYardMode); if(d) d._club=c; return d; }).filter(Boolean);
     const title=vizClubSrc==='optimised'?'Optimised bag · HCP '+hcp:'Custom · HCP '+hcp;
     const maxRange=+document.getElementById('vizMaxRange')?.value||calcVizMaxRange();
     const interval=+document.getElementById('vizRangeInterval')?.value||25;
@@ -664,7 +686,7 @@ function _dispArcPath(cx,cy,r1,r2,startDeg,endDeg){
          ' L '+s2[0]+' '+s2[1]+' A '+r1+' '+r1+' 0 0 0 '+e2[0]+' '+e2[1]+' Z';
 }
 
-function _buildDispRadialSVG(heatCounts, heatMax, fpCounts){
+function _buildDispRadialSVG(heatCounts, heatMax, fpCounts, expectedOverlay){
   var cx=150, cy=150;
   var rB=ZONE_RING_RADII.bull, rI=ZONE_RING_RADII.inner, rO=ZONE_RING_RADII.outer;
   var bg='<rect width="300" height="300" fill="#6a9a50"/><rect x="90" y="0" width="120" height="300" fill="#9ec880"/>';
@@ -707,7 +729,20 @@ function _buildDispRadialSVG(heatCounts, heatMax, fpCounts){
       labels+=_fpLine('outer-'+i,heatCounts['outer-'+i]||0,ox,oy);
     }
   }
-  return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px;display:block;margin:0 auto">'+bg+paths+labels+'</svg>';
+  /* ASKB-2 -- expected-ellipse outline overlay, projected onto radial canvas.
+     expectedOverlay = { rxR, rxL, ryU, ryD, tilt } in yards; scaled so mean-radius maps to rO. */
+  var overlay='';
+  if(expectedOverlay){
+    var eo=expectedOverlay;
+    var meanR=(eo.rxR+eo.rxL+eo.ryU+eo.ryD)/4;
+    if(meanR>0){
+      var scl=rO/meanR;
+      var ep=vizEllipsePath(cx,cy,eo.rxR*scl,eo.rxL*scl,eo.ryU*scl,eo.ryD*scl,eo.tilt||0);
+      overlay='<path d="'+ep+'" fill="none" stroke="rgba(255,235,120,0.95)" stroke-width="1.8" stroke-dasharray="4 3" opacity="0.9"/>';
+      overlay+='<text x="'+cx+'" y="'+(cy+rO+12)+'" font-family="monospace" font-size="8" fill="rgba(255,235,120,0.9)" text-anchor="middle">expected</text>';
+    }
+  }
+  return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:280px;display:block;margin:0 auto">'+bg+paths+labels+overlay+'</svg>';
 }
 
 function _lrShotClubName(shot){
@@ -934,7 +969,21 @@ function _buildDispCardInner(key, selectedSessions, yardageFilter){
       }).join('')+
     '</div>';
   }
-  return _buildDispRadialSVG(counts,heatMax,agg.fpCounts)+
+  /* ASKB-2 -- resolve club from key; compute expected ellipse geometry for overlay.
+     Key is slug (SLUG2b) first, clubName fallback. getHandicap/profile lookups mirror renderViz. */
+  var expectedOverlay=null;
+  var clubObj=bag.find(function(x){return x.slug===key;});
+  if(!clubObj){
+    // Fallback: name match (legacy entries)
+    clubObj=bag.find(function(x){return (x.identifier||x.type)===key;});
+  }
+  if(clubObj){
+    var hcp=(typeof getHandicap==='function'?getHandicap():null)||25;
+    var handed=profile.handed||'Right-handed';
+    var d2=vizGetDisp(clubObj,hcp,handed,profile.yardType||'Total',vizYardMode);
+    if(d2){ expectedOverlay={ rxR:d2.rxR, rxL:d2.rxL, ryU:d2.dl, ryD:d2.ds, tilt:d2.tilt }; }
+  }
+  return _buildDispRadialSVG(counts,heatMax,agg.fpCounts,expectedOverlay)+
     '<div style="font-size:.58rem;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.9">'+statStr+'</div>'+
     yardageChips;
 }
@@ -1093,6 +1142,110 @@ export function vizDispToggleAllClubs(){
   renderVizDisp();
 }
 
+/* ASKB-4 -- shared source toggle handler. Persists + re-renders current viz mode. */
+export function askbSetSource(src) {
+  if (src !== 'rounds' && src !== 'range' && src !== 'both') return;
+  askbSource = src;
+  try { localStorage.setItem('vc:askb:source', src); } catch(e) {}
+  ['askbSrc-rounds','askbSrc-range','askbSrc-both','askbSrc2-rounds','askbSrc2-range','askbSrc2-both'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    var isOn = id.indexOf('-'+src) !== -1;
+    el.classList.toggle('on', isOn);
+  });
+  if (vizMode === 'dispersion') renderVizDisp();
+  else renderViz();
+}
+
+/* ASKB-3 -- observed overlay renderer (heatmap markers).
+   Centre is always the straight-shot target (caller passes cx,cy unbiased).
+   refR is a simple size (no tilt, no asymmetry) -- observed drift vs expected is the point.
+   Renders 3 concentric rings + 8 segment wedges, heat-coloured by count.
+   Labels (%, flight-path arrows) scaled to refR, hidden below readable threshold.
+   obs = { bucketCounts, sampleSize, fpCounts } from aggregateObservedDispersion. */
+export function vizRenderObservedMarker(cx, cy, refR, obs, strokeHex) {
+  if (!obs || !obs.bucketCounts) return '';
+  var d = obs.bucketCounts;
+  var rB = refR * 0.25, rI = refR * 0.60, rO = refR * 1.00;
+  var innerTot = 0, outerTot = 0, i;
+  for (i = 0; i < 8; i++) { innerTot += d.inner[i]; outerTot += d.outer[i]; }
+  var total = d.bull + innerTot + outerTot;
+  if (!total) return '';
+  var heatMax = Math.max(d.bull, 1);
+  for (i = 0; i < 8; i++) {
+    if (d.inner[i] > heatMax) heatMax = d.inner[i];
+    if (d.outer[i] > heatMax) heatMax = d.outer[i];
+  }
+  var heatR = function(n) {
+    if (!n) return 'rgba(255,255,255,0)';
+    return 'rgba(160,30,30,' + (0.20 + (n / heatMax) * 0.55).toFixed(2) + ')';
+  };
+  var arc = function(r1, r2, startDeg, endDeg) {
+    var rad = function(a){ return (a - 90) * Math.PI / 180; };
+    var pt = function(r, a){ return [(cx + r*Math.sin(rad(a))).toFixed(2), (cy - r*Math.cos(rad(a))).toFixed(2)]; };
+    var s1 = pt(r2, startDeg), e1 = pt(r2, endDeg);
+    var s2 = pt(r1, endDeg),   e2 = pt(r1, startDeg);
+    return 'M ' + s1[0] + ' ' + s1[1] + ' A ' + r2 + ' ' + r2 + ' 0 0 1 ' + e1[0] + ' ' + e1[1] +
+           ' L ' + s2[0] + ' ' + s2[1] + ' A ' + r1 + ' ' + r1 + ' 0 0 0 ' + e2[0] + ' ' + e2[1] + ' Z';
+  };
+  var paths = '';
+  for (i = 0; i < 8; i++) paths += '<path d="' + arc(rB, rI, (i*45)-22.5, (i*45)+22.5) + '" fill="' + heatR(d.inner[i]) + '"/>';
+  for (i = 0; i < 8; i++) paths += '<path d="' + arc(rI, rO, (i*45)-22.5, (i*45)+22.5) + '" fill="' + heatR(d.outer[i]) + '"/>';
+  paths += '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + rB.toFixed(2) + '" fill="' + heatR(d.bull) + '"/>';
+  var stroke = strokeHex || 'rgba(255,255,255,0.55)';
+  paths += '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + rB.toFixed(2) + '" fill="none" stroke="' + stroke + '" stroke-width="1" stroke-dasharray="2 2" opacity="0.7"/>';
+  paths += '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + rI.toFixed(2) + '" fill="none" stroke="' + stroke + '" stroke-width="1" stroke-dasharray="2 2" opacity="0.55"/>';
+  paths += '<circle cx="' + cx.toFixed(2) + '" cy="' + cy.toFixed(2) + '" r="' + rO.toFixed(2) + '" fill="none" stroke="' + stroke + '" stroke-width="1.2" stroke-dasharray="3 2" opacity="0.75"/>';
+
+  /* ASKB-3 -- % + flight-path labels, scaled to refR. Mirrors dispersion-tab _buildDispRadialSVG labelling.
+     Font scales refR/15 (dispersion tab uses 9pt at 300x300 -> refR~135). Hide labels below 4pt. */
+  var fs = Math.max(3, Math.min(9, refR / 15));
+  var fc = obs.fpCounts || null;
+  if (fs >= 4) {
+    var fsStr = fs.toFixed(1), fsSmall = (fs * 0.8).toFixed(1);
+    var pctLbl = function(pct, x, y) {
+      return pct > 0 ? '<text x="' + x + '" y="' + y + '" font-family="monospace" font-size="' + fsStr + '" fill="white" text-anchor="middle">' + pct + '%</text>' : '';
+    };
+    var fpLine = function(segKey, segCount, x, y) {
+      if (!fc || !segCount) return '';
+      var sfp = fc[segKey]; if (!sfp) return '';
+      var parts = [];
+      if (sfp.straight > 0)         parts.push('\u2191' + Math.round(sfp.straight / segCount * 100) + '%');
+      if (sfp['left-to-right'] > 0) parts.push('\u21b1' + Math.round(sfp['left-to-right'] / segCount * 100) + '%');
+      if (sfp['right-to-left'] > 0) parts.push('\u21b0' + Math.round(sfp['right-to-left'] / segCount * 100) + '%');
+      if (!parts.length) return '';
+      return '<text x="' + x + '" y="' + (parseFloat(y) + fs * 1.1).toFixed(2) + '" font-family="monospace" font-size="' + fsSmall + '" fill="white" text-anchor="middle">' + parts.join(' ') + '</text>';
+    };
+    paths += pctLbl(Math.round((d.bull || 0) / total * 100), cx.toFixed(2), (cy + fs * 0.4).toFixed(2));
+    var iMid = (rB + rI) / 2, oMid = (rI + rO) / 2;
+    for (i = 0; i < 8; i++) {
+      var ang = i * 45 * Math.PI / 180;
+      var ix = (cx + iMid * Math.sin(ang)).toFixed(2), iy = (cy - iMid * Math.cos(ang) + fs * 0.3).toFixed(2);
+      var ox = (cx + oMid * Math.sin(ang)).toFixed(2), oy = (cy - oMid * Math.cos(ang) + fs * 0.3).toFixed(2);
+      paths += pctLbl(Math.round((d.inner[i] || 0) / total * 100), ix, iy);
+      paths += fpLine('inner-' + i, d.inner[i] || 0, ix, iy);
+      paths += pctLbl(Math.round((d.outer[i] || 0) / total * 100), ox, oy);
+      paths += fpLine('outer-' + i, d.outer[i] || 0, ox, oy);
+    }
+  }
+  paths += '<text x="' + cx.toFixed(2) + '" y="' + (cy - rO - 3).toFixed(2) + '" font-family="monospace" font-size="7" fill="' + stroke + '" text-anchor="middle" opacity="0.85">n=' + obs.sampleSize + '</text>';
+  return '<g class="askb-obs">' + paths + '</g>';
+}
+
+/* ASKB-3 helper -- resolve club object (with slug) to observed aggregate using current askbSource. */
+export function askbGetObserved(club) {
+  if (!club) return null;
+  var slug = club.slug;
+  if (!slug) return null;
+  return aggregateObservedDispersion(slug, {
+    source: askbSource,
+    minShots: 5,
+    rangeSessions: rangeSessions || [],
+    rounds: rounds || [],
+    bag: bag || []
+  });
+}
+
 Object.assign(window, {
   onVizModeChange, onVizClubSrcChange, onVizOptSessionChange,
   onVizCourseChange, onVizTeeChange, onVizHoleSessionChange,
@@ -1101,5 +1254,6 @@ Object.assign(window, {
   vizToggleClub, vizTogglePath, vizTogglePlanner, vizUpdatePath,
   vizDispToggleSession, vizDispToggleClub, vizDispSetYardage, vizDispToggleRound,
   vizDispToggleAllSessions, vizDispToggleAllRounds,
-  vizDispToggleAllClubs /* UI-γ3 */
+  vizDispToggleAllClubs, /* UI-γ3 */
+  askbSetSource          /* ASKB-4 */
 });
