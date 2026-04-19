@@ -23,10 +23,18 @@ export let vizDispInitDone         = false;
 export let vizDispYardageFilter    = {}; // clubId -> yardage number | null (null = All)
 export let vizDispSelectedRounds   = new Set(); // Set of history[] indices
 
-/* ASKB-4 -- shared observed-source state (rounds | range | both). Persisted to vc:askb:source. */
-export let askbSource = (function(){
-  try { var v = localStorage.getItem('vc:askb:source'); return v==='rounds'||v==='range'||v==='both' ? v : 'both'; }
-  catch(e) { return 'both'; }
+/* ASKB-4 -- three independent visibility toggles (calc, rounds, range).
+   calc=expected ellipse; rounds/range=observed heatmap sources (OR'd).
+   Persisted to vc:askb:show. */
+export let askbShow = (function(){
+  try {
+    var raw = localStorage.getItem('vc:askb:show');
+    if (raw) {
+      var p = JSON.parse(raw);
+      if (p && typeof p === 'object') return { calc: p.calc !== false, rounds: p.rounds !== false, range: p.range !== false };
+    }
+  } catch(e) {}
+  return { calc: true, rounds: true, range: true };
 })();
 
 export function setVizInitDone(v) { vizInitDone = v; }
@@ -63,9 +71,12 @@ export function vizDrawCanvas(dispList,fwYds,mode,title,subtitle,maxRange,interv
     const carryY=teeY-d.carry*scale,aimX=cx+d.off*scale;
     const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=carryY+ryD*.1;
     const col=VIZ_COLORS[i%VIZ_COLORS.length];
-    const es=vizRenderEllipse(i,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
-    defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
-    shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+    /* ASKB-4 -- expected ellipse gated by askbShow.calc */
+    if(askbShow.calc){
+      const es=vizRenderEllipse(i,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
+      defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
+      shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+    }
     if(i>0){const prev=filtered[i-1],gap=prev.carry-prev.ds-(d.carry+d.dl);
       if(gap>12){const gy=teeY-((prev.carry-prev.ds+d.carry+d.dl)/2)*scale;
         annots+=`<line x1="${cx-20}" y1="${gy}" x2="${cx+20}" y2="${gy}" stroke="rgba(160,48,48,.4)" stroke-width="1" stroke-dasharray="3 2"/><text x="${cx}" y="${gy+4}" font-family="monospace" font-size="8" fill="rgba(160,48,48,.7)" text-anchor="middle">gap ~${Math.round(gap)}y</text>`;}}
@@ -184,9 +195,12 @@ export function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
       const col=si===0?baseCol:vizLightenHex(baseCol,Math.min(si*0.28,0.65));
       const carryY=teeY-yft*scale, aimX=cx+d.off*scale;
       const rxR=d.rxR*scale,rxL=d.rxL*scale,ryU=d.dl*scale,ryD=d.ds*scale,eCy=carryY+ryD*.1;
-      const es=vizRenderEllipse(uid++,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
-      defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
-      shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+      /* ASKB-4 -- expected ellipse gated by askbShow.calc */
+      if(askbShow.calc){
+        const es=vizRenderEllipse(uid++,aimX,eCy,rxR,rxL,ryU,ryD,d.tilt,col,d.pR,d.pL,d.pS,d.pLn,mode);
+        defs+=es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0]||'';
+        shapes+=es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s,'');
+      }
       const lx=Math.min(W-2,aimX+rxR+5);
       annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml('P'+(pi+1)+'\xb7'+d.label)}</text>`;
       annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${Math.round(yft)}y</text>`;
@@ -289,6 +303,7 @@ export function onVizModeChange(m){
   document.getElementById('vizDispOutput').style.display         = m==='dispersion' ? 'block' : 'none';
   if(m==='dispersion') initVizDisp();
   else renderViz();
+  askbSyncButtons(); /* ASKB-4 */
 }
 function onVizClubSrcChange(){
   vizClubSrc=document.getElementById('vizClubSrcSel').value;
@@ -666,6 +681,7 @@ export function initViz(){
   syncOptimisedSelection();
   syncHoleClubsFromSession();
   onVizModeChange('coverage');
+  askbSyncButtons(); /* ASKB-4 */
 }
 export function vizToggleClub(id){
   if(vizSelectedClubs.has(id)) vizSelectedClubs.delete(id);
@@ -686,11 +702,14 @@ function _dispArcPath(cx,cy,r1,r2,startDeg,endDeg){
          ' L '+s2[0]+' '+s2[1]+' A '+r1+' '+r1+' 0 0 0 '+e2[0]+' '+e2[1]+' Z';
 }
 
-function _buildDispRadialSVG(heatCounts, heatMax, fpCounts, expectedOverlay){
+function _buildDispRadialSVG(heatCounts, heatMax, fpCounts, expectedOverlay, showHeat){
   var cx=150, cy=150;
   var rB=ZONE_RING_RADII.bull, rI=ZONE_RING_RADII.inner, rO=ZONE_RING_RADII.outer;
   var bg='<rect width="300" height="300" fill="#6a9a50"/><rect x="90" y="0" width="120" height="300" fill="#9ec880"/>';
+  /* ASKB-4 -- showHeat=false suppresses heat fill + % labels; expectedOverlay still renders if provided */
+  var heatOn = showHeat !== false;
   var heatR=function(n){
+    if(!heatOn) return 'rgba(255,255,255,0.08)';
     if(!heatMax||!n) return 'rgba(255,255,255,0.12)';
     return 'rgba(160,30,30,'+(0.18+(n/heatMax)*0.72).toFixed(2)+')';
   };
@@ -705,7 +724,7 @@ function _buildDispRadialSVG(heatCounts, heatMax, fpCounts, expectedOverlay){
   paths+='<circle cx="150" cy="150" r="'+rB+'" fill="'+heatR(heatCounts['bull']||0)+'" stroke="rgba(255,255,255,0.40)" stroke-width="1.5"/>';
   var labels='';
   var total=Object.values(heatCounts).reduce(function(s,v){ return s+v; },0);
-  if(total>0){
+  if(heatOn && total>0){
     var lbl=function(pct,x,y){ return pct>0?'<text x="'+x+'" y="'+y+'" font-family="monospace" font-size="9" fill="white" text-anchor="middle">'+pct+'%</text>':''; };
     var iMid=(rB+rI)/2, oMid=(rI+rO)/2;
     labels+=lbl(Math.round((heatCounts['bull']||0)/total*100),150,154);
@@ -969,21 +988,23 @@ function _buildDispCardInner(key, selectedSessions, yardageFilter){
       }).join('')+
     '</div>';
   }
-  /* ASKB-2 -- resolve club from key; compute expected ellipse geometry for overlay.
-     Key is slug (SLUG2b) first, clubName fallback. getHandicap/profile lookups mirror renderViz. */
+  /* ASKB-4 -- expected overlay gated by askbShow.calc; heat radial gated by rounds||range */
   var expectedOverlay=null;
-  var clubObj=bag.find(function(x){return x.slug===key;});
-  if(!clubObj){
-    // Fallback: name match (legacy entries)
-    clubObj=bag.find(function(x){return (x.identifier||x.type)===key;});
+  if(askbShow.calc){
+    var clubObj=bag.find(function(x){return x.slug===key;});
+    if(!clubObj){
+      // Fallback: name match (legacy entries)
+      clubObj=bag.find(function(x){return (x.identifier||x.type)===key;});
+    }
+    if(clubObj){
+      var hcp=(typeof getHandicap==='function'?getHandicap():null)||25;
+      var handed=profile.handed||'Right-handed';
+      var d2=vizGetDisp(clubObj,hcp,handed,profile.yardType||'Total',vizYardMode);
+      if(d2){ expectedOverlay={ rxR:d2.rxR, rxL:d2.rxL, ryU:d2.dl, ryD:d2.ds, tilt:d2.tilt }; }
+    }
   }
-  if(clubObj){
-    var hcp=(typeof getHandicap==='function'?getHandicap():null)||25;
-    var handed=profile.handed||'Right-handed';
-    var d2=vizGetDisp(clubObj,hcp,handed,profile.yardType||'Total',vizYardMode);
-    if(d2){ expectedOverlay={ rxR:d2.rxR, rxL:d2.rxL, ryU:d2.dl, ryD:d2.ds, tilt:d2.tilt }; }
-  }
-  return _buildDispRadialSVG(counts,heatMax,agg.fpCounts,expectedOverlay)+
+  var showHeat = !!(askbShow.rounds || askbShow.range);
+  return _buildDispRadialSVG(counts,heatMax,agg.fpCounts,expectedOverlay,showHeat)+
     '<div style="font-size:.58rem;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.9">'+statStr+'</div>'+
     yardageChips;
 }
@@ -1142,19 +1163,25 @@ export function vizDispToggleAllClubs(){
   renderVizDisp();
 }
 
-/* ASKB-4 -- shared source toggle handler. Persists + re-renders current viz mode. */
-export function askbSetSource(src) {
-  if (src !== 'rounds' && src !== 'range' && src !== 'both') return;
-  askbSource = src;
-  try { localStorage.setItem('vc:askb:source', src); } catch(e) {}
-  ['askbSrc-rounds','askbSrc-range','askbSrc-both','askbSrc2-rounds','askbSrc2-range','askbSrc2-both'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (!el) return;
-    var isOn = id.indexOf('-'+src) !== -1;
-    el.classList.toggle('on', isOn);
-  });
+/* ASKB-4 -- per-toggle handler. key in {calc, rounds, range}. Re-renders active viz mode. */
+export function askbSetToggle(key) {
+  if (key !== 'calc' && key !== 'rounds' && key !== 'range') return;
+  askbShow[key] = !askbShow[key];
+  try { localStorage.setItem('vc:askb:show', JSON.stringify(askbShow)); } catch(e) {}
+  askbSyncButtons();
   if (vizMode === 'dispersion') renderVizDisp();
   else renderViz();
+}
+
+/* ASKB-4 -- reflect state on all button mounts (dispersion panel + shared controls). */
+export function askbSyncButtons() {
+  ['calc','rounds','range'].forEach(function(k){
+    var on = !!askbShow[k];
+    ['askbT-'+k, 'askbT2-'+k].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('on', on);
+    });
+  });
 }
 
 /* ASKB-3 -- observed overlay renderer (heatmap markers).
@@ -1232,13 +1259,16 @@ export function vizRenderObservedMarker(cx, cy, refR, obs, strokeHex) {
   return '<g class="askb-obs">' + paths + '</g>';
 }
 
-/* ASKB-3 helper -- resolve club object (with slug) to observed aggregate using current askbSource. */
+/* ASKB-3 helper -- resolve observed aggregate for a club using askbShow.rounds/range.
+   Returns null if both sources off, no slug, or <5 shots across selected sources. */
 export function askbGetObserved(club) {
   if (!club) return null;
+  if (!askbShow.rounds && !askbShow.range) return null;
   var slug = club.slug;
   if (!slug) return null;
+  var src = (askbShow.rounds && askbShow.range) ? 'both' : (askbShow.rounds ? 'rounds' : 'range');
   return aggregateObservedDispersion(slug, {
-    source: askbSource,
+    source: src,
     minShots: 5,
     rangeSessions: rangeSessions || [],
     rounds: rounds || [],
@@ -1255,5 +1285,6 @@ Object.assign(window, {
   vizDispToggleSession, vizDispToggleClub, vizDispSetYardage, vizDispToggleRound,
   vizDispToggleAllSessions, vizDispToggleAllRounds,
   vizDispToggleAllClubs, /* UI-γ3 */
-  askbSetSource          /* ASKB-4 */
+  askbSetToggle,         /* ASKB-4 */
+  askbSyncButtons        /* ASKB-4 */
 });
