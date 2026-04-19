@@ -1390,16 +1390,16 @@ body{
         <div style="font-size:.62rem;color:var(--tx3);margin-bottom:8px">
           Select range sessions and/or rounds, then clubs to compare dispersion.
         </div>
-        <!-- ASKB-4 -- shared observed-source toggle (applies to dispersion tab + coverage + hole planner via Block 4 handler) -->
+        <!-- ASKB-4 -- three independent toggles: Calculated (expected ellipse), Rounds, Range. Applies to all 3 viz modes. -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div class="flbl" style="margin-bottom:0">Observed Source</div>
+          <div class="flbl" style="margin-bottom:0">Show</div>
           <div style="display:flex;gap:3px">
-            <button class="implied-tog"    id="askbSrc-rounds" onclick="askbSetSource('rounds')" style="font-size:.58rem;padding:2px 8px">Rounds</button>
-            <button class="implied-tog"    id="askbSrc-range"  onclick="askbSetSource('range')"  style="font-size:.58rem;padding:2px 8px">Range</button>
-            <button class="implied-tog on" id="askbSrc-both"   onclick="askbSetSource('both')"   style="font-size:.58rem;padding:2px 8px">Both</button>
+            <button class="implied-tog on" id="askbT-calc"   onclick="askbSetToggle('calc')"   style="font-size:.58rem;padding:2px 8px">Calculated</button>
+            <button class="implied-tog on" id="askbT-rounds" onclick="askbSetToggle('rounds')" style="font-size:.58rem;padding:2px 8px">Rounds</button>
+            <button class="implied-tog on" id="askbT-range"  onclick="askbSetToggle('range')"  style="font-size:.58rem;padding:2px 8px">Range</button>
           </div>
         </div>
-        <div style="font-size:.56rem;color:var(--tx3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--br)">Controls which shots feed observed overlay (min 5 per source).</div>
+        <div style="font-size:.56rem;color:var(--tx3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--br)">Independently toggle expected ellipse and observed heatmap sources (min 5 shots per combined source).</div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <div class="flbl" style="margin-bottom:0">Range Sessions</div>
           <button class="implied-tog" id="vizDispSessionAllBtn" onclick="vizDispToggleAllSessions()" style="font-size:.58rem;padding:2px 8px">All</button>
@@ -1429,13 +1429,13 @@ body{
         Tip: keep combined shapes (expected ellipses + observed heatmaps) to roughly 16 or fewer for readability &mdash; e.g., full bag expected-only, full bag observed-only, or 8 clubs showing both.
       </div>
       <div id="vizSharedControls" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding-top:8px;border-top:1px solid var(--br)">
-        <!-- ASKB-4 -- observed-source toggle mirrored here for coverage + hole planner -->
+        <!-- ASKB-4 -- mirror of 3 independent togs (Calculated / Rounds / Range) for coverage + hole planner -->
         <div class="field">
-          <div class="flbl">Observed</div>
+          <div class="flbl">Show</div>
           <div style="display:flex;gap:3px">
-            <button class="implied-tog"    id="askbSrc2-rounds" onclick="askbSetSource('rounds')" style="font-size:.62rem;padding:2px 6px">Rounds</button>
-            <button class="implied-tog"    id="askbSrc2-range"  onclick="askbSetSource('range')"  style="font-size:.62rem;padding:2px 6px">Range</button>
-            <button class="implied-tog on" id="askbSrc2-both"   onclick="askbSetSource('both')"   style="font-size:.62rem;padding:2px 6px">Both</button>
+            <button class="implied-tog on" id="askbT2-calc"   onclick="askbSetToggle('calc')"   style="font-size:.62rem;padding:2px 6px">Calc</button>
+            <button class="implied-tog on" id="askbT2-rounds" onclick="askbSetToggle('rounds')" style="font-size:.62rem;padding:2px 6px">Rounds</button>
+            <button class="implied-tog on" id="askbT2-range"  onclick="askbSetToggle('range')"  style="font-size:.62rem;padding:2px 6px">Range</button>
           </div>
         </div>
         <div class="field">
