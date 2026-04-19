@@ -1208,7 +1208,7 @@ export function vizRenderObservedMarker(cx, cy, refR, obs, strokeHex) {
     return 'rgba(160,30,30,' + (0.18 + (n / heatMax) * 0.72).toFixed(2) + ')'; /* ASKB-FIX -- alpha range matched to dispersion tab _buildDispRadialSVG (was 0.20+0.55) */
   };
   var arc = function(r1, r2, startDeg, endDeg) {
-    var rad = function(a){ return (a - 90) * Math.PI / 180; };
+    var rad = function(a){ return a * Math.PI / 180; }; /* ASKB-FIX -- segment rotation matched to dispersion tab (was a-90, caused 90deg CCW offset) */
     var pt = function(r, a){ return [(cx + r*Math.sin(rad(a))).toFixed(2), (cy - r*Math.cos(rad(a))).toFixed(2)]; };
     var s1 = pt(r2, startDeg), e1 = pt(r2, endDeg);
     var s2 = pt(r1, endDeg),   e2 = pt(r1, startDeg);
