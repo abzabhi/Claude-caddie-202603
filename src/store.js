@@ -26,26 +26,56 @@ export function load() {
   try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); const rsParsed=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; rangeSessions.splice(0,rangeSessions.length,...rsParsed); } catch { rangeSessions.splice(0,rangeSessions.length); }
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
-  /* SLUG1 -- backfill stable slug on any legacy club missing it */
+  /* SLUG1c -- unconditional bag slug regeneration + cascade reconciler for
+     historical session/round data. Replaces SLUG1 (guarded) and SLUG1b
+     (clubId-only lookup). Cascade: (1) current clubId, (2) current clubSlug,
+     (3) clubName -> bag.identifier (only if unique match). Ambiguous
+     name-matches are left alone (don't guess). On match, stamps BOTH clubId
+     and clubSlug so data self-heals. Extensible: add new identifying fields
+     to the cascade without touching call sites. */
   var _slugDirty=false;
-  for(var _si=0;_si<bag.length;_si++){ if(!bag[_si].slug){ bag[_si].slug=clubSlug(bag[_si]); _slugDirty=true; } }
-  /* SLUG1b -- one-time retro-backfill for historical session + round-shot data.
-     Walks rangeSessions[].clubSummary[] and rounds[].holes[].shots[], fills
-     clubSlug by looking up clubId against current bag. Unmatched -> left empty
-     (don't guess). Persists via save() only if something changed. */
-  var _bagById={};
-  for(var _bi=0;_bi<bag.length;_bi++){ if(bag[_bi].id) _bagById[bag[_bi].id]=bag[_bi]; }
+  /* SLUG1c -- regenerate bag slugs unconditionally; legacy brand-only values
+     get upgraded to composite brand|type|identifier|loft|stiffness. */
+  for(var _si=0;_si<bag.length;_si++){
+    var _newSlug=clubSlug(bag[_si]);
+    if(bag[_si].slug!==_newSlug){ bag[_si].slug=_newSlug; _slugDirty=true; }
+  }
+  /* SLUG1c -- build lookup indexes for reconciliation */
+  var _bagById={}, _bagBySlug={}, _bagByIdent={};
+  for(var _bi=0;_bi<bag.length;_bi++){
+    var _bc=bag[_bi]; if(!_bc||!_bc.id) continue;
+    _bagById[_bc.id]=_bc;
+    if(_bc.slug) _bagBySlug[_bc.slug]=_bc;
+    var _ident=String(_bc.identifier==null?'':_bc.identifier).toLowerCase().trim();
+    if(_ident){ (_bagByIdent[_ident]=_bagByIdent[_ident]||[]).push(_bc); }
+  }
+  /* SLUG1c -- cascade reconciler. Returns matched bag club or null. */
+  var _reconcile=function(entry, nameField){
+    if(!entry) return null;
+    var hit=entry.clubId && _bagById[entry.clubId];
+    if(hit) return hit;
+    hit=entry.clubSlug && _bagBySlug[entry.clubSlug];
+    if(hit) return hit;
+    var nm=entry[nameField]; if(nm==null) return null;
+    var key=String(nm).toLowerCase().trim(); if(!key) return null;
+    var candidates=_bagByIdent[key];
+    if(candidates && candidates.length===1) return candidates[0];
+    return null;
+  };
+  /* SLUG1c -- apply to rangeSessions clubSummary */
   for(var _rsi=0;_rsi<rangeSessions.length;_rsi++){
     var _cs=rangeSessions[_rsi] && rangeSessions[_rsi].clubSummary;
     if(!Array.isArray(_cs)) continue;
     for(var _ei=0;_ei<_cs.length;_ei++){
-      var _entry=_cs[_ei];
-      if(_entry && !_entry.clubSlug){
-        var _cRef=_bagById[_entry.clubId];
-        if(_cRef){ _entry.clubSlug=_cRef.slug||clubSlug(_cRef); _slugDirty=true; }
+      var _entry=_cs[_ei]; if(!_entry) continue;
+      var _match=_reconcile(_entry,'clubName');
+      if(_match){
+        if(_entry.clubId!==_match.id){ _entry.clubId=_match.id; _slugDirty=true; }
+        if(_entry.clubSlug!==_match.slug){ _entry.clubSlug=_match.slug; _slugDirty=true; }
       }
     }
   }
+  /* SLUG1c -- apply to rounds shots */
   for(var _ri=0;_ri<rounds.length;_ri++){
     var _holes=rounds[_ri] && rounds[_ri].holes;
     if(!Array.isArray(_holes)) continue;
@@ -53,10 +83,11 @@ export function load() {
       var _shots=_holes[_hi] && _holes[_hi].shots;
       if(!Array.isArray(_shots)) continue;
       for(var _shi=0;_shi<_shots.length;_shi++){
-        var _sh=_shots[_shi];
-        if(_sh && !_sh.clubSlug){
-          var _sc=_bagById[_sh.clubId];
-          if(_sc){ _sh.clubSlug=_sc.slug||clubSlug(_sc); _slugDirty=true; }
+        var _sh=_shots[_shi]; if(!_sh) continue;
+        var _shMatch=_reconcile(_sh,'clubName');
+        if(_shMatch){
+          if(_sh.clubId!==_shMatch.id){ _sh.clubId=_shMatch.id; _slugDirty=true; }
+          if(_sh.clubSlug!==_shMatch.slug){ _sh.clubSlug=_shMatch.slug; _slugDirty=true; }
         }
       }
     }
