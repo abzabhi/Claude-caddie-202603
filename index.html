@@ -2241,6 +2241,8 @@ async function gateNewUser(step) {
       return;
     }
 _gateNewSitePass = sp;
+    /* GUEST1 -- stamp encrypted site-password verify token for offline unlock of guest sessions */
+    dbEncrypt('gordy-site-verify', sp).then(function(svt) { sessionStorage.setItem('vc:siteVerify', svt); });
     if (step === 'guest') {
       sessionStorage.setItem('vc:gateUnlocked', 'guest');
       setTimeout(function() { gateUnlocked(null); }, 0);
@@ -2514,6 +2516,11 @@ function lockApp() {
   if (ol) ol.classList.add('visible');
   var inp = document.getElementById('lockPassInput');
   if (inp) inp.value = '';
+  /* GUEST1 -- placeholder reflects session type (passphrase vs site password) */
+  if (inp) {
+    var isGuest = !sessionStorage.getItem('vc:verify') && !!sessionStorage.getItem('vc:siteVerify');
+    inp.placeholder = isGuest ? 'Site password' : 'Your passphrase';
+  }
   _gateErr('lockErr', '');
   // Disable app interaction; pill (z-index:95) and overlay remain accessible above
   var app = document.getElementById('appRoot');
@@ -2524,15 +2531,20 @@ async function unlockApp() {
   var pass = (document.getElementById('lockPassInput')?.value || '').trim();
   _gateErr('lockErr', '');
   if (!pass) { _gateErr('lockErr', 'Enter your passphrase.'); return; }
-  // Verify against stored token (set at login -- no network call needed)
-  // Known edge case (OQ4 -- accepted risk): if vc:verify is absent (sessionStorage
-  // partially cleared while tab stays open), any passphrase will be accepted here.
-  // Network fallback not implemented -- app must work offline in rural areas.
-  // Risk is low: requires tab to remain open AND sessionStorage to partially clear.
+  /* GUEST2 -- guests have no passphrase; validate against cached site-password verify token.
+     vc:verify present  -> user session (current path, passphrase decrypt).
+     vc:verify absent   -> guest session (siteVerify decrypt).
+     Known edge case (OQ4 -- accepted risk): if both tokens are absent
+     (sessionStorage partially cleared while tab stays open), any input will be
+     accepted here. Network fallback not implemented -- app must work offline. */
   var vt = sessionStorage.getItem('vc:verify');
+  var svt = sessionStorage.getItem('vc:siteVerify');
   if (vt) {
     try { await dbDecrypt(vt, pass); }
     catch { _gateErr('lockErr', 'Wrong passphrase.'); return; }
+  } else if (svt) {
+    try { await dbDecrypt(svt, pass); }
+    catch { _gateErr('lockErr', 'Wrong site password.'); return; }
   }
   sessionStorage.setItem('vc:kvPass', pass);
   _appLocked = false;
