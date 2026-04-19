@@ -5,7 +5,7 @@
 import { bag, courses, rounds, history, profile, rangeSessions,
          save, today, uid, serialise,
          setBag, setRounds, setProfile, replaceCourse, clearAll } from './store.js';
-import { calcDiff, clubSlug } from './geo.js';
+import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag } from './geo.js'; /* ASKB-1 */
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
 import { renderCourseList } from './courses.js';
@@ -759,7 +759,7 @@ function renderPerfSummary() {
     html+='<div style="font-size:.65rem;color:var(--tx3);padding:4px 0">Play some rounds to see your stats.</div>';
   }
 
-  // Range derived stat helpers
+  /* ASKB-1 -- inner helpers extracted to geo.js (BUCKET_NAMES, tagLookup, dominantMiss, shotTag). Originals commented, not deleted.
   var _bucketNames=['Long','Long-Right','Right','Short-Right','Short','Short-Left','Left','Long-Left'];
   var _tagLookup=function(path,miss,sev){
     if(!miss||miss==='\u2014') return 'Target';
@@ -823,6 +823,11 @@ function renderPerfSummary() {
     var t1=_tagLookup(paths[0][0],miss,sev), t2=_tagLookup(paths[1][0],miss,sev);
     return (sevW[t1]||0)>=(sevW[t2]||0)?t1:t2;
   };
+  */
+  var _bucketNames = BUCKET_NAMES;           /* ASKB-1 alias -- shim for downstream refs */
+  var _tagLookup   = tagLookup;              /* ASKB-1 */
+  var _dominantMiss = dominantMiss;          /* ASKB-1 */
+  var _shotTag     = shotTag;                /* ASKB-1 */
 
   // Range display
   html+='<div style="font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);font-weight:700;padding:10px 0 6px;border-top:1px solid var(--br);margin-top:4px">Range</div>';
