@@ -26,21 +26,26 @@ export function load() {
   try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); const rsParsed=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; rangeSessions.splice(0,rangeSessions.length,...rsParsed); } catch { rangeSessions.splice(0,rangeSessions.length); }
   try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
   bag=bag.filter(x=>x&&x.id);
-  /* SLUG1c -- unconditional bag slug regeneration + cascade reconciler for
-     historical session/round data. Replaces SLUG1 (guarded) and SLUG1b
-     (clubId-only lookup). Cascade: (1) current clubId, (2) current clubSlug,
-     (3) clubName -> bag.identifier (only if unique match). Ambiguous
-     name-matches are left alone (don't guess). On match, stamps BOTH clubId
-     and clubSlug so data self-heals. Extensible: add new identifying fields
-     to the cascade without touching call sites. */
-  var _slugDirty=false;
-  /* SLUG1c -- regenerate bag slugs unconditionally; legacy brand-only values
-     get upgraded to composite brand|type|identifier|loft|stiffness. */
+  courses=courses.filter(x=>x&&x.id);
+  rounds=rounds.filter(x=>x&&x.id);
+  /* SLUG1c -- delegate to shared reconciler (called from load + every bag-write site) */
+  if(reconcileSlugs()) save();
+}
+
+/* SLUG1c -- shared slug reconciler. Callable from load() and from any bag-write
+   site in ui.js (dbLoadData, _doMergeOverwrite, importData). Does three things:
+   (1) regenerates bag slugs to current composite (brand|type|identifier|loft|stiffness);
+   (2) builds bagById/bagBySlug/bagByIdent lookup indexes;
+   (3) runs cascade reconciler on rangeSessions[].clubSummary[] and rounds[].holes[].shots[],
+       matching by clubId, then clubSlug, then unique identifier lookup. Stamps both
+       clubId and clubSlug on match. Ambiguous identifier matches are skipped (don't guess).
+   Returns true if any value changed (caller can decide whether to persist). */
+export function reconcileSlugs() {
+  var dirty=false;
   for(var _si=0;_si<bag.length;_si++){
     var _newSlug=clubSlug(bag[_si]);
-    if(bag[_si].slug!==_newSlug){ bag[_si].slug=_newSlug; _slugDirty=true; }
+    if(bag[_si].slug!==_newSlug){ bag[_si].slug=_newSlug; dirty=true; }
   }
-  /* SLUG1c -- build lookup indexes for reconciliation */
   var _bagById={}, _bagBySlug={}, _bagByIdent={};
   for(var _bi=0;_bi<bag.length;_bi++){
     var _bc=bag[_bi]; if(!_bc||!_bc.id) continue;
@@ -49,7 +54,6 @@ export function load() {
     var _ident=String(_bc.identifier==null?'':_bc.identifier).toLowerCase().trim();
     if(_ident){ (_bagByIdent[_ident]=_bagByIdent[_ident]||[]).push(_bc); }
   }
-  /* SLUG1c -- cascade reconciler. Returns matched bag club or null. */
   var _reconcile=function(entry, nameField){
     if(!entry) return null;
     var hit=entry.clubId && _bagById[entry.clubId];
@@ -62,7 +66,6 @@ export function load() {
     if(candidates && candidates.length===1) return candidates[0];
     return null;
   };
-  /* SLUG1c -- apply to rangeSessions clubSummary */
   for(var _rsi=0;_rsi<rangeSessions.length;_rsi++){
     var _cs=rangeSessions[_rsi] && rangeSessions[_rsi].clubSummary;
     if(!Array.isArray(_cs)) continue;
@@ -70,12 +73,11 @@ export function load() {
       var _entry=_cs[_ei]; if(!_entry) continue;
       var _match=_reconcile(_entry,'clubName');
       if(_match){
-        if(_entry.clubId!==_match.id){ _entry.clubId=_match.id; _slugDirty=true; }
-        if(_entry.clubSlug!==_match.slug){ _entry.clubSlug=_match.slug; _slugDirty=true; }
+        if(_entry.clubId!==_match.id){ _entry.clubId=_match.id; dirty=true; }
+        if(_entry.clubSlug!==_match.slug){ _entry.clubSlug=_match.slug; dirty=true; }
       }
     }
   }
-  /* SLUG1c -- apply to rounds shots */
   for(var _ri=0;_ri<rounds.length;_ri++){
     var _holes=rounds[_ri] && rounds[_ri].holes;
     if(!Array.isArray(_holes)) continue;
@@ -86,15 +88,13 @@ export function load() {
         var _sh=_shots[_shi]; if(!_sh) continue;
         var _shMatch=_reconcile(_sh,'clubName');
         if(_shMatch){
-          if(_sh.clubId!==_shMatch.id){ _sh.clubId=_shMatch.id; _slugDirty=true; }
-          if(_sh.clubSlug!==_shMatch.slug){ _sh.clubSlug=_shMatch.slug; _slugDirty=true; }
+          if(_sh.clubId!==_shMatch.id){ _sh.clubId=_shMatch.id; dirty=true; }
+          if(_sh.clubSlug!==_shMatch.slug){ _sh.clubSlug=_shMatch.slug; dirty=true; }
         }
       }
     }
   }
-  courses=courses.filter(x=>x&&x.id);
-  rounds=rounds.filter(x=>x&&x.id);
-  if(_slugDirty) save();
+  return dirty;
 }
 
 // Mutation helpers -- use at import sites instead of direct binding reassignment
