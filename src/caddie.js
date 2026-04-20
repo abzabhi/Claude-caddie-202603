@@ -242,21 +242,30 @@ function exportForAI() {
     '--- PROFILE ---',
   ];
 
+  /* 1A -- PROFILE: tier-gated fields */
   const p = profile;
-  if(p.name)     L.push(`NAME | ${p.name}`);
-  if(p.age)      L.push(`AGE | ${p.age}`);
-  if(p.gender)   L.push(`GENDER | ${p.gender}`);
-  if(p.handed)   L.push(`HANDED | ${p.handed}`);
-  if(p.homeClub) L.push(`HOMECLUB | ${p.homeClub}`);
+  if(p.name)   L.push(`NAME | ${p.name}`);
+  if(+optTier >= 4 && p.age)      L.push(`AGE | ${p.age}`);
+  if(+optTier >= 2 && p.gender)   L.push(`GENDER | ${p.gender}`);
+  if(p.handed) L.push(`HANDED | ${p.handed}`);
+  if(+optTier >= 4 && p.homeClub) L.push(`HOMECLUB | ${p.homeClub}`);
   if(p.yardType) L.push(`YARDPREF | ${p.yardType}`);
+  if(+optTier >= 4 && p.notes) p.notes.split('\n').forEach(function(nl){ if(nl.trim()) L.push('NOTE | '+nl); });
 
+  /* 1A -- CLUBS: tier-gated emission */
   L.push('', '--- CLUBS ---');
   let activeCnt = 0;
   const ti = tierIndex(hcpIdx);
   bag.forEach(c => {
-    const st = c.tested === 'PUTTER' ? 'PUTTER' : (c.tested ? 'YES' : 'NO');
-    L.push(`CLUB | ${c.brand} | ${c.type} | ${c.identifier} | ${c.stiffness||''} | ${c.shaftLength||''} | ${st} | ${c.confidence||4} | ${c.bias||'Straight'} | ${c.yardType||''} | ${c.loft||''} | ${c.model||''}`);
-    (c.sessions||[]).forEach(s => L.push(`  SESSION | ${s.date} | ${s.min} | ${s.max}`));
+    const cst = c.tested === 'PUTTER' ? 'PUTTER' : (c.tested ? 'YES' : 'NO');
+    if(+optTier === 1) {
+      /* T1: identifier in field 3, all other fields blank; suppress SESSION lines */
+      L.push(`CLUB | | | ${c.identifier||''} | | | | | | | |`);
+    } else {
+      /* T2+: full CLUB line + SESSION lines */
+      L.push(`CLUB | ${c.brand||''} | ${c.type} | ${c.identifier||''} | ${c.stiffness||''} | ${c.shaftLength||''} | ${cst} | ${c.confidence||4} | ${c.bias||'Straight'} | ${c.yardType||''} | ${c.loft||''} | ${c.model||''}`);
+      (c.sessions||[]).forEach(s => L.push(`  SESSION | ${s.date} | ${s.min} | ${s.max}`));
+    }
     if(c.tested === true && c.sessions?.length) {
       activeCnt++;
       const stats = deriveStats(c.sessions);
@@ -302,25 +311,39 @@ function exportForAI() {
     }
   }
 
+  /* 1A -- COURSES: selected tee only, hole detail tier-gated */
   L.push('', '--- COURSES ---');
   if(course) {
-    const sc=_stripGeometry(course); // geometry must never be sent to AI
+    const sc = _stripGeometry(course); // geometry must never be sent to AI
     L.push(`COURSE | ${sc.id} | ${sc.name} | ${sc.city||''} | ${sc.par||''} | ${sc.rating||''} | ${sc.slope||''} | ${sc.yardage||''} | ${sc.selectedTee||''} | ${sc.updatedAt||''}`);
-    (sc.tees||[]).forEach(t => {
-      L.push(`  TEE | ${t.id} | ${t.name} | ${t.rating||''} | ${t.slope||''} | ${t.yardage||''}`);
-      (t.holes||[]).forEach(h => L.push(`    HOLE | ${h.number} | ${h.par} | ${h.yards||''} | ${h.handicap||''} | ${h.note||''}`));
-    });
+    /* Emit selected tee only */
+    const selTee = (sc.tees||[]).find(t => t.id === teeId) || (sc.tees||[])[0];
+    if(selTee) {
+      L.push(`  TEE | ${selTee.id} | ${selTee.name} | ${selTee.rating||''} | ${selTee.slope||''} | ${selTee.yardage||''}`);
+      (selTee.holes||[]).forEach(h => {
+        if(+optTier === 1) {
+          L.push(`    HOLE | ${h.number} | | ${h.yards||''} | |`);
+        } else if(+optTier === 2) {
+          L.push(`    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''} |`);
+        } else {
+          L.push(`    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''} | ${h.note||''}`);
+        }
+      });
+    }
   } else {
     L.push('# No course selected');
   }
 
+  /* 1A -- HANDICAP: tier-gated fields */
   L.push('', '--- HANDICAP ---');
   const hcpMode   = localStorage.getItem('vc:hcpMode')||'calculated';
   const manualHcp = localStorage.getItem('vc:manualHcp')||'';
-  L.push(`MODE | ${hcpMode}`);
-  if(manualHcp) L.push(`MANUAL | ${manualHcp}`);
+  if(+optTier >= 4) L.push(`MODE | ${hcpMode}`);
+  if(+optTier >= 4 && manualHcp) L.push(`MANUAL | ${manualHcp}`);
   L.push(`ACTIVE | ${hcpIdx !== null ? hcpIdx : 'not set'}`);
+  if(+optTier >= 2) L.push(`PLAYING_HCP | ${playHcp !== null ? playHcp : 'not computed \u2014 select course and tee'}`);
 
+  /* SESSION PARAMETERS: unchanged */
   L.push('', '--- SESSION PARAMETERS ---');
   L.push(`TYPE | ${type}`);
   L.push(`COURSE | ${course ? course.name : 'not selected'}`);
@@ -329,37 +352,62 @@ function exportForAI() {
   L.push(`CONDITIONS | ${conds}`);
   L.push(`OPT_TIER | ${optTier}`);
 
-  L.push('', '--- COMPUTED SUMMARY ---');
-  L.push(`HCP_INDEX | ${hcpIdx !== null ? hcpIdx : 'not set'}`);
-  L.push(`PLAYING_HCP | ${playHcp !== null ? playHcp : 'not computed \u2014 select course and tee'}`);
-  L.push(`ACTIVE_CLUBS | ${activeCnt}`);
+  /* 1A -- COMPUTED SUMMARY: dropped at all tiers (redundant) */
+  /* was: HCP_INDEX | PLAYING_HCP | ACTIVE_CLUBS -- removed */
 
-  // Round context -- smart 6-slot algorithm:
-  // From last 10 rounds: up to 6 most recent at this course, fill remainder with most recent other rounds
-  L.push('', '--- ROUND CONTEXT ---');
-  L.push('# Pre-filtered round history for this session. No further filtering needed.');
-  L.push(`# Course: ${course ? course.name : 'none selected'} \u00B7 Up to 6 slots: course rounds prioritised, filled with recent rounds.`);
-  if(rounds.length) {
-    const last10 = [...rounds].slice(0,10); // already sorted newest first
-    const courseName = course?.name||'';
-    const courseMatches = last10.filter(r=>{
-      if(!courseName) return false;
-      const cn = (r.courseName||'').toLowerCase();
-      const sel = courseName.toLowerCase();
-      return cn === sel || cn.includes(sel.split(' ')[0]) || sel.includes(cn.split(' ')[0]);
-    });
-    const others = last10.filter(r=>!courseMatches.includes(r));
-    const slots = [...courseMatches.slice(0,6), ...others].slice(0,6);
-    if(slots.length) {
-      slots.forEach(r=>{
-        const atCourse = courseMatches.includes(r);
-        L.push(`ROUND | ${r.date} | ${r.courseName||''} | ${r.tee||''} | ${r.rating||''} | ${r.slope||''} | ${r.par||''} | ${r.score||''} | ${r.diff!==null?r.diff:''} | ${r.notes||''}${atCourse?' # this course':''}`);
+  /* 1A -- ROUND CONTEXT: Tier 3+ only */
+  if(+optTier >= 3) {
+    // Round context -- smart 6-slot algorithm:
+    // From last 10 rounds: up to 6 most recent at this course, fill remainder with most recent other rounds
+    L.push('', '--- ROUND CONTEXT ---');
+    L.push('# Pre-filtered round history for this session. No further filtering needed.');
+    L.push(`# Course: ${course ? course.name : 'none selected'} \u00B7 Up to 6 slots: course rounds prioritised, filled with recent rounds.`);
+    if(rounds.length) {
+      const last10 = [...rounds].slice(0,10); // already sorted newest first
+      const courseName = course?.name||'';
+      const courseMatches = last10.filter(r=>{
+        if(!courseName) return false;
+        const cn = (r.courseName||'').toLowerCase();
+        const sel = courseName.toLowerCase();
+        return cn === sel || cn.includes(sel.split(' ')[0]) || sel.includes(cn.split(' ')[0]);
       });
+      const others = last10.filter(r=>!courseMatches.includes(r));
+      const slots = [...courseMatches.slice(0,6), ...others].slice(0,6);
+      if(slots.length) {
+        slots.forEach(r=>{
+          const atCourse = courseMatches.includes(r);
+          L.push(`ROUND | ${r.date} | ${r.courseName||''} | ${r.tee||''} | ${r.rating||''} | ${r.slope||''} | ${r.par||''} | ${r.score||''} | ${r.diff!==null?r.diff:''} | ${r.notes||''}${atCourse?' # this course':''}`);
+        });
+      } else {
+        L.push('# No rounds logged yet.');
+      }
     } else {
       L.push('# No rounds logged yet.');
     }
-  } else {
-    L.push('# No rounds logged yet.');
+  }
+
+  /* 1A -- HISTORY block: Tier 4 only.
+     Last 6 rounds at selected courseId; if fewer than 6, pad with most recent other rounds. */
+  if(+optTier >= 4 && rounds.length) {
+    const courseRounds = rounds.filter(r => r.courseId && courseId && r.courseId === courseId);
+    const otherRounds  = rounds.filter(r => !(r.courseId && courseId && r.courseId === courseId));
+    const histSlots    = [...courseRounds.slice(0,6), ...otherRounds].slice(0,6);
+    if(histSlots.length) {
+      L.push('', '--- HISTORY ---');
+      histSlots.forEach(r => {
+        L.push(`HISTORY-ROUND | ${r.date} | ${r.courseName||''} | ${r.tee||''} | ${r.par||''} | ${r.score||''} | ${r.diff!==null?r.diff:''} | ${r.notes||''}`);
+        if(r.holes && r.holes.length) {
+          r.holes.forEach(h => {
+            L.push(`  HISTORY-HOLE | ${h.n} | ${h.par||''} | ${h.score||''} | ${h.putts||''} | ${h.gir===true?'Y':h.gir===false?'N':''} | ${h.yards||''}`);
+          });
+          const hasShotData = r.holes.some(h => h.shots && h.shots.some(sh => sh.sg !== null && sh.sg !== undefined));
+          if(hasShotData && window._lrRoundSG) {
+            const sg = window._lrRoundSG(r.holes, r.holes);
+            if(sg) L.push(`  HISTORY-SG | total=${sg.total} | OTT=${sg.OTT} | APP=${sg.APP} | ARG=${sg.ARG} | PUTT=${sg.PUTT}`);
+          }
+        }
+      });
+    }
   }
 
   const blob = new Blob([L.join('\n')], {type:'text/plain'});
