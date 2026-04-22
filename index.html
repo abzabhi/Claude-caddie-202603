@@ -1152,10 +1152,10 @@ body{
         </div>
         <div id="cadStatus" style="font-size:.62rem;color:var(--tx3);margin-top:6px;min-height:1em">Set your session parameters, then export for AI. Import the session result when done.</div>
         <div id="aiStepsForAI" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-top:10px">
-          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">'\u2713' File ready to use</div>
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">&#x2713; File ready to use</div>
           <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
           <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
-          <div class="ai-step-row">Step 3 &nbsp; Copy the AI'\u2019's full response</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI&#x2019;s full response</div>
           <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn sec" onclick="exportForAI()">Export again</button>
@@ -1193,10 +1193,10 @@ body{
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importRoundResult(event)"></label>
         </div>
         <div id="aiStepsRound" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-bottom:10px">
-          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">&#x2713; File ready to use</div>
           <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
           <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
-          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI&#x2019;s full response</div>
           <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn sec" onclick="exportRoundTask()">Export again</button>
@@ -1234,10 +1234,10 @@ body{
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importCourseResult(event)"></label>
         </div>
         <div id="aiStepsCourse" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-bottom:10px">
-          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">&#x2713; File ready to use</div>
           <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
           <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
-          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI&#x2019;s full response</div>
           <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn sec" onclick="exportCourseTask()">Export again</button>
@@ -1263,10 +1263,10 @@ body{
           <label class="btn sec" style="cursor:pointer">&#8681; Import Result<input type="file" accept=".txt" style="display:none" onchange="importClubResult(event)"></label>
         </div>
         <div id="aiStepsClub" class="ai-steps-card" style="display:none;background:var(--gr3);border:1px solid var(--gr2);border-radius:6px;padding:12px;margin-bottom:10px">
-          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">\u2713 File ready to use</div>
+          <div style="font-size:.68rem;color:var(--ac);margin-bottom:8px">&#x2713; File ready to use</div>
           <div class="ai-step-row">Step 1 &nbsp; Open any AI chat (Claude recommended)</div>
           <div class="ai-step-row">Step 2 &nbsp; Attach the exported file and send it</div>
-          <div class="ai-step-row">Step 3 &nbsp; Copy the AI\u2019s full response</div>
+          <div class="ai-step-row">Step 3 &nbsp; Copy the AI&#x2019;s full response</div>
           <div class="ai-step-row">Step 4 &nbsp; Paste or import it below</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn sec" onclick="exportClubTask()">Export again</button>
@@ -2642,7 +2642,7 @@ async function savePassphraseChange() {
       sessionStorage.setItem('vc:kvPass', p1);
       if (id && sessionStorage.getItem('gordy:bp:' + id)) sessionStorage.setItem('gordy:bp:' + id, p1);
       var form = document.getElementById('passphraseChangeForm');
-      if (form) form.innerHTML = '<div style="font-size:.72rem;color:var(--ac);padding:4px 0">\u2713 Passphrase updated successfully.</div>';
+      if (form) form.innerHTML = '<div style="font-size:.72rem;color:var(--ac);padding:4px 0">&#x2713; Passphrase updated successfully.</div>';
       setTimeout(cancelPassphraseChange, 2000);
     } else {
       if (errEl) errEl.textContent = 'Rekey failed. Try signing out and back in.';
