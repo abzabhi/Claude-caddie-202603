@@ -1394,7 +1394,7 @@ function _lrDefaultDraft(holeIdx) {
   var lastShot = s.shots && s.shots.length ? s.shots[s.shots.length - 1] : null;
   var dist     = isFirst ? (hole.yards || null) : null;
   var autoMode = isFirst ? 'standard'
-    : lastShot && lastShot.shot_mode === 'approach' && lastShot.radial_ring ? 'on_green'
+    : lastShot && lastShot.shot_mode === 'approach' && lastShot.radial_ring && lastShot.lie === 'green' ? 'on_green' /* LR-TAB1 */
     : dist !== null && dist <= 100 ? 'approach'
     : 'standard';
   return {
