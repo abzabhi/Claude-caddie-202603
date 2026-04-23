@@ -1175,7 +1175,7 @@ function _aggregateTrends(roundsArr, opts) {
   // But we need hcp-at-time-of-round to use all rounds up to that date; range filter is view-only.
   // Strategy: extract metric for every solo round first (newest->oldest), then apply range filter to points.
 
-  var extracted = []; // newest-first: [{date, y, label}]
+  var extracted = [];
   var skipped = 0;
 
   solo.forEach(function(r, i) {
@@ -1221,7 +1221,7 @@ function _aggregateTrends(roundsArr, opts) {
   filtered = filtered.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
 
   if (granularity === 'month') {
-    var buckets = {}; // 'YYYY-MM' -> {sum, n, label}
+    var buckets = {};
     filtered.forEach(function(p) {
       var mk = p.date.slice(0, 7);
       if (!buckets[mk]) buckets[mk] = { sum: 0, n: 0 };
@@ -1286,7 +1286,7 @@ function _trendsSvg(points, metric) {
   // X-axis date labels: first, last, middle (if N>=4 add quarter marks)
   var xIdx = N <= 3 ? (N === 1 ? [0] : [0, N - 1]) : [0, Math.floor((N - 1) / 2), N - 1];
   var xLabels = xIdx.map(function(i) {
-    var d = points[i].x; // 'YYYY-MM-DD' or 'YYYY-MM-01'
+    var d = points[i].x;
     var parts = d.split('-');
     var short = parts[1] + '/' + parts[2].slice(0, 2);
     return '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="8" fill="var(--tx3)">' + short + '</text>';
@@ -1372,6 +1372,8 @@ function renderTrendsCard() {
 }
 
 
+Object.assign(window, {
+  saveData, exportData, processDataText, dbLoadData, importData, onMergeFile,
   showTab, saveProfile, renderProfileHero, renderProfile,
   showTabFromProfile,
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
