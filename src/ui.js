@@ -5,7 +5,7 @@
 import { bag, courses, rounds, history, profile, rangeSessions,
          save, today, uid, serialise,
          setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs } from './store.js'; /* SLUG1c */
-import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag } from './geo.js'; /* ASKB-1 */
+import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag, calcHandicap } from './geo.js'; /* ASKB-1, TRENDS-1 */
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
 import { renderCourseList } from './courses.js';
@@ -603,6 +603,7 @@ function renderProfile() {
     }
   }
   renderPerfSummary();
+  renderTrendsCard(); /* TRENDS-5 */
   window.renderGistSettings();
 }
 
@@ -1162,8 +1163,215 @@ function updateSessionLinker() {
   if (linkerBody) linkerBody.style.display = unlinked.length > 0 ? 'block' : 'none';
 }
 
-Object.assign(window, {
-  saveData, exportData, processDataText, dbLoadData, importData, onMergeFile,
+/* TRENDS-1 -- aggregate rounds into {points:[{x,y,label?}], skipped} for chart render.
+   metric: 'hcp'|'gir'|'fir'|'sg'  granularity: 'round'|'month'  range: 'last10'|'last6mo'|'all'
+   Excludes multi-player rounds. Per-round handicap = calcHandicap(tail-from-that-round).
+   rounds[] is stored newest-first (unshift in addRound). */
+function _aggregateTrends(roundsArr, opts) {
+  var metric = opts.metric, granularity = opts.granularity, range = opts.range;
+  var solo = roundsArr.filter(function(r){ return !(r.players && r.players.length >= 2); });
+
+  // Range filter applied AFTER metric extraction so per-round hcp still uses full history for accuracy
+  // But we need hcp-at-time-of-round to use all rounds up to that date; range filter is view-only.
+  // Strategy: extract metric for every solo round first (newest->oldest), then apply range filter to points.
+
+  var extracted = []; // newest-first: [{date, y, label}]
+  var skipped = 0;
+
+  solo.forEach(function(r, i) {
+    var y = null, label = r.courseName || '';
+    if (metric === 'hcp') {
+      if (r.countForHandicap === false) { skipped++; return; }
+      // Tail from this round = all rounds at-or-older-than this round (newest-first array, so slice(i))
+      var h = calcHandicap(solo.slice(i));
+      if (h === null) { skipped++; return; }
+      y = h;
+    } else if (metric === 'gir') {
+      var girHit = (r.holes || []).filter(function(h){ return h.gir === true; }).length;
+      var girOf  = (r.holes || []).filter(function(h){ return h.gir !== null && h.gir !== undefined; }).length;
+      if (!girOf) { skipped++; return; }
+      y = Math.round(girHit / girOf * 1000) / 10;
+    } else if (metric === 'fir') {
+      if (!window._lrRoundFIR) { skipped++; return; }
+      var fir = window._lrRoundFIR(r.holes || [], r.holes || []);
+      if (!fir || !fir.eligible) { skipped++; return; }
+      y = Math.round(fir.pct * 1000) / 10;
+    } else if (metric === 'sg') {
+      var hasSG = (r.holes || []).some(function(h){ return (h.shots || []).some(function(sh){ return sh.sg !== null && sh.sg !== undefined; }); });
+      if (!hasSG || !window._lrRoundSG) { skipped++; return; }
+      var sg = window._lrRoundSG(r.holes || [], r.holes || []);
+      y = sg ? +sg.total.toFixed(2) : null;
+      if (y === null) { skipped++; return; }
+    }
+    if (!r.date) { skipped++; return; }
+    extracted.push({ date: r.date, y: y, label: label });
+  });
+
+  // Apply range filter (view-only)
+  var filtered = extracted;
+  if (range === 'last10') {
+    filtered = extracted.slice(0, 10);
+  } else if (range === 'last6mo') {
+    var cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 6);
+    var cutoffISO = cutoff.toISOString().slice(0, 10);
+    filtered = extracted.filter(function(p){ return p.date >= cutoffISO; });
+  }
+
+  // Sort oldest->newest for chart x-axis left-to-right
+  filtered = filtered.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+
+  if (granularity === 'month') {
+    var buckets = {}; // 'YYYY-MM' -> {sum, n, label}
+    filtered.forEach(function(p) {
+      var mk = p.date.slice(0, 7);
+      if (!buckets[mk]) buckets[mk] = { sum: 0, n: 0 };
+      buckets[mk].sum += p.y; buckets[mk].n++;
+    });
+    var keys = Object.keys(buckets).sort();
+    var monthly = keys.map(function(mk) {
+      var b = buckets[mk];
+      return { x: mk + '-01', y: Math.round(b.sum / b.n * 100) / 100, label: mk + ' (' + b.n + ')' };
+    });
+    return { points: monthly, skipped: skipped };
+  }
+
+  return {
+    points: filtered.map(function(p){ return { x: p.date, y: p.y, label: p.label }; }),
+    skipped: skipped
+  };
+}
+
+/* TRENDS-2 -- pure SVG line chart. viewBox 0 0 320 170. Returns HTML string.
+   metric drives y-axis scale. No Unicode literals in SVG text. */
+function _trendsSvg(points, metric) {
+  if (!points || points.length < 2) {
+    return '<div style="font-size:.62rem;color:var(--tx3);padding:14px 4px;text-align:center">Need at least 2 rounds with this metric to show a trend.</div>';
+  }
+  var W = 320, H = 170, ML = 32, MR = 8, MT = 10, MB = 24;
+  var IW = W - ML - MR, IH = H - MT - MB;
+
+  // Y-scale
+  var ys = points.map(function(p){ return p.y; });
+  var yMin, yMax;
+  if (metric === 'gir' || metric === 'fir') { yMin = 0; yMax = 100; }
+  else if (metric === 'sg') {
+    var absMax = Math.max.apply(null, ys.map(function(v){ return Math.abs(v); }));
+    absMax = Math.max(absMax, 1);
+    yMin = -absMax; yMax = absMax;
+  } else { // hcp
+    var mn = Math.min.apply(null, ys), mx = Math.max.apply(null, ys);
+    var pad = Math.max((mx - mn) * 0.15, 0.5);
+    yMin = Math.max(0, mn - pad); yMax = mx + pad;
+  }
+  if (yMax === yMin) yMax = yMin + 1;
+
+  // X-scale: even spacing by index
+  var N = points.length;
+  var xAt = function(i){ return ML + (N === 1 ? IW/2 : (i / (N - 1)) * IW); };
+  var yAt = function(v){ return MT + IH - ((v - yMin) / (yMax - yMin)) * IH; };
+
+  // Grid + axis labels
+  var yTicks = 4;
+  var gridLines = '', yLabels = '';
+  for (var t = 0; t <= yTicks; t++) {
+    var yv = yMin + (yMax - yMin) * (t / yTicks);
+    var ypx = yAt(yv);
+    gridLines += '<line x1="' + ML + '" y1="' + ypx.toFixed(1) + '" x2="' + (W - MR) + '" y2="' + ypx.toFixed(1) + '" stroke="var(--br)" stroke-width="0.5" stroke-dasharray="2,2"/>';
+    var lbl = (metric === 'gir' || metric === 'fir') ? Math.round(yv) + '%'
+            : metric === 'sg' ? (yv > 0 ? '+' : '') + yv.toFixed(1)
+            : yv.toFixed(1);
+    yLabels += '<text x="' + (ML - 4) + '" y="' + (ypx + 3).toFixed(1) + '" text-anchor="end" font-size="8" fill="var(--tx3)">' + lbl + '</text>';
+  }
+
+  // X-axis date labels: first, last, middle (if N>=4 add quarter marks)
+  var xIdx = N <= 3 ? (N === 1 ? [0] : [0, N - 1]) : [0, Math.floor((N - 1) / 2), N - 1];
+  var xLabels = xIdx.map(function(i) {
+    var d = points[i].x; // 'YYYY-MM-DD' or 'YYYY-MM-01'
+    var parts = d.split('-');
+    var short = parts[1] + '/' + parts[2].slice(0, 2);
+    return '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="8" fill="var(--tx3)">' + short + '</text>';
+  }).join('');
+
+  // Zero line for SG
+  var zeroLine = '';
+  if (metric === 'sg' && yMin < 0 && yMax > 0) {
+    zeroLine = '<line x1="' + ML + '" y1="' + yAt(0).toFixed(1) + '" x2="' + (W - MR) + '" y2="' + yAt(0).toFixed(1) + '" stroke="var(--tx3)" stroke-width="0.8" stroke-dasharray="3,2"/>';
+  }
+
+  // Polyline
+  var pts = points.map(function(p, i){ return xAt(i).toFixed(1) + ',' + yAt(p.y).toFixed(1); }).join(' ');
+  var markers = points.map(function(p, i) {
+    return '<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(p.y).toFixed(1) + '" r="2.5" fill="var(--ac2)"><title>' + p.x + ': ' + p.y + (p.label ? ' \u00B7 ' + p.label : '') + '</title></circle>';
+  }).join('');
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">'
+       + gridLines + zeroLine + yLabels + xLabels
+       + '<polyline fill="none" stroke="var(--ac2)" stroke-width="1.5" points="' + pts + '"/>'
+       + markers
+       + '</svg>';
+}
+
+/* TRENDS-4 -- state, persistence, setters, card render. */
+var _trendsState = null;
+function _trendsLoad() {
+  if (_trendsState) return _trendsState;
+  try {
+    var raw = localStorage.getItem('vc:trends');
+    var s = raw ? JSON.parse(raw) : {};
+    _trendsState = {
+      metric:      ['hcp','gir','fir','sg'].indexOf(s.metric) >= 0 ? s.metric : 'hcp',
+      granularity: s.granularity === 'month' ? 'month' : 'round',
+      range:       ['last10','last6mo','all'].indexOf(s.range) >= 0 ? s.range : 'all'
+    };
+  } catch(e) {
+    _trendsState = { metric:'hcp', granularity:'round', range:'all' };
+  }
+  return _trendsState;
+}
+function _trendsPersist() {
+  try { localStorage.setItem('vc:trends', JSON.stringify(_trendsState)); } catch(e){}
+}
+function _trendsSetMetric(m)      { _trendsLoad(); _trendsState.metric = m;      _trendsPersist(); renderTrendsCard(); }
+function _trendsSetGranularity(g) { _trendsLoad(); _trendsState.granularity = g; _trendsPersist(); renderTrendsCard(); }
+function _trendsSetRange(r)       { _trendsLoad(); _trendsState.range = r;       _trendsPersist(); renderTrendsCard(); }
+
+function renderTrendsCard() {
+  var body = document.getElementById('trendsCardBody');
+  if (!body) return;
+  var st = _trendsLoad();
+  var agg = _aggregateTrends(rounds, st);
+
+  var metricLabels = { hcp:'Handicap', gir:'GIR %', fir:'FIR %', sg:'Strokes Gained' };
+  var metricChips = ['hcp','gir','fir','sg'].map(function(m) {
+    var cls = st.metric === m ? 'btn' : 'btn sec';
+    return '<button class="' + cls + '" style="font-size:.58rem;padding:3px 8px" onclick="_trendsSetMetric(\'' + m + '\')">' + metricLabels[m] + '</button>';
+  }).join('');
+
+  var granChips = [['round','Per round'],['month','Monthly']].map(function(g) {
+    var cls = st.granularity === g[0] ? 'btn' : 'btn sec';
+    return '<button class="' + cls + '" style="font-size:.58rem;padding:3px 8px" onclick="_trendsSetGranularity(\'' + g[0] + '\')">' + g[1] + '</button>';
+  }).join('');
+
+  var rangeChips = [['last10','Last 10'],['last6mo','6 mo'],['all','All']].map(function(r) {
+    var cls = st.range === r[0] ? 'btn' : 'btn sec';
+    return '<button class="' + cls + '" style="font-size:.58rem;padding:3px 8px" onclick="_trendsSetRange(\'' + r[0] + '\')">' + r[1] + '</button>';
+  }).join('');
+
+  var skipNote = agg.skipped > 0
+    ? '<div style="font-size:.55rem;color:var(--tx3);margin-top:4px">' + agg.skipped + ' round' + (agg.skipped !== 1 ? 's' : '') + ' skipped (missing ' + metricLabels[st.metric] + ' data).</div>'
+    : '';
+
+  body.innerHTML =
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' + metricChips + '</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
+      + '<div style="display:flex;gap:4px">' + granChips + '</div>'
+      + '<div style="display:flex;gap:4px">' + rangeChips + '</div>'
+    + '</div>'
+    + '<div id="trendsChart">' + _trendsSvg(agg.points, st.metric) + '</div>'
+    + skipNote;
+}
+
+
   showTab, saveProfile, renderProfileHero, renderProfile,
   showTabFromProfile,
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
@@ -1174,5 +1382,7 @@ Object.assign(window, {
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
   showAIStepsCard, hideAIStepsCard,
-  updateSessionLinker
+  updateSessionLinker,
+  /* TRENDS-4 */
+  _trendsSetMetric, _trendsSetGranularity, _trendsSetRange, renderTrendsCard
 });
