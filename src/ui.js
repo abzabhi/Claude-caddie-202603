@@ -91,7 +91,8 @@ function _doProcessDataText(text) {
     if(section==='courses') {
       if(line.startsWith('COURSE |')) {
         const p=line.split('|').map(s=>s.trim());
-        currentCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||'',tees:[],holes:[]};
+        /* G2 -- parts 10/11/12 are osmLon/osmLat/osmCourseId (additive; legacy records lack them) */
+        currentCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||'',osmCenter:(p[10]&&p[11])?[parseFloat(p[10]),parseFloat(p[11])]:undefined,osmCourseId:p[12]?parseInt(p[12]):undefined,tees:[],holes:[]};
         newCourses.push(currentCourse);
         currentTee=null;
       } else if(line.startsWith('TEE |')&&currentCourse) {
@@ -224,7 +225,8 @@ function _parseDataText(text) {
     if(section==='courses'){
       if(line.startsWith('COURSE |')){
         const p=line.split('|').map(s=>s.trim());
-        currentCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||'',tees:[],holes:[]};
+        /* G2 -- parts 10/11/12 are osmLon/osmLat/osmCourseId (additive; legacy records lack them) */
+        currentCourse={id:p[1]||uid(),name:p[2]||'',city:p[3]||'',par:p[4]||'',rating:p[5]||'',slope:p[6]||'',yardage:p[7]||'',selectedTee:p[8]||'',updatedAt:p[9]||'',osmCenter:(p[10]&&p[11])?[parseFloat(p[10]),parseFloat(p[11])]:undefined,osmCourseId:p[12]?parseInt(p[12]):undefined,tees:[],holes:[]};
         newCourses.push(currentCourse); currentTee=null;
       } else if(line.startsWith('TEE |')&&currentCourse){
         const p=line.split('|').map(s=>s.trim());
