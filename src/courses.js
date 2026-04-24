@@ -1,5 +1,6 @@
 import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse } from './store.js';
 import { setVizInitDone } from './viz.js';
+import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition } from './geomap.js'; /* G2 */
 
 const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
 const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/courses/';
@@ -143,6 +144,9 @@ function getFavCourseId() {
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
             <button class="${togCls}" onclick="event.stopPropagation();toggleHomeCourse('${c.id}')">${togLbl}</button>
+            ${crsIsGeotagged(c)
+              ? `<span class="course-pin" style="background:var(--ok,#2d8a3e);color:#fff;font-size:.58rem;padding:3px 7px;border-radius:10px;cursor:pointer" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')" title="Re-pin location">\uD83D\uDCCD Pinned</span>`
+              : `<button class="btn sec" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')">\uD83D\uDCCD Pin location</button>`}
             <div style="text-align:right">
               <button id="delBtn-${c.id}" class="btn danger" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button>
               <div id="delWarn-${c.id}" style="font-size:.62rem;color:var(--danger);font-family:'DM Mono',monospace;margin-top:3px;display:none;max-width:160px;line-height:1.4"></div>
@@ -427,19 +431,184 @@ async function onRepoSearch() {
     </div>`).join('');
 }
 
+/* ============================================================================
+   G2 -- Geotag (pin course to OSM location). Additive; existing flow untouched.
+   ============================================================================ */
+
+function crsIsGeotagged(course) {
+  return !!(course && course.osmCenter && course.osmCenter.length === 2
+    && isFinite(course.osmCenter[0]) && isFinite(course.osmCenter[1]));
+}
+
+async function crsGeotagSearchByName(courseId, city) {
+  const c = courses.find(x => x.id === courseId);
+  if (!c) throw new Error('Course not found');
+  if (!city || !c.name) return [];
+  return await geomSearchByName(city, c.name);
+}
+
+async function crsGeotagSearchByGps(courseId) {
+  const loc = await geomGetCurrentPosition();  /* [lon, lat, acc] */
+  return await geomSearchByLocation(loc[0], loc[1], 10000);
+}
+
+function crsGeotagApply(courseId, osmCenter, osmCourseId) {
+  const c = courses.find(x => x.id === courseId);
+  if (!c) return;
+  const updated = Object.assign({}, c, {
+    osmCenter: osmCenter,
+    osmCourseId: osmCourseId,
+    updatedAt: today()
+  });
+  replaceCourse(updated);
+  save();
+  _crsGeotagCloseModal();
+  renderCourseList();
+}
+
+function _crsGeotagCloseModal() {
+  const el = document.getElementById('crsGeotagModal');
+  if (el) el.remove();
+}
+
+function crsOpenGeotagModal(courseId) {
+  const c = courses.find(x => x.id === courseId);
+  if (!c) return;
+  _crsGeotagCloseModal();
+
+  const wrap = document.createElement('div');
+  wrap.id = 'crsGeotagModal';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);'
+    + 'display:flex;align-items:center;justify-content:center;padding:20px';
+  wrap.onclick = (e) => { if (e.target === wrap) _crsGeotagCloseModal(); };
+
+  const safeName = (c.name || 'Unnamed').replace(/</g, '&lt;');
+  const defaultCity = (c.city || '').replace(/"/g, '&quot;');
+  const pinnedLine = crsIsGeotagged(c)
+    ? `<div style="font-size:.6rem;color:var(--tx3);margin-bottom:8px">Currently pinned at ${c.osmCenter[1].toFixed(4)}, ${c.osmCenter[0].toFixed(4)}</div>`
+    : '';
+
+  wrap.innerHTML = `
+    <div style="background:var(--bg);border:1px solid var(--br);border-radius:8px;
+                max-width:440px;width:100%;max-height:85vh;overflow-y:auto;
+                padding:18px;font-family:'DM Mono',monospace;color:var(--tx)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:.85rem;font-weight:600">\uD83D\uDCCD Pin ${safeName}</div>
+        <button class="btn sec" style="font-size:.7rem;padding:3px 9px" onclick="_crsGeotagCloseModal()">\u2715</button>
+      </div>
+      ${pinnedLine}
+      <div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px;line-height:1.4">
+        Search OpenStreetMap for this course to enable map features in live rounds.
+      </div>
+
+      <div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">A. Search by city</div>
+        <div style="display:flex;gap:6px">
+          <input id="crsGeotagCity" type="text" value="${defaultCity}" placeholder="City"
+            style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;
+                   color:var(--tx);font-family:'DM Mono',monospace;font-size:.7rem;
+                   padding:5px 8px;outline:none">
+          <button class="btn" style="font-size:.7rem;padding:5px 12px"
+            onclick="_crsGeotagDoNameSearch('${courseId}')">Find</button>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">B. Use my location</div>
+        <button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"
+          onclick="_crsGeotagDoGpsSearch('${courseId}')">\uD83D\uDCE1 Search nearby courses</button>
+      </div>
+
+      <div id="crsGeotagStatus" style="font-size:.62rem;color:var(--tx3);margin:8px 0;min-height:14px"></div>
+      <div id="crsGeotagResults"></div>
+
+      <div style="margin-top:14px;text-align:right">
+        <button class="btn sec" style="font-size:.7rem;padding:5px 14px" onclick="_crsGeotagCloseModal()">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(wrap);
+  setTimeout(() => { const inp = document.getElementById('crsGeotagCity'); if (inp) inp.focus(); }, 50);
+}
+
+function _crsGeotagSetStatus(msg) {
+  const el = document.getElementById('crsGeotagStatus');
+  if (el) el.textContent = msg || '';
+}
+
+function _crsGeotagRenderResults(courseId, results, origin) {
+  const host = document.getElementById('crsGeotagResults');
+  if (!host) return;
+  if (!results || !results.length) { host.innerHTML = '<div style="font-size:.62rem;color:var(--tx3)">No matches found.</div>'; return; }
+
+  const rows = results.map(r => {
+    const lon = r.center[0], lat = r.center[1];
+    let distTxt = '';
+    if (origin && window.turf) {
+      const d = window.turf.distance(
+        window.turf.point(origin), window.turf.point(r.center), { units: 'kilometers' });
+      distTxt = ` \u00B7 ${d.toFixed(1)} km`;
+    }
+    const osmId = r.osmId.split('/')[1] || '';
+    const nameEsc = (r.name || 'Unnamed').replace(/'/g, '\\\'').replace(/</g, '&lt;');
+    const nameDisp = (r.name || 'Unnamed').replace(/</g, '&lt;');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;
+                       padding:8px;border:1px solid var(--br);border-radius:6px;margin-bottom:6px">
+        <div style="min-width:0">
+          <div style="font-size:.7rem;color:var(--tx)">${nameDisp}</div>
+          <div style="font-size:.58rem;color:var(--tx3)">${lat.toFixed(4)}, ${lon.toFixed(4)}${distTxt}</div>
+        </div>
+        <button class="btn" style="font-size:.65rem;padding:4px 10px;flex-shrink:0"
+          onclick="crsGeotagApply('${courseId}', [${lon}, ${lat}], ${osmId || 'null'})">Select</button>
+      </div>`;
+  }).join('');
+  host.innerHTML = rows;
+}
+
+async function _crsGeotagDoNameSearch(courseId) {
+  const cityEl = document.getElementById('crsGeotagCity');
+  const city = cityEl ? cityEl.value.trim() : '';
+  if (!city) { _crsGeotagSetStatus('Enter a city first.'); return; }
+  _crsGeotagSetStatus('Searching...');
+  try {
+    const results = await crsGeotagSearchByName(courseId, city);
+    _crsGeotagSetStatus(results.length ? `${results.length} match(es)` : 'No matches');
+    _crsGeotagRenderResults(courseId, results, null);
+  } catch (err) {
+    _crsGeotagSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown'));
+  }
+}
+
+async function _crsGeotagDoGpsSearch(courseId) {
+  _crsGeotagSetStatus('Getting location...');
+  try {
+    const loc = await geomGetCurrentPosition();
+    _crsGeotagSetStatus('Searching nearby...');
+    const results = await geomSearchByLocation(loc[0], loc[1], 10000);
+    _crsGeotagSetStatus(results.length ? `${results.length} nearby course(s)` : 'No courses within 10km');
+    _crsGeotagRenderResults(courseId, results, [loc[0], loc[1]]);
+  } catch (err) {
+    _crsGeotagSetStatus('Location failed: ' + (err && err.message ? err.message : 'denied'));
+  }
+}
+
 export {
   getFavCourseId, renderCourseList, deleteCourse, toggleHomeCourse,
   editCourse, cancelCourseEdit, renderTeeButtons, showAddTeeRow,
   cancelAddTee, confirmAddTee, deleteTee, selectEditTee,
   renderHoleTable, updateHole, updateHoleTotals, saveCourse,
   _fetchCourseIndex, _fetchCourseFile, _stripGeometry,
-  searchCourseRepo, addCourseFromRepo, onRepoSearch
+  searchCourseRepo, addCourseFromRepo, onRepoSearch,
+  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsOpenGeotagModal /* G2 */
 };
 
 Object.assign(window, {
   renderCourseList, deleteCourse, toggleHomeCourse, editCourse,
   cancelCourseEdit, showAddTeeRow, cancelAddTee, confirmAddTee,
   deleteTee, selectEditTee, updateHole, updateHoleTotals, saveCourse,
-  addCourseFromRepo, onRepoSearch, _stripGeometry
+  addCourseFromRepo, onRepoSearch, _stripGeometry,
+  /* G2 geotag */
+  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsOpenGeotagModal,
+  _crsGeotagCloseModal, _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch
 });
 Object.assign(window, { cancelAddTee, cancelCourseEdit, confirmAddTee, editCourse, onRepoSearch, saveCourse, showAddTeeRow });
