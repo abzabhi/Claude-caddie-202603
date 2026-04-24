@@ -142,12 +142,12 @@ function getFavCourseId() {
             <div class="course-name">${pinHTML}${c.name||'Unnamed'}</div>
             <div class="course-meta">${c.city?c.city+' \u00B7 ':''}Par ${c.par} \u00B7 ${c.yardage}yds \u00B7 Rating ${c.rating}/Slope ${c.slope}${c.tees?.length?' \u00B7 '+c.tees.length+' tees':''}</div>
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+          <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start">
             <button class="${togCls}" onclick="event.stopPropagation();toggleHomeCourse('${c.id}')">${togLbl}</button>
             ${crsIsGeotagged(c)
-              ? `<span class="course-pin" style="background:var(--ok,#2d8a3e);color:#fff;font-size:.58rem;padding:3px 7px;border-radius:10px;cursor:pointer" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')" title="Re-pin location">\uD83D\uDCCD Pinned</span>`
-              : `<button class="btn sec" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')">\uD83D\uDCCD Pin location</button>`}
-            <div style="text-align:right">
+              ? `<span class="course-pin" style="background:var(--ok,#2d8a3e);color:#fff;font-size:.58rem;padding:3px 7px;border-radius:10px;cursor:pointer;align-self:center" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')" title="Re-pin location">\uD83D\uDCCD Pinned</span>`
+              : `<button class="btn sec" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')">\uD83D\uDCCD Pin</button>`}
+            <div>
               <button id="delBtn-${c.id}" class="btn danger" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button>
               <div id="delWarn-${c.id}" style="font-size:.62rem;color:var(--danger);font-family:'DM Mono',monospace;margin-top:3px;display:none;max-width:160px;line-height:1.4"></div>
             </div>
