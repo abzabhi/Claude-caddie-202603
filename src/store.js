@@ -131,10 +131,10 @@ export function serialise() {
     (c.sessions||[]).forEach(s=>lines.push('  SESSION | '+s.date+' | '+s.min+' | '+s.max+(s.notes?(' | '+s.notes):'')));
   });
   lines.push(''); lines.push('=== COURSES ===');
-  lines.push('# id | name | city | par | rating | slope | yardage | selectedTee | updatedAt');
+  lines.push('# id | name | city | par | rating | slope | yardage | selectedTee | updatedAt | osmLon | osmLat | osmCourseId');
   courses.forEach(c => {
     lines.push('');
-    lines.push('COURSE | '+[c.id,c.name||'',c.city||'',c.par||'',c.rating||'',c.slope||'',c.yardage||'',c.selectedTee||'',c.updatedAt||''].join(' | '));
+    lines.push('COURSE | '+[c.id,c.name||'',c.city||'',c.par||'',c.rating||'',c.slope||'',c.yardage||'',c.selectedTee||'',c.updatedAt||'',(c.osmCenter&&c.osmCenter[0])||'',(c.osmCenter&&c.osmCenter[1])||'',c.osmCourseId||''].join(' | ')); /* G2 -- osmCenter + osmCourseId additive */
     (c.tees||[]).forEach(t => {
       lines.push('  TEE | '+[t.id,t.name||'',t.rating||'',t.slope||'',t.yardage||''].join(' | '));
       (t.holes||[]).forEach(h => {
