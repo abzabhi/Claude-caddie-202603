@@ -2,6 +2,9 @@ import { uid, today, save, courses, rounds, history, profile, bag } from './stor
 import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
 import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 import { renderHandicap } from './rounds.js';
+/* G2 -- geomap integration for in-round map view */
+import { geomCreateMap, geomLoadByCenter, geomRenderGeometry, geomShowHole,
+         geomStartGpsWatch, geomStopGpsWatch, geomDistanceYds } from './geomap.js';
 
 /* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
@@ -229,11 +232,20 @@ lrState = {
   saved: false,
   linkedSessionId: (function() { var s = document.getElementById('lrLinkedSession'); return s && s.value ? s.value : null; })(),
   _sessionBagOpen: false,
+  /* G2 -- map view state (all persisted in gordy:activeRound via _lrPersist) */
+  _mapPromptSeen: false,
+  _mapOpen: false,
+  _mapMode: 'simple',          /* 'simple' | 'advanced' */
+  _scoringCollapsed: false,
+  _gpsOn: false,
+  _gpsPrompted: false,
+  _mapSelectedPoint: null,     /* [lon, lat] */
 };
 
 lrShowScreen('lrHoleScreen');
 lrRenderHole();
 _lrPersist();
+_lrMapPromptIfNeeded();  /* G2 -- offer map load once at round start */
 }
 
 function lrCancelSetup() {
@@ -375,6 +387,19 @@ if(lrState.players.length > 1 && !shared) {
 
 // Score content
 const scroll = document.getElementById('lrScroll');
+
+/* G2 -- map mode branch. When map is active, replace the scroll with banner+map+collapsible scoring.
+   Classic path (else) is untouched. */
+if (lrState._mapOpen && _lrMapGeo) {
+  scroll.innerHTML = _lrMapPanelHtml(h, pi, shared);
+  setTimeout(function(){ _lrMapMount(); }, 0);
+  // Nav still needed below
+  document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
+  var last = lrState.curHole === lrState.holes.length-1;
+  document.getElementById('lrNextIcon').textContent = last ? '\u2713' : '\u2192';
+  return;
+}
+
 if(shared) {
   // Scramble / foursomes: one score for the team (use player 0)
   const ts = lrState.players[0].scores[lrState.curHole];
@@ -534,8 +559,12 @@ _lrEditingIndex     = null;
 _lrObConfirmPending = false;
 _lrDeleteConfirmIdx = null;
 _lrGirPromptPending = false;
+/* G2 -- clear per-hole target point so previous hole's pin doesn't linger */
+if (lrState) lrState._mapSelectedPoint = null;
 lrRenderHole();
 _lrPersist();
+/* G2 -- fly map to the new hole if map is mounted */
+if (_lrMapInstance && _lrMapGeo) { _lrMapShowHole(lrState.curHole + 1); }
 }
 
 // \u2500\u2500 Minimize / expand \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -547,6 +576,7 @@ lrUpdatePill();
 function lrExpand() {
 document.getElementById('lrOverlay').classList.add('active');
 lrShowScreen('lrHoleScreen');
+_lrMapRestoreFromStorage();  /* G2 -- rehydrate geometry if mapping was active */
 lrRenderHole();
 if (window.updateSessionPill) window.updateSessionPill();
 }
@@ -1247,6 +1277,7 @@ if(banner) banner.style.display='none';
 // Old banner button reset removed -- no longer rewiring confirm button:
 // const confirmBtn = banner?.querySelector('.btn.danger');
 // if(confirmBtn) { confirmBtn.textContent = 'End Round'; confirmBtn.onclick = lrConfirmEnd; }
+_lrMapUnmount(); _lrMapClearStorage();  /* G2 */
 lrState = null;
 if (window.clearActiveSession) window.clearActiveSession('round');
 document.getElementById('lrOverlay').classList.remove('active');
@@ -1266,6 +1297,7 @@ if(b) b.style.display='none';
 
 function lrCloseRound() {
 document.getElementById('lrOverlay').classList.remove('active');
+_lrMapUnmount(); _lrMapClearStorage();  /* G2 */
 lrState = null;
 lrUpdatePill();
 if(window.showTab) window.showTab('rounds');
@@ -2098,6 +2130,333 @@ function _lrCaddieCompanionHtml() {
   return out;
 }
 
+/* ============================================================================
+   G2 -- In-round map view. All functions prefixed _lrMap*.
+   State lives on lrState for persistence; MapLibre instance + GPS watch kept
+   module-local to avoid serialising DOM handles. Geometry persisted separately
+   to 'gordy:activeRoundGeo' (written once at load; cleared on round end).
+   ============================================================================ */
+
+var _lrMapInstance    = null;    /* MapLibre Map */
+var _lrMapGeo         = null;    /* {holes, polygons, center, bounds} */
+var _lrGpsWatchId     = null;
+var _lrUserMarker     = null;    /* maplibregl.Marker */
+var _lrTargetMarker   = null;    /* maplibregl.Marker */
+var _lrUserLonLat     = null;    /* [lon, lat] latest GPS fix */
+
+function _lrMapHasGeotag() {
+  if (!lrState || !lrState.courseId) return false;
+  var c = courses.find(function(x){ return x.id === lrState.courseId; });
+  return !!(c && c.osmCenter && c.osmCenter.length === 2
+    && isFinite(c.osmCenter[0]) && isFinite(c.osmCenter[1]));
+}
+
+/* Prompt at round start. Fires once per round (gated on _mapPromptSeen). */
+function _lrMapPromptIfNeeded() {
+  if (!lrState || lrState._mapPromptSeen) return;
+  var banner = document.createElement('div');
+  banner.id = 'lrMapPrompt';
+  banner.style.cssText = 'position:absolute;top:10px;left:10px;right:10px;z-index:500;'
+    + 'background:var(--bg);border:1px solid var(--ac);border-radius:8px;padding:12px;'
+    + 'font-family:\'DM Mono\',monospace;font-size:.7rem;color:var(--tx);box-shadow:0 4px 12px rgba(0,0,0,.3)';
+  if (_lrMapHasGeotag()) {
+    banner.innerHTML =
+      '<div style="margin-bottom:8px">\uD83D\uDDFA Load course map for this round?</div>'
+      + '<div style="font-size:.6rem;color:var(--tx3);margin-bottom:10px">Shows holes, greens, and your GPS location.</div>'
+      + '<div style="display:flex;gap:6px;justify-content:flex-end">'
+      + '<button class="btn sec" style="font-size:.65rem;padding:4px 12px" onclick="_lrMapPromptDismiss()">Skip</button>'
+      + '<button class="btn" style="font-size:.65rem;padding:4px 12px" onclick="_lrMapPromptAccept()">Load map</button>'
+      + '</div>';
+  } else {
+    banner.innerHTML =
+      '<div style="margin-bottom:8px">\uD83D\uDDFA Course not pinned to a location</div>'
+      + '<div style="font-size:.6rem;color:var(--tx3);margin-bottom:10px">Pin from Courses tab to enable the map.</div>'
+      + '<div style="display:flex;gap:6px;justify-content:flex-end">'
+      + '<button class="btn sec" style="font-size:.65rem;padding:4px 12px" onclick="_lrMapPromptDismiss()">OK</button>'
+      + '</div>';
+  }
+  var screen = document.getElementById('lrHoleScreen');
+  if (screen) screen.appendChild(banner);
+}
+
+function _lrMapPromptDismiss() {
+  var b = document.getElementById('lrMapPrompt');
+  if (b) b.remove();
+  if (lrState) { lrState._mapPromptSeen = true; _lrPersist(); }
+}
+
+function _lrMapPromptAccept() {
+  var b = document.getElementById('lrMapPrompt');
+  if (b) b.remove();
+  if (lrState) { lrState._mapPromptSeen = true; _lrPersist(); }
+  _lrMapLoadForRound();
+}
+
+async function _lrMapLoadForRound() {
+  if (!lrState || !lrState.courseId) return;
+  var c = courses.find(function(x){ return x.id === lrState.courseId; });
+  if (!c || !c.osmCenter) return;
+  var hint = document.getElementById('lrMapLoadHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'lrMapLoadHint';
+    hint.style.cssText = 'position:absolute;top:10px;left:10px;right:10px;z-index:500;'
+      + 'background:var(--bg);border:1px solid var(--br);border-radius:8px;padding:10px;'
+      + 'font-family:\'DM Mono\',monospace;font-size:.65rem;color:var(--tx3);text-align:center';
+    var sc = document.getElementById('lrHoleScreen');
+    if (sc) sc.appendChild(hint);
+  }
+  hint.textContent = 'Loading course geometry...';
+  try {
+    var geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+    _lrMapGeo = geo;
+    try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
+    lrState._mapOpen = true;
+    _lrPersist();
+    hint.remove();
+    lrRenderHole();
+  } catch (err) {
+    hint.style.color = 'var(--danger)';
+    hint.textContent = 'Map load failed: ' + (err && err.message ? err.message : 'unknown');
+    setTimeout(function(){ if (hint && hint.parentNode) hint.remove(); }, 4000);
+  }
+}
+
+function _lrMapRestoreFromStorage() {
+  if (!lrState || !lrState._mapOpen) return;
+  if (_lrMapGeo) return;  /* already hydrated */
+  try {
+    var raw = localStorage.getItem('gordy:activeRoundGeo');
+    if (raw) _lrMapGeo = JSON.parse(raw);
+  } catch(e) { _lrMapGeo = null; }
+  if (!_lrMapGeo) lrState._mapOpen = false;  /* storage gone -- downgrade to classic view */
+}
+
+function _lrMapClearStorage() {
+  try { localStorage.removeItem('gordy:activeRoundGeo'); } catch(e) {}
+  _lrMapGeo = null;
+}
+
+/* Banner: hole number, par, yardage, stroke index. Static; re-rendered per hole. */
+function _lrMapBannerHtml(h) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;'
+    + 'padding:10px 12px;background:var(--sf);border-radius:8px;margin-bottom:8px;'
+    + 'font-family:\'DM Mono\',monospace">'
+    + '<div><span style="font-size:.5rem;color:var(--tx3);text-transform:uppercase">Hole</span>'
+    + '<div style="font-size:1.1rem;font-weight:600;color:var(--tx)">' + h.n + '</div></div>'
+    + '<div><span style="font-size:.5rem;color:var(--tx3);text-transform:uppercase">Par</span>'
+    + '<div style="font-size:.9rem;color:var(--tx)">' + h.par + '</div></div>'
+    + '<div><span style="font-size:.5rem;color:var(--tx3);text-transform:uppercase">Yds</span>'
+    + '<div style="font-size:.9rem;color:var(--tx)">' + (h.yards || '\u2014') + '</div></div>'
+    + '<div><span style="font-size:.5rem;color:var(--tx3);text-transform:uppercase">SI</span>'
+    + '<div style="font-size:.9rem;color:var(--tx)">' + (h.handicap || '\u2014') + '</div></div>'
+    + '</div>';
+}
+
+function _lrMapModeDropdownHtml() {
+  var mode = (lrState && lrState._mapMode) || 'simple';
+  return '<select onchange="_lrMapSetMode(this.value)" style="background:var(--bg);border:1px solid var(--br);'
+    + 'border-radius:4px;color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.65rem;padding:3px 8px;outline:none">'
+    + '<option value="simple"' + (mode==='simple'?' selected':'') + '>Simple</option>'
+    + '<option value="advanced"' + (mode==='advanced'?' selected':'') + '>Advanced</option>'
+    + '</select>';
+}
+
+function _lrDistancesHtml() {
+  var lines = [];
+  var hole = _lrMapGeo && _lrMapGeo.holes ? _lrCurHoleGeo() : null;
+  var green = hole && hole.green;
+  var user = _lrUserLonLat;
+  var target = lrState && lrState._mapSelectedPoint;
+
+  function line(label, val) {
+    return '<div style="display:flex;justify-content:space-between;font-size:.62rem;padding:2px 0">'
+      + '<span style="color:var(--tx3)">' + label + '</span>'
+      + '<span style="color:var(--tx)">' + (val === null ? '\u2014' : val + ' yds') + '</span></div>';
+  }
+  lines.push(line('You \u2192 Target', (user && target) ? geomDistanceYds(user, target) : null));
+  lines.push(line('Target \u2192 Green', (target && green) ? geomDistanceYds(target, green) : null));
+  lines.push(line('You \u2192 Green', (user && green) ? geomDistanceYds(user, green) : null));
+  return '<div style="padding:8px 10px;background:var(--sf);border-radius:6px;margin-top:6px">' + lines.join('') + '</div>';
+}
+
+function _lrCurHoleGeo() {
+  if (!_lrMapGeo || !_lrMapGeo.holes) return null;
+  var want = String(lrState.holes[lrState.curHole].n);
+  for (var key in _lrMapGeo.holes) {
+    if (String(_lrMapGeo.holes[key].ref) === want) return _lrMapGeo.holes[key];
+  }
+  return null;
+}
+
+/* Full map-mode layout. Scoring section is collapsible; mode dropdown switches simple/advanced. */
+function _lrMapPanelHtml(h, pi, shared) {
+  var collapsed = !!(lrState && lrState._scoringCollapsed);
+  var mapH = collapsed ? '60vh' : '40vh';
+  var scoreMode = (lrState && lrState._mapMode) || 'simple';
+  var scoreHtml = '';
+  if (scoreMode === 'simple') {
+    scoreHtml = shared
+      ? lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true)
+      : lrScoreBlock(lrState.players[pi], lrState.curHole, h, pi, false);
+  } else {
+    scoreHtml = _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
+    /* advanced html is normally collapsible; force-open by pre-toggling */
+    if (!_lrAdvancedOpen) { _lrAdvancedOpen = true; scoreHtml = _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared); }
+  }
+
+  var gpsBtn = (lrState && lrState._gpsOn)
+    ? '<button class="btn" style="font-size:.62rem;padding:3px 9px" onclick="_lrMapGpsToggle()">\uD83D\uDCE1 GPS on</button>'
+    : '<button class="btn sec" style="font-size:.62rem;padding:3px 9px" onclick="_lrMapGpsToggle()">\uD83D\uDCE1 GPS off</button>';
+
+  var collapseBtn = '<button class="btn sec" style="font-size:.62rem;padding:3px 9px" onclick="_lrMapToggleScoring()">'
+    + (collapsed ? '\u2B07 Show scoring' : '\u2B06 Hide scoring') + '</button>';
+
+  var mapExitBtn = '<button class="btn sec" style="font-size:.62rem;padding:3px 9px" onclick="_lrMapExit()">\u2715 Exit map</button>';
+
+  return _lrMapBannerHtml(h)
+    + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">'
+    +   _lrMapModeDropdownHtml() + gpsBtn + collapseBtn + mapExitBtn
+    + '</div>'
+    + '<div id="lrMapCanvas" style="width:100%;height:' + mapH + ';border-radius:8px;overflow:hidden;background:#111"></div>'
+    + _lrDistancesHtml()
+    + (collapsed ? '' : '<div style="margin-top:10px">' + scoreHtml + '</div>');
+}
+
+function _lrMapMount() {
+  if (!_lrMapGeo) return;
+  var el = document.getElementById('lrMapCanvas');
+  if (!el) return;
+  /* If an existing instance's container was replaced by innerHTML, rebuild */
+  if (_lrMapInstance && _lrMapInstance.getContainer && _lrMapInstance.getContainer() !== el) {
+    try { _lrMapInstance.remove(); } catch(e) {}
+    _lrMapInstance = null;
+    _lrUserMarker = null;
+    _lrTargetMarker = null;
+  }
+  if (!_lrMapInstance) {
+    _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 16 });
+    _lrMapInstance.on('load', function(){
+      geomRenderGeometry(_lrMapInstance, _lrMapGeo);
+      _lrMapShowHole(lrState.curHole + 1);
+    });
+    /* Handle case where map is created after style already loaded */
+    if (_lrMapInstance.isStyleLoaded && _lrMapInstance.isStyleLoaded()) {
+      geomRenderGeometry(_lrMapInstance, _lrMapGeo);
+      _lrMapShowHole(lrState.curHole + 1);
+    }
+    _lrMapInstance.on('click', _lrMapOnClick);
+  }
+  /* Restore target marker if one was persisted */
+  if (lrState && lrState._mapSelectedPoint) _lrPlaceTargetMarker(lrState._mapSelectedPoint);
+  /* Restore user marker if GPS running */
+  if (_lrUserLonLat) _lrPlaceUserMarker(_lrUserLonLat);
+}
+
+function _lrMapShowHole(n) {
+  if (!_lrMapInstance || !_lrMapGeo) return;
+  geomShowHole(_lrMapInstance, _lrMapGeo, n);
+}
+
+function _lrMapOnClick(e) {
+  if (!lrState) return;
+  var ll = [e.lngLat.lng, e.lngLat.lat];
+  lrState._mapSelectedPoint = ll;
+  _lrPersist();
+  _lrPlaceTargetMarker(ll);
+  _lrRefreshDistances();
+}
+
+function _lrPlaceTargetMarker(ll) {
+  if (!_lrMapInstance) return;
+  if (_lrTargetMarker) _lrTargetMarker.setLngLat(ll);
+  else _lrTargetMarker = new window.maplibregl.Marker({ color: '#f1c40f' }).setLngLat(ll).addTo(_lrMapInstance);
+}
+
+function _lrPlaceUserMarker(ll) {
+  if (!_lrMapInstance) return;
+  if (_lrUserMarker) _lrUserMarker.setLngLat(ll);
+  else _lrUserMarker = new window.maplibregl.Marker({ color: '#4a90e2' }).setLngLat(ll).addTo(_lrMapInstance);
+}
+
+function _lrRefreshDistances() {
+  var scroll = document.getElementById('lrScroll');
+  if (!scroll) return;
+  /* Re-render just the panel (cheap): re-call lrRenderHole would remount map; instead patch the distances block. */
+  /* Easier: full re-render is idempotent thanks to _lrMapMount's check. */
+  lrRenderHole();
+}
+
+function _lrMapGpsPromptIfNeeded() {
+  if (!lrState) return true;
+  if (lrState._gpsPrompted) return true;
+  var ok = confirm('Enable GPS tracking for this round? Accuracy helps distance estimates.');
+  lrState._gpsPrompted = true;
+  _lrPersist();
+  return ok;
+}
+
+function _lrMapGpsToggle() {
+  if (!lrState) return;
+  if (lrState._gpsOn) {
+    /* Turn off */
+    if (_lrGpsWatchId != null) { geomStopGpsWatch(_lrGpsWatchId); _lrGpsWatchId = null; }
+    if (_lrUserMarker) { try { _lrUserMarker.remove(); } catch(e) {} _lrUserMarker = null; }
+    _lrUserLonLat = null;
+    lrState._gpsOn = false;
+    _lrPersist();
+    lrRenderHole();
+    return;
+  }
+  if (!_lrMapGpsPromptIfNeeded()) return;
+  _lrGpsWatchId = geomStartGpsWatch(_lrMapOnGpsTick, function(err){
+    lrState._gpsOn = false;
+    _lrPersist();
+    alert('GPS error: ' + (err && err.message ? err.message : 'unknown'));
+    lrRenderHole();
+  });
+  lrState._gpsOn = true;
+  _lrPersist();
+  lrRenderHole();
+}
+
+function _lrMapOnGpsTick(tick) {
+  _lrUserLonLat = [tick[0], tick[1]];
+  _lrPlaceUserMarker(_lrUserLonLat);
+  _lrRefreshDistances();
+}
+
+function _lrMapToggleScoring() {
+  if (!lrState) return;
+  lrState._scoringCollapsed = !lrState._scoringCollapsed;
+  _lrPersist();
+  lrRenderHole();
+}
+
+function _lrMapSetMode(m) {
+  if (!lrState) return;
+  lrState._mapMode = (m === 'advanced' ? 'advanced' : 'simple');
+  _lrPersist();
+  lrRenderHole();
+}
+
+/* User-initiated exit from map view for remainder of round. Does not touch storage -- user can re-accept next round. */
+function _lrMapExit() {
+  if (!lrState) return;
+  _lrMapUnmount();
+  lrState._mapOpen = false;
+  _lrPersist();
+  lrRenderHole();
+}
+
+function _lrMapUnmount() {
+  if (_lrGpsWatchId != null) { try { geomStopGpsWatch(_lrGpsWatchId); } catch(e) {} _lrGpsWatchId = null; }
+  if (_lrUserMarker) { try { _lrUserMarker.remove(); } catch(e) {} _lrUserMarker = null; }
+  if (_lrTargetMarker) { try { _lrTargetMarker.remove(); } catch(e) {} _lrTargetMarker = null; }
+  if (_lrMapInstance) { try { _lrMapInstance.remove(); } catch(e) {} _lrMapInstance = null; }
+  _lrUserLonLat = null;
+}
+
 // -- Expose to window (required for HTML onclick handlers) --
 Object.assign(window, {
   lrStartSetup, lrAddPlayer, lrRemovePlayer, lrToggleMe,
@@ -2122,4 +2481,7 @@ Object.assign(window, {
   lrLinkSession, lrToggleSessionBag, lrRenderSessionPicker,
   /* Shared PDF helpers */
   _lrRoundSG, _lrRoundFIR, _pdfSharedCSS, _pdfBanner, _pdfFontsLink, _pdfLogoDataUrl,
+  /* G2 -- map view */
+  _lrMapPromptIfNeeded, _lrMapPromptDismiss, _lrMapPromptAccept,
+  _lrMapLoadForRound, _lrMapGpsToggle, _lrMapToggleScoring, _lrMapSetMode, _lrMapExit,
 });
