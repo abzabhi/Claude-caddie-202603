@@ -1,5 +1,5 @@
-// gordy-v1 — increment this string on every index.html or src/ update to bust cache for installed PWA users
-var CACHE = 'gordy-v1';
+// gordy-v2 — increment this string on every index.html or src/ update to bust cache for installed PWA users
+var CACHE = 'gordy-v2';
 
 var SHELL = [
   '/',
@@ -33,7 +33,10 @@ var SHELL = [
 var NETWORK_ONLY = [
   'gordythevirtualcaddie.workers.dev',
   'github.com/abzabhi/gordy-courses',
-  'raw.githubusercontent.com'
+  'raw.githubusercontent.com',
+  'nominatim.openstreetmap.org/',
+  'overpass-api.de/',
+  'server.arcgisonline.com/'
 ];
 
 self.addEventListener('install', function(e) {
