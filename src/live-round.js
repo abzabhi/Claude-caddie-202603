@@ -395,8 +395,8 @@ if (lrState._mapOpen && _lrMapGeo) {
   setTimeout(function(){ _lrMapMount(); }, 0);
   // Nav still needed below
   document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
-  var last = lrState.curHole === lrState.holes.length-1;
-  document.getElementById('lrNextIcon').textContent = last ? '\u2713' : '\u2192';
+  var _lrMapIsLast = lrState.curHole === lrState.holes.length-1;
+  document.getElementById('lrNextIcon').textContent = _lrMapIsLast ? '\u2713' : '\u2192';
   return;
 }
 
