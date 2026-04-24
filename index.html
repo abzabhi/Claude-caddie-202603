@@ -449,6 +449,10 @@ body{
 </style>
 <!-- CLEAN10 -- DOMPurify for sanitising user-authored strings before innerHTML assignment -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" integrity="sha512-dn5ClFMnAoB/BdYMh7vDaBpxECaTqz3lXjdOPsQi8OHRD2h+mGKOHTHlJvXrLMOXmAPlNAGI0q9OnnGbCWalw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- G1 — MapLibre GL + Turf.js for geomap.js (no SRI available for these unpkg ranges) -->
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 </head>
 <body>
 <div id="offlineBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:var(--sand);color:var(--gold);text-align:center;font-family:'DM Mono',monospace;font-size:.62rem;padding:5px;letter-spacing:.08em">
