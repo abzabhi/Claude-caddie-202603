@@ -28,7 +28,7 @@ const GC = {
   green:        '#28a050',
   tee:          '#d0d8e0',
   bunker:       '#c9a84c',
-  water_hazard: '#5b9bd5',
+  lateral_water_hazard: '#5b9bd5',
   rough:        '#4a7a28'
 };
 
@@ -322,8 +322,8 @@ function _processOSM(elements) {
   elements.forEach(e => {
     if (!e.tags) return;
     /* G2b -- water bodies lack golf= tag; promote to water_hazard for rendering */
-    if (!e.tags.golf && (e.tags.natural === 'water' || e.tags.landuse === 'reservoir')) {
-      e.tags.golf = 'water_hazard';
+    if (!e.tags.golf && (e.tags.natural === 'water' || e.tags.landuse === 'reservoir' || e.tags.golf === 'lateral_water_hazard')) {
+      e.tags.golf = 'lateral_water_hazard';
     }
     if (!e.tags.golf) return;
     let coords = [];
@@ -430,6 +430,7 @@ export async function geomLoadByCenter(lon, lat, radiusM) {
     /* G2b -- water bodies on golf courses are tagged natural=water/landuse=reservoir, not golf=water_hazard */
     `  way["natural"="water"](around:${r}, ${lat}, ${lon});\n` +
     `  way["landuse"="reservoir"](around:${r}, ${lat}, ${lon});\n` +
+    `  way["golf"="lateral_water_hazard"](around:${r}, ${lat}, ${lon});\n` +
     '); out body; >; out skel qt;';
 
   const res = await _fetchWithTimeout(
@@ -569,7 +570,7 @@ export function geomPointInPolygon(lngLat, polygon) {
 export function geomLieAtPoint(lngLat, polygons) {
   if (!polygons || !polygons.features || !polygons.features.length) return null;
   const pt = window.turf.point(lngLat);
-  const priority = ['green', 'tee', 'fairway', 'rough', 'bunker', 'water_hazard'];
+  const priority = ['green', 'tee', 'fairway', 'rough', 'bunker', 'lateral_water_hazard'];
   const hits = new Set();
   for (const f of polygons.features) {
     if (!f || !f.properties || !f.properties.golf) continue;
