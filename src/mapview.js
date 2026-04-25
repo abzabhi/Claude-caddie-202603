@@ -455,37 +455,43 @@ export class MapView {
       }
     }
 
-    /* Start -> aim pill: tee row always shown; GPS row when active. */
-    if (pill) {
+    /* Tee->aim + GPS->aim: positioned below the reticle, same projection as bubble. */
+    if (pill && aim) {
       var teePt  = this._teeOverride || hole.tee || (hole.line && hole.line[0]) || null;
       var teeToAim = (teePt && aim) ? geomDistanceYds(teePt, aim) : null;
-      var gpsToAim = (this._gpsOn && this._userLonLat && aim)
+      var gpsToAim = (this._gpsOn && this._userLonLat)
         ? geomDistanceYds(this._userLonLat, aim) : null;
-      /* Override single-row pill shape to accommodate two rows. */
-      pill.style.borderRadius = '12px';
-      pill.style.flexDirection = 'column';
-      pill.style.alignItems = 'flex-start';
-      pill.style.gap = '4px';
-      pill.style.padding = '6px 10px';
-      pill.style.width = 'auto';
-      pill.style.minWidth = '0';
       pill.innerHTML = ''
-        + '<div style="display:flex;align-items:center;gap:8px">'
-        +   '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
-        +     (teeToAim === null ? '\u2014' : teeToAim + 'y')
-        +   '</span>'
-        +   '<span style="font-size:.56rem;color:#444">'
-        +     (this._teeOverride ? 'from tee\u2217' : 'from tee')
-        +   '</span>'
+        + '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">'
+        +   '<span style="background:#111;color:#fff;border-radius:999px;padding:2px 8px;font-size:.67rem;font-weight:700">'
+        +     (teeToAim === null ? '\u2014' : teeToAim + 'y') + '</span>'
+        +   '<span style="font-size:.55rem;color:#555">' + (this._teeOverride ? 'tee\u2217' : 'tee') + '</span>'
         + '</div>'
         + (gpsToAim !== null
-          ? '<div style="display:flex;align-items:center;gap:8px">'
-          +   '<span style="background:#1a7f4b;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
-          +     gpsToAim + 'y'
-          +   '</span>'
-          +   '<span style="font-size:.56rem;color:#444">from GPS</span>'
+          ? '<div style="display:flex;align-items:center;gap:6px;margin-top:3px;white-space:nowrap">'
+          +   '<span style="background:#1a7f4b;color:#fff;border-radius:999px;padding:2px 8px;font-size:.67rem;font-weight:700">'
+          +     gpsToAim + 'y</span>'
+          +   '<span style="font-size:.55rem;color:#555">GPS</span>'
           + '</div>'
           : '');
+      /* Position below reticle — clear bottom/left anchoring from live-round template. */
+      try {
+        var pp = this._map.project(aim);
+        pill.style.position  = 'absolute';
+        pill.style.left      = (pp.x - 40) + 'px';
+        pill.style.top       = (pp.y + 28) + 'px';
+        pill.style.bottom    = 'auto';
+        pill.style.background = 'rgba(255,255,255,.92)';
+        pill.style.borderRadius = '8px';
+        pill.style.padding   = '5px 8px';
+        pill.style.display   = 'flex';
+        pill.style.flexDirection = 'column';
+        pill.style.alignItems = 'flex-start';
+        pill.style.gap       = '0';
+        pill.style.boxShadow = '0 2px 8px rgba(0,0,0,.35)';
+      } catch(e) { pill.style.display = 'none'; }
+    } else if (pill) {
+      pill.style.display = 'none';
     }
   }
 
