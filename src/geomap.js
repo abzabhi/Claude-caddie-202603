@@ -799,19 +799,12 @@ export async function geomLoadByCourse(osmCourseId, fallbackCenter) {
   });
   var filteredFC = window.turf.featureCollection(filtered);
 
-  /* Step 7: filter holes — drop any hole whose tee OR green falls outside boundary */
-  var filteredHoles = {};
-  var holeKeys = Object.keys(processed.holes);
-  for (var hi = 0; hi < holeKeys.length; hi++) {
-    var hk = holeKeys[hi];
-    var h  = processed.holes[hk];
-    var keepHole = true;
-    try {
-      if (h.tee && !window.turf.booleanPointInPolygon(window.turf.point(h.tee), boundary)) keepHole = false;
-      if (keepHole && h.green && !window.turf.booleanPointInPolygon(window.turf.point(h.green), boundary)) keepHole = false;
-    } catch(e) { /* keep on error */ }
-    if (keepHole) filteredHoles[hk] = h;
-  }
+  /* Step 7: holes passed through unfiltered. OSM course boundaries are often loosely
+     drawn and tee boxes frequently sit just outside the leisure=golf_course polygon.
+     The polygon centroid filter (Step 6) is sufficient to prevent adjacent-course bleed;
+     a second containment pass on tee/green coords drops legitimate holes on imprecise
+     boundaries. */
+  var filteredHoles = processed.holes;
 
   /* Step 8: compute overall bounds from filtered polygons */
   var bounds = null;
