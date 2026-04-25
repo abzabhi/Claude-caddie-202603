@@ -636,8 +636,203 @@ export function geomGetCurrentPosition() {
 }
 
 // -----------------------------------------------------------------------------
-// window exposure (for dev / non-module callers in G2 and G3)
+// G3-FIX -- Course-bounded geometry fetch
 // -----------------------------------------------------------------------------
+
+/**
+ * Load course geometry bounded to a specific OSM course element, eliminating
+ * bleed from adjacent courses. Falls back to geomLoadByCenter if the course
+ * boundary cannot be resolved.
+ *
+ * Path B (relation): fetch relation members tagged golf=* directly.
+ * Path A (bbox + containment): fetch course boundary, then all golf=* in bbox,
+ *   filter by centroid-inside-boundary. Most reliable path.
+ *
+ * Returns same shape as geomLoadByCenter, plus a `boundary` field for G3.
+ *
+ * @param {string} osmCourseId  e.g. "relation/12345" or "way/67890"
+ * @param {number[]|null} fallbackCenter  [lon, lat] for geomLoadByCenter fallback
+ * @returns {Promise<{holes, polygons, center, bounds, boundary?}>}
+ */
+export async function geomLoadByCourse(osmCourseId, fallbackCenter) {
+  if (!osmCourseId) throw new Error('geomLoadByCourse: osmCourseId required');
+
+  /* Parse type/id from string like "relation/12345" or "way/67890" */
+  var parts = String(osmCourseId).split('/');
+  var osmType = parts[0]; /* "relation" | "way" */
+  var osmId   = parts[1];
+  if (!osmId) throw new Error('geomLoadByCourse: invalid osmCourseId format');
+
+  /* ------------------------------------------------------------------ */
+  /* Path B: relation members (fast path, only works for relations with  */
+  /* golf=* members)                                                     */
+  /* ------------------------------------------------------------------ */
+  if (osmType === 'relation') {
+    try {
+      var qB =
+        '[out:json][timeout:15];\n' +
+        '(relation(' + osmId + ');\n' +
+        ' way(r); node(w););\n' +
+        'out body geom;';
+      var resB = await _fetchWithTimeout(
+        'https://overpass-api.de/api/interpreter',
+        { method: 'POST', body: qB }
+      );
+      if (resB.ok) {
+        var dataB = await resB.json();
+        var elemsB = (dataB && dataB.elements) || [];
+        var hasGolf = elemsB.some(function(e) { return e.tags && e.tags.golf; });
+        if (hasGolf) {
+          var procB = _processOSM(elemsB);
+          var boundsB = null;
+          if (procB.polygons.features.length) {
+            var bbB = window.turf.bbox(procB.polygons);
+            boundsB = [[bbB[0], bbB[1]], [bbB[2], bbB[3]]];
+          }
+          var centerB = fallbackCenter || (boundsB
+            ? [(boundsB[0][0] + boundsB[1][0]) / 2, (boundsB[0][1] + boundsB[1][1]) / 2]
+            : [0, 0]);
+          return { holes: procB.holes, polygons: procB.polygons, center: centerB, bounds: boundsB };
+        }
+        /* No golf=* members — fall through to Path A */
+      }
+    } catch (e) {
+      if (e && e.message === 'TIMEOUT') throw e;
+      /* Non-fatal: fall through to Path A */
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Path A: fetch course boundary, bbox query, centroid containment     */
+  /* ------------------------------------------------------------------ */
+
+  /* Step 1: fetch the course element itself with full geometry */
+  var qBoundary =
+    '[out:json][timeout:15];\n' +
+    '(way(' + osmId + '); relation(' + osmId + '););\n' +
+    'out body geom;';
+  var resBoundary = await _fetchWithTimeout(
+    'https://overpass-api.de/api/interpreter',
+    { method: 'POST', body: qBoundary }
+  );
+  if (!resBoundary.ok) throw new Error('Overpass HTTP ' + resBoundary.status);
+  var dataBoundary = await resBoundary.json();
+  var boundaryElems = (dataBoundary && dataBoundary.elements) || [];
+
+  /* Step 2: build boundary polygon from the course element */
+  var boundary = null;
+  for (var bi = 0; bi < boundaryElems.length; bi++) {
+    var be = boundaryElems[bi];
+    if (!be) continue;
+    if (be.type === 'way' && be.geometry && be.geometry.length >= 4) {
+      var wCoords = be.geometry.map(function(n) { return [n.lon, n.lat]; });
+      /* Ensure ring is closed */
+      if (wCoords[0][0] !== wCoords[wCoords.length - 1][0] ||
+          wCoords[0][1] !== wCoords[wCoords.length - 1][1]) {
+        wCoords.push(wCoords[0]);
+      }
+      if (wCoords.length >= 4) {
+        try { boundary = window.turf.polygon([wCoords]); break; } catch(e) {}
+      }
+    } else if (be.type === 'relation' && be.members) {
+      /* Relation: pick the longest outer way as boundary ring.
+         Rationale: merging multiple outer ways requires ring-stitching which
+         is error-prone on mobile. Longest outer way covers most of the course
+         area in practice. */
+      var bestLen = 0;
+      var bestCoords = null;
+      for (var mi = 0; mi < be.members.length; mi++) {
+        var mem = be.members[mi];
+        if (mem && mem.role === 'outer' && mem.geometry && mem.geometry.length >= 4) {
+          if (mem.geometry.length > bestLen) {
+            bestLen = mem.geometry.length;
+            bestCoords = mem.geometry.map(function(n) { return [n.lon, n.lat]; });
+          }
+        }
+      }
+      if (bestCoords && bestCoords.length >= 4) {
+        if (bestCoords[0][0] !== bestCoords[bestCoords.length - 1][0] ||
+            bestCoords[0][1] !== bestCoords[bestCoords.length - 1][1]) {
+          bestCoords.push(bestCoords[0]);
+        }
+        try { boundary = window.turf.polygon([bestCoords]); break; } catch(e) {}
+      }
+    }
+  }
+
+  if (!boundary) throw new Error('NO_COURSE_BOUNDARY');
+
+  /* Step 3: compute bbox [south, west, north, east] — Overpass order */
+  var bb = window.turf.bbox(boundary); /* [minX=west, minY=south, maxX=east, maxY=north] */
+  var overpassBbox = bb[1] + ',' + bb[0] + ',' + bb[3] + ',' + bb[2]; /* south,west,north,east */
+
+  /* Step 4: fetch all golf=* inside bbox */
+  var qGolf =
+    '[out:json][timeout:15];\n' +
+    '(\n' +
+    '  way["golf"](' + overpassBbox + ');\n' +
+    '  relation["type"="golf_hole"](' + overpassBbox + ');\n' +
+    '  node["golf"](' + overpassBbox + ');\n' +
+    '  way["natural"="water"](' + overpassBbox + ');\n' +
+    '  way["landuse"="reservoir"](' + overpassBbox + ');\n' +
+    '  way["golf"="lateral_water_hazard"](' + overpassBbox + ');\n' +
+    ');\n' +
+    'out body; >; out skel qt;';
+  var resGolf = await _fetchWithTimeout(
+    'https://overpass-api.de/api/interpreter',
+    { method: 'POST', body: qGolf }
+  );
+  if (!resGolf.ok) throw new Error('Overpass HTTP ' + resGolf.status);
+  var dataGolf = await resGolf.json();
+  var elemsGolf = (dataGolf && dataGolf.elements) || [];
+
+  /* Step 5: processOSM on raw elements */
+  var processed = _processOSM(elemsGolf);
+
+  /* Step 6: centroid containment filter — drop polygons whose centroid falls
+     outside the course boundary. Handles adjacent-course bleed. */
+  var filtered = processed.polygons.features.filter(function(f) {
+    try {
+      var c = window.turf.centroid(f);
+      return window.turf.booleanPointInPolygon(c, boundary);
+    } catch(e) { return true; /* keep on error */ }
+  });
+  var filteredFC = window.turf.featureCollection(filtered);
+
+  /* Step 7: filter holes — drop any hole whose tee OR green falls outside boundary */
+  var filteredHoles = {};
+  var holeKeys = Object.keys(processed.holes);
+  for (var hi = 0; hi < holeKeys.length; hi++) {
+    var hk = holeKeys[hi];
+    var h  = processed.holes[hk];
+    var keepHole = true;
+    try {
+      if (h.tee && !window.turf.booleanPointInPolygon(window.turf.point(h.tee), boundary)) keepHole = false;
+      if (keepHole && h.green && !window.turf.booleanPointInPolygon(window.turf.point(h.green), boundary)) keepHole = false;
+    } catch(e) { /* keep on error */ }
+    if (keepHole) filteredHoles[hk] = h;
+  }
+
+  /* Step 8: compute overall bounds from filtered polygons */
+  var bounds = null;
+  if (filteredFC.features.length) {
+    var bbF = window.turf.bbox(filteredFC);
+    bounds = [[bbF[0], bbF[1]], [bbF[2], bbF[3]]];
+  }
+
+  /* Derive center from boundary centroid */
+  var centerCoords = window.turf.centroid(boundary).geometry.coordinates;
+
+  return {
+    holes:    filteredHoles,
+    polygons: filteredFC,
+    center:   centerCoords,
+    bounds:   bounds,
+    boundary: boundary   /* G3 will consume for viz overlay clipping */
+  };
+}
+
+
 
 if (typeof window !== 'undefined') {
   Object.assign(window, {
@@ -646,6 +841,7 @@ if (typeof window !== 'undefined') {
     geomSearchByBounds,
     geomSearchByLocation,
     geomLoadByCenter,
+    geomLoadByCourse,
     geomRenderGeometry,
     geomShowHole,
     geomRenderPath,
