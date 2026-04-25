@@ -461,11 +461,14 @@ export class MapView {
       var teeToAim = (teePt && aim) ? geomDistanceYds(teePt, aim) : null;
       var gpsToAim = (this._gpsOn && this._userLonLat && aim)
         ? geomDistanceYds(this._userLonLat, aim) : null;
-      pill.style.borderRadius = '10px';
+      /* Override single-row pill shape to accommodate two rows. */
+      pill.style.borderRadius = '12px';
       pill.style.flexDirection = 'column';
-      pill.style.alignItems = 'stretch';
+      pill.style.alignItems = 'flex-start';
       pill.style.gap = '4px';
       pill.style.padding = '6px 10px';
+      pill.style.width = 'auto';
+      pill.style.minWidth = '0';
       pill.innerHTML = ''
         + '<div style="display:flex;align-items:center;gap:8px">'
         +   '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
