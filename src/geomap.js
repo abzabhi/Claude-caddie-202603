@@ -193,15 +193,19 @@ export function geomCreateMap(container, opts) {
 export async function geomSearchByName(city, courseName) {
   if (!city || !courseName) return [];
 
-  // 1. Geocode city.
-  const geoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
+  // 1. Geocode city — fetch top 5, prefer place=city/town/village over other classes.
+  const geoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=5`;
   const geoRes = await _fetchWithTimeout(geoUrl);
   if (!geoRes.ok) throw new Error(`Nominatim HTTP ${geoRes.status}`);
   const geoData = await geoRes.json();
   if (!geoData || !geoData.length) return [];
 
-  const cLat = geoData[0].lat;
-  const cLon = geoData[0].lon;
+  const PLACE_TYPES = ['city','town','village','municipality','hamlet'];
+  const best = geoData.find(r => r.class === 'place' && PLACE_TYPES.includes(r.type))
+    || geoData[0];
+
+  const cLat = best.lat;
+  const cLon = best.lon;
   const safeName = courseName.replace(/"/g, '\\"');
 
   // 2. Overpass around the city. Reference used timeout:15 here - preserved.
