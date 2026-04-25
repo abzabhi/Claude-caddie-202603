@@ -2631,7 +2631,7 @@ function _lrMapMount() {
   }
   if (!_lrMapInstance) {
     /* G2b-R -- initial zoom tightened from 16 to 18 (tee-level satellite detail). */
-    _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 18 });
+    _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 17 });
     /* G2b-R2 -- inline polygon-source set, skipping geomRenderGeometry's fitBounds
        which would zoom out to the entire course. We only want hole-level framing
        in live round; _lrMapShowHole below handles the per-hole flyTo. */
@@ -2678,7 +2678,7 @@ function _lrMapShowHole(n) {
     var hole = _lrCurHoleGeo();
     if (hole && hole.tee && hole.green) {
       var brg = geomBearingDeg(hole.tee, hole.green);
-      _lrMapInstance.flyTo({ center: hole.tee, zoom: 18.5, bearing: brg, pitch: 0 });
+      _lrMapInstance.flyTo({ center: hole.tee, zoom: 17.5, bearing: brg, pitch: 0 });
     }
   } catch(e) {}
 }
