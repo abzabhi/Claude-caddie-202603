@@ -599,7 +599,7 @@ _lrPersist();
    G2.5 -- _lrMapShowHole is now a thin wrapper over MapView.showHole; passing
    {resetAim:true} replaces the manual aim/path clear. */
 if (lrState && lrState._mapInstance && _lrMapGeo) {
-  lrState._mapAim = null;
+  lrState._mapAim = null; _lrPersist();
   _lrMapShowHole(lrState.curHole + 1, { resetAim: true });
 }
 /* G2b original (multi-waypoint):
