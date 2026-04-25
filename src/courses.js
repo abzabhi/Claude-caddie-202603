@@ -1,6 +1,6 @@
 import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse } from './store.js';
 import { setVizInitDone } from './viz.js';
-import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition } from './geomap.js'; /* G2 */
+import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap } from './geomap.js'; /* G2 */
 
 const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
 const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/courses/';
@@ -9,6 +9,10 @@ let editCourseData = null;
 let currentEditTeeId = null;
 let _deleteConfirmId = null;
 let _deleteConfirmTimer = null;
+
+var _crsGeotagMapInst        = null;  /* raw MapLibre instance for geotag picker */
+var _crsGeotagMapOpen        = false; /* whether map panel is visible */
+var _crsGeotagActiveCourseId = null;  /* courseId of currently open geotag modal */
 
 async function _fetchCourseIndex() {
   const CACHE_KEY='gordy:courseIndex', CACHE_TS='gordy:courseIndex:ts', TTL=24*60*60*1000;
@@ -476,6 +480,8 @@ function crsOpenGeotagModal(courseId) {
   const c = courses.find(x => x.id === courseId);
   if (!c) return;
   _crsGeotagCloseModal();
+  if (_crsGeotagMapInst) { _crsGeotagMapInst.remove(); _crsGeotagMapInst = null; _crsGeotagMapOpen = false; }
+  _crsGeotagActiveCourseId = courseId;
 
   const wrap = document.createElement('div');
   wrap.id = 'crsGeotagModal';
@@ -518,6 +524,17 @@ function crsOpenGeotagModal(courseId) {
         <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">B. Use my location</div>
         <button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"
           onclick="_crsGeotagDoGpsSearch('${courseId}')">\uD83D\uDCE1 Search nearby courses</button>
+      </div>
+
+      <div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">C. Search by map</div>
+        <button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"
+          onclick="_crsGeotagToggleMap()">🗺 Pan to course location</button>
+        <div id="crsGeotagMapPanel" style="display:none;margin-top:8px">
+          <div id="crsGeotagMapCanvas" style="width:100%;height:250px;border-radius:8px;overflow:hidden"></div>
+          <button class="btn" style="font-size:.7rem;padding:5px 12px;width:100%;margin-top:6px"
+            onclick="_crsGeotagMapSearchHere()">Search courses here</button>
+        </div>
       </div>
 
       <div id="crsGeotagStatus" style="font-size:.62rem;color:var(--tx3);margin:8px 0;min-height:14px"></div>
@@ -593,6 +610,31 @@ async function _crsGeotagDoGpsSearch(courseId) {
   }
 }
 
+function _crsGeotagToggleMap() {
+  const panel = document.getElementById('crsGeotagMapPanel');
+  if (!panel) return;
+  _crsGeotagMapOpen = !_crsGeotagMapOpen;
+  panel.style.display = _crsGeotagMapOpen ? 'block' : 'none';
+  if (_crsGeotagMapOpen && !_crsGeotagMapInst) {
+    const c = _crsGeotagActiveCourseId ? courses.find(x => x.id === _crsGeotagActiveCourseId) : null;
+    const center = (c && crsIsGeotagged(c)) ? c.osmCenter : [-98, 38];
+    _crsGeotagMapInst = geomCreateMap('crsGeotagMapCanvas', { center, zoom: 13 });
+  }
+}
+
+async function _crsGeotagMapSearchHere() {
+  if (!_crsGeotagMapInst) return;
+  const { lng, lat } = _crsGeotagMapInst.getCenter();
+  _crsGeotagSetStatus('Searching...');
+  try {
+    const results = await geomSearchByLocation(lng, lat, 5000);
+    _crsGeotagSetStatus(results.length ? `${results.length} match(es)` : 'No courses within 5km');
+    _crsGeotagRenderResults(_crsGeotagActiveCourseId, results, [lng, lat]);
+  } catch (err) {
+    _crsGeotagSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown'));
+  }
+}
+
 export {
   getFavCourseId, renderCourseList, deleteCourse, toggleHomeCourse,
   editCourse, cancelCourseEdit, renderTeeButtons, showAddTeeRow,
@@ -610,6 +652,7 @@ Object.assign(window, {
   addCourseFromRepo, onRepoSearch, _stripGeometry,
   /* G2 geotag */
   crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsOpenGeotagModal,
-  _crsGeotagCloseModal, _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch
+  _crsGeotagCloseModal, _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch,
+  _crsGeotagToggleMap, _crsGeotagMapSearchHere
 });
 Object.assign(window, { cancelAddTee, cancelCourseEdit, confirmAddTee, editCourse, onRepoSearch, saveCourse, showAddTeeRow });
