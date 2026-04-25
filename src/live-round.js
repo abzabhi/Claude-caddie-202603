@@ -2678,7 +2678,7 @@ function _lrMapShowHole(n) {
     var hole = _lrCurHoleGeo();
     if (hole && hole.tee && hole.green) {
       var brg = geomBearingDeg(hole.tee, hole.green);
-      _lrMapInstance.flyTo({ center: hole.tee, zoom: 16.75, bearing: brg, pitch: 45 });
+      _lrMapInstance.flyTo({ center: hole.tee, zoom: 16.75, bearing: brg, pitch: 0 });
     }
   } catch(e) {}
 }
