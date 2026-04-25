@@ -320,7 +320,12 @@ function _processOSM(elements) {
   });
 
   elements.forEach(e => {
-    if (!e.tags || !e.tags.golf) return;
+    if (!e.tags) return;
+    /* G2b -- water bodies lack golf= tag; promote to water_hazard for rendering */
+    if (!e.tags.golf && (e.tags.natural === 'water' || e.tags.landuse === 'reservoir')) {
+      e.tags.golf = 'water_hazard';
+    }
+    if (!e.tags.golf) return;
     let coords = [];
     if (e.type === 'way' && e.nodes) {
       coords = e.nodes.map(id => nodes[id]).filter(Boolean);
@@ -422,6 +427,9 @@ export async function geomLoadByCenter(lon, lat, radiusM) {
     `  way["golf"](around:${r}, ${lat}, ${lon});\n` +
     `  node["golf"](around:${r}, ${lat}, ${lon});\n` +
     `  relation["type"="golf_hole"](around:${r}, ${lat}, ${lon});\n` +
+    /* G2b -- water bodies on golf courses are tagged natural=water/landuse=reservoir, not golf=water_hazard */
+    `  way["natural"="water"](around:${r}, ${lat}, ${lon});\n` +
+    `  way["landuse"="reservoir"](around:${r}, ${lat}, ${lon});\n` +
     '); out body; >; out skel qt;';
 
   const res = await _fetchWithTimeout(
