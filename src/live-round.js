@@ -12,13 +12,13 @@ import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomSearchByLocation
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
 */
 
-// \u2500\u2500 Live Round Tracker \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Live Round Tracker --------------------------------------------------------
 // lrState shape:
 // { courseId, courseName, tee, date, conditions, mode, countForHandicap,
 //   holes:[{n,par,yards,handicap}], players:[{id,name,isMe,handicap,scores:[{score,putts,gir,notes}]}],
 //   mePlayerId, teams:[{name,playerIds:[]}], curHole, netView }
 
-// \u2500\u2500 Mode metadata \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Mode metadata ----------------------------------------------------------
 const LR_MODES = {
 stroke:     { label:'Stroke Play',          teams:false, shared:false },
 stableford: { label:'Stableford',           teams:false, shared:false },
@@ -34,7 +34,7 @@ scramble:   'All players tee off, best shot chosen, everyone plays from there. O
 foursomes:  'Two teams, alternate shot. One ball per team, players alternate hitting.',
 };
 
-// \u2500\u2500 Setup \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Setup ------------------------------------------------------------------
 function lrStartSetup() {
 if(lrState) { lrExpand(); return; }
 // Populate course dropdown
@@ -265,7 +265,7 @@ document.getElementById('lrOverlay').classList.remove('active');
 if(window.showTab) window.showTab('rounds');
 }
 
-// \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Helpers ----------------------------------------------------------------
 function lrParClass(par) { return par===3?'par3':par===5?'par5':'par4'; }
 function lrTogParPicker() {
 const p = document.getElementById('lrParPicker');
@@ -329,7 +329,7 @@ function lrHasAnyHandicap() {
 return lrState.players.some(p=>p.handicap!==null);
 }
 
-// \u2500\u2500 Render hole view \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Render hole view --------------------------------------------------------
 function lrRenderHole() {
 if(!lrState) return;
 const h   = lrState.holes[lrState.curHole];
@@ -519,7 +519,7 @@ const rows = shared
 return `<div class="lr-tally">${rows.join('')}</div>`;
 }
 
-// \u2500\u2500 Interaction \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Interaction ------------------------------------------------------------
 function lrAdj(pi, holeIdx, field, delta, shared) {
 const targets = shared ? lrState.players : [lrState.players[pi]];
 targets.forEach(p=>{
@@ -608,7 +608,7 @@ if (_lrMapInstance && _lrMapGeo) {
 } */
 }
 
-// \u2500\u2500 Minimize / expand \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Minimize / expand ------------------------------------------------------
 function lrMinimize() {
 document.getElementById('lrOverlay').classList.remove('active');
 lrUpdatePill();
@@ -654,7 +654,7 @@ liveDot?.classList.add('visible');
 if(window.updateSessionPill) window.updateSessionPill();
 }
 
-// \u2500\u2500 Tally view \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Tally view -------------------------------------------------------------
 function lrShowTally() {
 lrRenderTally();
 lrShowScreen('lrTallyScreen');
@@ -773,7 +773,7 @@ if (_lrTallyMeIdx >= 0) {
 }
 }
 
-// \u2500\u2500 End round \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- End round --------------------------------------------------------------
 function lrCancelEndBanner() {
 const banner = document.getElementById('lrEndBanner');
 if(banner) banner.style.display = 'none';
@@ -903,7 +903,7 @@ if(meIdx<0) {
 }
 }
 
-// \u2500\u2500 Save \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Save -------------------------------------------------------------------
 function lrCalcDiffWithCap(meIdx) {
 // Returns {diff, capped} where capped=true means net double bogey was applied
 const me = lrState.players[meIdx];
@@ -993,7 +993,7 @@ if(closeBtn) closeBtn.style.display = '';
 lrUpdatePill();
 }
 
-// \u2500\u2500 PDF export \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- PDF export -------------------------------------------------------------
 // -- Shared PDF helpers -------------------------------------------------------
 var _pdfFontsLink = '<link rel="preconnect" href="https://fonts.googleapis.com">'
   + '<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">';
@@ -1295,7 +1295,7 @@ const w = window.open('','_blank');
 if(w){ w.document.open(); w.document.write(html); w.document.close(); }
 }
 
-// \u2500\u2500 Discard \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Discard ----------------------------------------------------------------
 // lrDiscardRound -- called from summary screen button.
 // Uses inline confirm strip (not banner) matching range discard pattern.
 // Hole screen discard is accessible via lrEndBanner Discard button (index.html).
@@ -1325,7 +1325,7 @@ document.getElementById('lrOverlay').classList.remove('active');
 lrUpdatePill();
 }
 
-// \u2500\u2500 Screen switcher \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Screen switcher --------------------------------------------------------
 function lrShowScreen(id) {
 ['lrSetup','lrHoleScreen','lrTallyScreen','lrSummaryScreen'].forEach(s=>{
   const el=document.getElementById(s);
@@ -1358,7 +1358,7 @@ function _lrPersist() {
   if (window.updateSessionPill) window.updateSessionPill();
 }
 
-// \u2500\u2500 Phase 4b: Strokes Gained \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Phase 4b: Strokes Gained -----------------------------------------------------
 
 function _lrCalcSG(shots) {
   if (!shots || !shots.length) return [];
@@ -1400,7 +1400,7 @@ function _lrWriteSG(s) {
   });
 }
 
-// \u2500\u2500 SG Categorisation Engine \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- SG Categorisation Engine -------------------------------------------------
 
 function _lrSGCategory(shot, shotIndex, holePar) {
   /* OTT: first shot on par 4 or 5 */
@@ -1457,7 +1457,7 @@ function _lrRoundFIR(scores, holes) {
   return { hit: hit, eligible: eligible, pct: eligible > 0 ? hit / eligible : null };
 }
 
-// \u2500\u2500 Phase 4: Advanced Shot Logging \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Phase 4: Advanced Shot Logging ---------------------------------------
 
 function _lrDefaultDraft(holeIdx) {
   var hole     = lrState.holes[holeIdx];
@@ -1991,7 +1991,7 @@ function lrToggleHoledOut() {
   _lrPersist();
 }
 
-// \u2500\u2500 Caddie Session Linking \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// -- Caddie Session Linking --------------------------------------------------
 
 /* Memoised parse cache -- invalidated when linkedSessionId changes */
 var _lrSessionCache = { id: null, data: null };
