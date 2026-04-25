@@ -361,9 +361,19 @@ export class MapView {
     if (!hole || !hole.green) return;
     var startPt = this._teeOverride || hole.tee;
     if (!startPt) return;
-    /* Initialize aim at midpoint if not set. */
+    /* Initialize aim at fairway line centroid if not set; fall back to tee->green midpoint. */
     if (!this._aim) {
-      this._aim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
+      if (hole.line && hole.line.length >= 2 && window.turf) {
+        try {
+          var lineFc = window.turf.lineString(hole.line);
+          var ctr = window.turf.centroid(lineFc);
+          this._aim = ctr.geometry.coordinates;
+        } catch(e) {
+          this._aim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
+        }
+      } else {
+        this._aim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
+      }
       if (this._onAimChange) { try { this._onAimChange(this._aim); } catch(e) {} }
     }
     if (this._aimMarker) { try { this._aimMarker.remove(); } catch(e) {} this._aimMarker = null; }
@@ -423,11 +433,15 @@ export class MapView {
     var bubble = document.getElementById(this._idPrefix + 'AimDistBubble');
     var pill   = document.getElementById(this._idPrefix + 'PlayerDistPill');
 
-    /* Aim -> green bubble. */
+    /* Aim -> green bubble: light green background, floats above reticle. */
     if (bubble) {
       if (aim && hole.green) {
         var aimToGreen = geomDistanceYds(aim, hole.green);
-        bubble.textContent = aimToGreen + 'y';
+        bubble.style.background = 'rgba(40,160,80,.85)';
+        bubble.style.color = '#fff';
+        bubble.innerHTML = ''
+          + '<span style="font-size:.68rem;font-weight:700">' + aimToGreen + 'y</span>'
+          + '<span style="font-size:.52rem;opacity:.85;margin-left:4px">to hole</span>';
         try {
           var pt = this._map.project(aim);
           bubble.style.left = pt.x + 'px';
