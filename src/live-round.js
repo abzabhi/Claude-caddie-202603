@@ -3,7 +3,7 @@ import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js
 import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 import { renderHandicap } from './rounds.js';
 /* G2 -- geomap integration for in-round map view */
-import { geomCreateMap, geomLoadByCenter, geomRenderGeometry, geomShowHole,
+import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomRenderGeometry, geomShowHole,
          geomStartGpsWatch, geomStopGpsWatch, geomDistanceYds,
          geomBearingDeg, geomGetCurrentPosition, geomRenderPath } from './geomap.js';
 
@@ -2355,7 +2355,8 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
 async function _lrMapLoadForRound() {
   if (!lrState || !lrState.courseId) return;
   var c = courses.find(function(x){ return x.id === lrState.courseId; });
-  if (!c || !c.osmCenter) return;
+  /* G3-FIX -- branch on osmCourseId for bounded fetch; silent legacy fallback */
+  if (!c || (!c.osmCourseId && !c.osmCenter)) return;
   var hint = document.getElementById('lrMapLoadHint');
   if (!hint) {
     hint = document.createElement('div');
@@ -2368,7 +2369,27 @@ async function _lrMapLoadForRound() {
   }
   hint.textContent = 'Loading course geometry...';
   try {
-    var geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+    var geo;
+    /* G3-FIX: original single fetch commented out below per "comment, don't delete" rule:
+    var geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500); */
+    if (c.osmCourseId) {
+      try {
+        geo = await geomLoadByCourse(c.osmCourseId, c.osmCenter || null);
+      } catch (e) {
+        if (e.message === 'NO_COURSE_BOUNDARY' && c.osmCenter) {
+          console.warn('[geomap] No course boundary available; falling back to radial fetch.');
+          geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+        } else {
+          throw e;
+        }
+      }
+    } else if (c.osmCenter) {
+      if (!window._lrMapWarnedLegacy) {
+        console.warn('[geomap] Course missing osmCourseId; using legacy radial fetch. Re-geotag for accurate boundaries.');
+        window._lrMapWarnedLegacy = true;
+      }
+      geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+    }
     _lrMapGeo = geo;
     try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
     lrState._mapOpen = true;
