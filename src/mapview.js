@@ -361,8 +361,8 @@ export class MapView {
     if (!this._map || !window.maplibregl) return;
     var hole = this._curHoleGeo();
     if (!hole || !hole.green) return;
-    var startPt = this._teeOverride || hole.tee;
-    if (!startPt) return;
+    var startPt = this._teeOverride || hole.tee || (hole.line && hole.line[0]) || null;
+    if (!startPt && !hole.line) return;
     /* Initialize aim at exact midpoint along hole centreline; fall back to tee->green midpoint. */
     if (!this._aim) {
       if (hole.line && hole.line.length >= 2 && window.turf) {
