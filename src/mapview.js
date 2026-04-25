@@ -335,8 +335,10 @@ export class MapView {
   _placeTeeMarker() {
     if (!this._map || !window.maplibregl) return;
     var hole = this._curHoleGeo();
-    if (!hole || !hole.tee) return;
-    var ll = this._teeOverride || hole.tee;
+    if (!hole) return;
+    var teePt = hole.tee || (hole.line && hole.line[0]) || null;
+    if (!teePt) return;
+    var ll = this._teeOverride || teePt;
     if (this._teeMarker) { try { this._teeMarker.remove(); } catch(e) {} this._teeMarker = null; }
     var el = document.createElement('div');
     el.style.cssText = 'width:14px;height:14px;background:#d0d8e0;'
@@ -361,13 +363,13 @@ export class MapView {
     if (!hole || !hole.green) return;
     var startPt = this._teeOverride || hole.tee;
     if (!startPt) return;
-    /* Initialize aim at fairway line centroid if not set; fall back to tee->green midpoint. */
+    /* Initialize aim at exact midpoint along hole centreline; fall back to tee->green midpoint. */
     if (!this._aim) {
       if (hole.line && hole.line.length >= 2 && window.turf) {
         try {
-          var lineFc = window.turf.lineString(hole.line);
-          var ctr = window.turf.centroid(lineFc);
-          this._aim = ctr.geometry.coordinates;
+          var ls   = window.turf.lineString(hole.line);
+          var half = window.turf.length(ls, { units: 'kilometers' }) / 2;
+          this._aim = window.turf.along(ls, half, { units: 'kilometers' }).geometry.coordinates;
         } catch(e) {
           this._aim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
         }
@@ -453,15 +455,34 @@ export class MapView {
       }
     }
 
-    /* Start -> aim pill (always shown when geometry available). */
+    /* Start -> aim pill: tee row always shown; GPS row when active. */
     if (pill) {
-      var label = gpsActive ? 'from GPS' : (this._teeOverride ? 'from tee*' : 'from tee');
-      var startToAim = (startPt && aim) ? geomDistanceYds(startPt, aim) : null;
+      var teePt  = this._teeOverride || hole.tee || (hole.line && hole.line[0]) || null;
+      var teeToAim = (teePt && aim) ? geomDistanceYds(teePt, aim) : null;
+      var gpsToAim = (this._gpsOn && this._userLonLat && aim)
+        ? geomDistanceYds(this._userLonLat, aim) : null;
+      pill.style.borderRadius = '10px';
+      pill.style.flexDirection = 'column';
+      pill.style.alignItems = 'stretch';
+      pill.style.gap = '4px';
+      pill.style.padding = '6px 10px';
       pill.innerHTML = ''
-        + '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
-        +   (startToAim === null ? '\u2014' : startToAim + 'y')
-        + '</span>'
-        + '<span style="font-size:.56rem;color:#444">' + label + '</span>';
+        + '<div style="display:flex;align-items:center;gap:8px">'
+        +   '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
+        +     (teeToAim === null ? '\u2014' : teeToAim + 'y')
+        +   '</span>'
+        +   '<span style="font-size:.56rem;color:#444">'
+        +     (this._teeOverride ? 'from tee\u2217' : 'from tee')
+        +   '</span>'
+        + '</div>'
+        + (gpsToAim !== null
+          ? '<div style="display:flex;align-items:center;gap:8px">'
+          +   '<span style="background:#1a7f4b;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
+          +     gpsToAim + 'y'
+          +   '</span>'
+          +   '<span style="font-size:.56rem;color:#444">from GPS</span>'
+          + '</div>'
+          : '');
     }
   }
 
