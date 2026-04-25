@@ -7,6 +7,10 @@ import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomSearchByLocation
          geomRenderGeometry, geomShowHole,
          geomStartGpsWatch, geomStopGpsWatch, geomDistanceYds,
          geomBearingDeg, geomGetCurrentPosition, geomRenderPath } from './geomap.js';
+/* G2.5 -- view-layer primitives extracted into class. live-round retains
+   round-specific glue; MapView owns markers, GPS watch, polygon source/layer,
+   floating bubble/pill, draggable aim+tee. */
+import { MapView } from './mapview.js';
 
 /* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
@@ -591,12 +595,11 @@ if (lrState) {
 }
 lrRenderHole();
 _lrPersist();
-/* G2b-R -- fly map to new hole + clear rendered aim line; marker will be replaced by _lrMapMount */
-if (_lrMapInstance && _lrMapGeo) {
-  _lrMapShowHole(lrState.curHole + 1);
-  try { geomRenderPath(_lrMapInstance, []); } catch(e) {}
-  /* remove old aim marker so _lrMapMount places a fresh one at new midpoint */
-  if (_lrAimMarker) { try { _lrAimMarker.remove(); } catch(e) {} _lrAimMarker = null; }
+/* G2b-R -- fly map to new hole + clear rendered aim line; marker will be replaced by _lrMapMount.
+   G2.5 -- _lrMapShowHole is now a thin wrapper over MapView.showHole; passing
+   {resetAim:true} replaces the manual aim/path clear. */
+if (lrState && lrState._mapInstance && _lrMapGeo) {
+  _lrMapShowHole(lrState.curHole + 1, { resetAim: true });
 }
 /* G2b original (multi-waypoint):
 if (lrState) { lrState._mapPath = []; lrState._mapTeeLonLat = null; }
@@ -2178,18 +2181,22 @@ function _lrCaddieCompanionHtml() {
    to 'gordy:activeRoundGeo' (written once at load; cleared on round end).
    ============================================================================ */
 
-var _lrMapInstance    = null;    /* MapLibre Map */
-var _lrMapGeo         = null;    /* {holes, polygons, center, bounds} */
+var _lrMapGeo         = null;    /* {holes, polygons, center, bounds} -- module-level so storage rehydration runs at load */
+/* G2.5 -- View-state moved into MapView class. Map instance now lives at
+   lrState._mapInstance so each round owns its own view; future viz/courses
+   consumers will hold their own MapView instance independently.
+   Original module-level vars preserved as comments per "comment, don't delete":
+var _lrMapInstance    = null;
 var _lrGpsWatchId     = null;
-var _lrUserMarker     = null;    /* maplibregl.Marker */
-var _lrTargetMarker   = null;    /* maplibregl.Marker -- G2b retained for legacy unmount; no longer placed */
-/* G2b additions */
-var _lrTeeMarker      = null;    /* draggable tee maplibregl.Marker */
+var _lrUserMarker     = null;
+var _lrTargetMarker   = null;
+var _lrTeeMarker      = null;
+var _lrAimMarker      = null;
+var _lrUserLonLat     = null;
+*/
+/* Entry-modal state stays in live-round (round-mode entry flow, not view layer) */
 var _lrSearchMap      = null;    /* map instance inside entry modal */
 var _lrSearchMarker   = null;    /* center-hint marker on entry modal */
-/* G2b-R additions */
-var _lrAimMarker      = null;    /* draggable aim reticle */
-var _lrUserLonLat     = null;    /* [lon, lat] latest GPS fix */
 var _lrSearchResults  = [];      /* course picker results, indexed by picker buttons */
 
 function _lrMapHasGeotag() {
@@ -2703,209 +2710,77 @@ function _lrMapPanelHtml(h, pi, shared) {
     + '</div>';
 }
 
+/* G2.5 -- _lrMapMount is now a thin wrapper. View-layer mount logic lives in
+   MapView.mount(); this function instantiates the MapView on lrState (per round)
+   and syncs round-state (aim, tee override) into the view before mounting.
+   Original 52-line body extracted to mapview.js MapView.mount(). */
 function _lrMapMount() {
-  if (!_lrMapGeo) return;
-  var el = document.getElementById('lrMapCanvas');
-  if (!el) return;
-  /* If an existing instance's container was replaced by innerHTML, rebuild */
-  if (_lrMapInstance && _lrMapInstance.getContainer && _lrMapInstance.getContainer() !== el) {
-    try { _lrMapInstance.remove(); } catch(e) {}
-    _lrMapInstance = null;
-    _lrUserMarker = null;
-    _lrTargetMarker = null;
-    _lrTeeMarker = null;    /* G2b */
-    _lrAimMarker = null;    /* G2b-R */
-  }
-  if (!_lrMapInstance) {
-    /* G2b-R -- initial zoom tightened from 16 to 18 (tee-level satellite detail). */
-    _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 17 });
-    /* G2b-R2 -- inline polygon-source set, skipping geomRenderGeometry's fitBounds
-       which would zoom out to the entire course. We only want hole-level framing
-       in live round; _lrMapShowHole below handles the per-hole flyTo. */
-    var _lrApplyPolys = function(){
-      try {
-        var src = _lrMapInstance.getSource('course-polygons');
-        if (src && _lrMapGeo && _lrMapGeo.polygons) src.setData(_lrMapGeo.polygons);
-      } catch(e) {}
-    };
-    _lrMapInstance.on('load', function(){
-      _lrApplyPolys();
-      _lrMapShowHole(lrState.curHole + 1);
-      _lrPlaceTeeMarker();
-      _lrPlaceAimMarker();           /* G2b-R */
-      _lrRenderAimLine();            /* G2b-R */
-      _lrUpdateFloatingDists();      /* G2b-R */
+  if (!_lrMapGeo || !lrState) return;
+  if (!lrState._mapInstance) {
+    lrState._mapInstance = new MapView({
+      containerId: 'lrMapCanvas',
+      geo:         _lrMapGeo,
+      holeN:       lrState.curHole + 1,
+      idPrefix:    'lr',                /* preserve existing #lrAimDistBubble / #lrPlayerDistPill DOM ids */
+      onAimChange: function(ll) {
+        lrState._mapAim = ll;
+        _lrPersist();
+      },
+      onTeeChange: function(ll) {
+        lrState._mapTeeLonLat = ll;
+        _lrPersist();
+      },
+      onGpsTick: function(/*ll*/) {
+        /* MapView already updates its own user marker + path + bubble. No extra
+           round-state action needed here. (Prior _lrMapOnGpsTick body was
+           equivalent to MapView's internal handler.) */
+      },
+      onGpsError: function(err) {
+        if (lrState) {
+          lrState._gpsOn = false;
+          _lrPersist();
+        }
+        alert('GPS error: ' + (err && err.message ? err.message : 'unknown'));
+        lrRenderHole();
+      }
     });
-    if (_lrMapInstance.isStyleLoaded && _lrMapInstance.isStyleLoaded()) {
-      _lrApplyPolys();
-      _lrMapShowHole(lrState.curHole + 1);
-      _lrPlaceTeeMarker();
-      _lrPlaceAimMarker();
-      _lrRenderAimLine();
-      _lrUpdateFloatingDists();
-    }
-    _lrMapInstance.on('click', _lrMapOnClick);
-    /* G2b-R -- floating aim-distance bubble tracks aim marker on map move/zoom. */
-    _lrMapInstance.on('move', _lrUpdateFloatingDists);
   } else {
-    /* Same instance being re-shown (e.g. after hole change returns scroll html) */
-    _lrPlaceTeeMarker();
-    _lrPlaceAimMarker();
-    _lrRenderAimLine();
-    _lrUpdateFloatingDists();
+    /* Re-render path may have torn down the canvas DOM; refresh geometry + hole + state. */
+    lrState._mapInstance.setGeometry(_lrMapGeo);
+    lrState._mapInstance._holeN = lrState.curHole + 1;
   }
-  if (_lrUserLonLat) _lrPlaceUserMarker(_lrUserLonLat);
+  /* Sync round-state into view before mount/re-mount. */
+  if (lrState._mapAim)        lrState._mapInstance._aim         = lrState._mapAim;
+  if (lrState._mapTeeLonLat)  lrState._mapInstance._teeOverride = lrState._mapTeeLonLat;
+  lrState._mapInstance.mount();
 }
 
-/* G2b-R2 -- per-hole flyTo. Replaces geomShowHole's internal flyTo (zoom 17.5)
-   with a single tighter flyTo (zoom 18.5). Avoids competing-flyTo jank. */
-function _lrMapShowHole(n) {
-  if (!_lrMapInstance || !_lrMapGeo) return;
-  try {
-    var hole = _lrCurHoleGeo();
-    if (hole && hole.tee && hole.green) {
-      var brg = geomBearingDeg(hole.tee, hole.green);
-      _lrMapInstance.flyTo({ center: hole.tee, zoom: 16, bearing: brg, pitch: 0 });
-    }
-  } catch(e) {}
+/* G2.5 -- thin wrappers over MapView. Original bodies extracted to mapview.js:
+   _lrMapShowHole       -> MapView.showHole / _showHoleInternal
+   _lrPlaceTeeMarker    -> MapView._placeTeeMarker
+   _lrPlaceAimMarker    -> MapView._placeAimMarker
+   _lrRenderAimLine     -> MapView._renderAimLine */
+function _lrMapShowHole(n, opts) {
+  if (lrState && lrState._mapInstance) lrState._mapInstance.showHole(n, opts);
 }
-
-/* G2b-R -- draggable tee; dragend updates line + floating distances. */
 function _lrPlaceTeeMarker() {
-  if (!_lrMapInstance || !window.maplibregl) return;
-  var hole = _lrCurHoleGeo();
-  if (!hole || !hole.tee) return;
-  var ll = (lrState && lrState._mapTeeLonLat) || hole.tee;
-  if (_lrTeeMarker) { try { _lrTeeMarker.remove(); } catch(e) {} _lrTeeMarker = null; }
-  var el = document.createElement('div');
-  el.style.cssText = 'width:14px;height:14px;background:#d0d8e0;'
-    + 'border:2px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,.5);cursor:grab';
-  _lrTeeMarker = new window.maplibregl.Marker({ element: el, draggable: true })
-    .setLngLat(ll).addTo(_lrMapInstance);
-  _lrTeeMarker.on('dragend', function(){
-    var p = _lrTeeMarker.getLngLat();
-    if (lrState) {
-      lrState._mapTeeLonLat = [p.lng, p.lat];
-      _lrPersist();
-    }
-    _lrRenderAimLine();
-    _lrUpdateFloatingDists();
-  });
+  if (lrState && lrState._mapInstance) lrState._mapInstance._placeTeeMarker();
 }
-
-/* G2b-R -- aim reticle. Initial position = midpoint of start(tee or user-tee) and green.
-   Draggable; drag/dragend update line + floating distances. */
 function _lrPlaceAimMarker() {
-  if (!_lrMapInstance || !window.maplibregl) return;
-  var hole = _lrCurHoleGeo();
-  if (!hole || !hole.green) return;
-  var startPt = (lrState && lrState._mapTeeLonLat) || hole.tee;
-  if (!startPt) return;
-  /* Initialize aim at midpoint if not set. */
-  if (lrState && !lrState._mapAim) {
-    lrState._mapAim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
-    _lrPersist();
-  }
-  if (_lrAimMarker) { try { _lrAimMarker.remove(); } catch(e) {} _lrAimMarker = null; }
-  /* Reticle: 44px crosshair circle, matches screenshot aesthetic. */
-  var el = document.createElement('div');
-  el.style.cssText = 'width:44px;height:44px;border-radius:50%;'
-    + 'border:2px solid #fff;background:rgba(255,255,255,.08);'
-    + 'box-shadow:0 0 6px rgba(0,0,0,.6);cursor:grab;position:relative';
-  el.innerHTML = ''
-    + '<div style="position:absolute;left:50%;top:50%;width:6px;height:6px;'
-    +   'background:#fff;border-radius:50%;transform:translate(-50%,-50%);'
-    +   'box-shadow:0 0 3px rgba(0,0,0,.6)"></div>'
-    /* 4 tick marks */
-    + '<div style="position:absolute;left:50%;top:0;width:2px;height:6px;background:#fff;transform:translateX(-50%)"></div>'
-    + '<div style="position:absolute;left:50%;bottom:0;width:2px;height:6px;background:#fff;transform:translateX(-50%)"></div>'
-    + '<div style="position:absolute;top:50%;left:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>'
-    + '<div style="position:absolute;top:50%;right:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>';
-  _lrAimMarker = new window.maplibregl.Marker({ element: el, draggable: true })
-    .setLngLat(lrState._mapAim).addTo(_lrMapInstance);
-  _lrAimMarker.on('drag', function(){
-    var p = _lrAimMarker.getLngLat();
-    if (lrState) lrState._mapAim = [p.lng, p.lat];
-    _lrRenderAimLine();
-    _lrUpdateFloatingDists();
-  });
-  _lrAimMarker.on('dragend', function(){
-    var p = _lrAimMarker.getLngLat();
-    if (lrState) {
-      lrState._mapAim = [p.lng, p.lat];
-      _lrPersist();
-    }
-  });
+  if (lrState && lrState._mapInstance) lrState._mapInstance._placeAimMarker();
 }
-
-/* G2b-R -- render the aim line: start(GPS|userTee|geomTee) -> aim -> green. */
 function _lrRenderAimLine() {
-  if (!_lrMapInstance || !_lrMapGeo) return;
-  var hole = _lrCurHoleGeo();
-  if (!hole || !hole.green) { try { geomRenderPath(_lrMapInstance, []); } catch(e){} return; }
-  var userTee = lrState && lrState._mapTeeLonLat;
-  var gpsOn = !!(lrState && lrState._gpsOn && _lrUserLonLat);
-  var startPt = gpsOn ? _lrUserLonLat : (userTee || hole.tee);
-  var aim = lrState && lrState._mapAim;
-  if (!startPt || !aim) { try { geomRenderPath(_lrMapInstance, []); } catch(e){} return; }
-  try { geomRenderPath(_lrMapInstance, [startPt, aim, hole.green]); } catch(e) {}
+  if (lrState && lrState._mapInstance) lrState._mapInstance._renderAimLine();
 }
 
-/* G2b-R -- update the two floating labels.
-   #lrAimDistBubble: yards from aim to green, positioned at aim's screen coords.
-   #lrPlayerDistPill: yards from start(GPS|Tee) to aim, bottom-left label. */
+/* G2.5 -- thin wrappers. Original bodies extracted to mapview.js:
+   _lrUpdateFloatingDists -> MapView._updateFloatingDists
+   _lrMapOnClick          -> MapView._handleMapClick */
 function _lrUpdateFloatingDists() {
-  if (!_lrMapInstance) return;
-  var hole = _lrCurHoleGeo();
-  if (!hole || !hole.green) return;
-  var aim = lrState && lrState._mapAim;
-  var userTee = lrState && lrState._mapTeeLonLat;
-  var gpsOn = !!(lrState && lrState._gpsOn && _lrUserLonLat);
-  var startPt = gpsOn ? _lrUserLonLat : (userTee || hole.tee);
-
-  var bubble = document.getElementById('lrAimDistBubble');
-  var pill   = document.getElementById('lrPlayerDistPill');
-
-  /* Aim -> green bubble. */
-  if (bubble) {
-    if (aim && hole.green) {
-      var aimToGreen = geomDistanceYds(aim, hole.green);
-      bubble.textContent = aimToGreen + 'y';
-      try {
-        var pt = _lrMapInstance.project(aim);
-        bubble.style.left = pt.x + 'px';
-        bubble.style.top = pt.y + 'px';
-        bubble.style.display = 'block';
-      } catch(e) { bubble.style.display = 'none'; }
-    } else {
-      bubble.style.display = 'none';
-    }
-  }
-
-  /* Start -> aim pill (always shown when geometry available). */
-  if (pill) {
-    var label = gpsOn ? 'from GPS' : (userTee ? 'from tee*' : 'from tee');
-    var startToAim = (startPt && aim) ? geomDistanceYds(startPt, aim) : null;
-    pill.innerHTML = ''
-      + '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
-      +   (startToAim === null ? '\u2014' : startToAim + 'y')
-      + '</span>'
-      + '<span style="font-size:.56rem;color:#444">' + label + '</span>';
-  }
+  if (lrState && lrState._mapInstance) lrState._mapInstance._updateFloatingDists();
 }
-
-/* G2b-R -- tap-to-move aim. Cheaper than dragging for small adjustments. */
 function _lrMapOnClick(e) {
-  if (!lrState) return;
-  lrState._mapAim = [e.lngLat.lng, e.lngLat.lat];
-  _lrPersist();
-  if (_lrAimMarker) {
-    try { _lrAimMarker.setLngLat(lrState._mapAim); } catch(err) {}
-  } else {
-    _lrPlaceAimMarker();
-  }
-  _lrRenderAimLine();
-  _lrUpdateFloatingDists();
+  if (lrState && lrState._mapInstance) lrState._mapInstance._handleMapClick(e);
 }
 
 /* G2b-R -- OBSOLETE stubs. Multi-waypoint handlers retained as comments so nothing
@@ -2929,16 +2804,17 @@ function _lrPlaceTargetMarker(ll) {
 */
 function _lrPlaceTargetMarker(ll) { /* no-op */ }
 
+/* G2.5 -- thin wrappers. Original bodies extracted to mapview.js:
+   _lrPlaceUserMarker -> MapView._placeUserMarker
+   _lrRefreshDistances -> inline (MapView._renderAimLine + _updateFloatingDists) */
 function _lrPlaceUserMarker(ll) {
-  if (!_lrMapInstance) return;
-  if (_lrUserMarker) _lrUserMarker.setLngLat(ll);
-  else _lrUserMarker = new window.maplibregl.Marker({ color: '#4a90e2' }).setLngLat(ll).addTo(_lrMapInstance);
+  if (lrState && lrState._mapInstance) lrState._mapInstance._placeUserMarker(ll);
 }
-
-/* G2b-R -- generic refresh on GPS tick / external events. */
 function _lrRefreshDistances() {
-  _lrRenderAimLine();
-  _lrUpdateFloatingDists();
+  if (lrState && lrState._mapInstance) {
+    lrState._mapInstance._renderAimLine();
+    lrState._mapInstance._updateFloatingDists();
+  }
 }
 
 /* G2b-R -- OBSOLETE multi-waypoint handlers replaced by no-op stubs above.
@@ -2960,12 +2836,9 @@ function _lrMapClearPath() {
 }
 */
 
-/* G2b-R -- zoom-to-green shortcut. Zoom 19 -> 17.5 (was too tight). */
+/* G2.5 -- thin wrapper. Original body extracted to mapview.js MapView.zoomGreen. */
 function _lrZoomGreen() {
-  if (!_lrMapInstance) return;
-  var hole = _lrCurHoleGeo();
-  if (!hole || !hole.green) return;
-  _lrMapInstance.flyTo({ center: hole.green, zoom: 17.5, pitch: 0 });
+  if (lrState && lrState._mapInstance) lrState._mapInstance.zoomGreen();
 }
 
 /* G2b -- bottom sheet open/close. No full rerender; toggles height only via rerender
@@ -2987,35 +2860,30 @@ function _lrMapGpsPromptIfNeeded() {
   return ok;
 }
 
+/* G2.5 -- thin wrappers. GPS lifecycle (watchPosition + user marker + tick handler)
+   lives in MapView. Round-state side-effects retained here: lrState._gpsOn flag for
+   panel rendering, the prompt-once check, alert on error, and lrRenderHole().
+   Original bodies extracted to mapview.js MapView.startGps / stopGps / _handleGpsTickInner. */
 function _lrMapGpsToggle() {
   if (!lrState) return;
   if (lrState._gpsOn) {
     /* Turn off */
-    if (_lrGpsWatchId != null) { geomStopGpsWatch(_lrGpsWatchId); _lrGpsWatchId = null; }
-    if (_lrUserMarker) { try { _lrUserMarker.remove(); } catch(e) {} _lrUserMarker = null; }
-    _lrUserLonLat = null;
+    if (lrState._mapInstance) lrState._mapInstance.stopGps();
     lrState._gpsOn = false;
     _lrPersist();
     lrRenderHole();
     return;
   }
   if (!_lrMapGpsPromptIfNeeded()) return;
-  _lrGpsWatchId = geomStartGpsWatch(_lrMapOnGpsTick, function(err){
-    lrState._gpsOn = false;
-    _lrPersist();
-    alert('GPS error: ' + (err && err.message ? err.message : 'unknown'));
-    lrRenderHole();
-  });
+  /* GPS errors handled by MapView via the onGpsError callback wired in _lrMapMount. */
+  if (lrState._mapInstance) lrState._mapInstance.startGps();
   lrState._gpsOn = true;
   _lrPersist();
   lrRenderHole();
 }
-
 function _lrMapOnGpsTick(tick) {
-  _lrUserLonLat = [tick[0], tick[1]];
-  _lrPlaceUserMarker(_lrUserLonLat);
-  /* G2b -- cheap refresh: update path geometry + distance panel in place. */
-  _lrRefreshDistances();
+  /* Retained for any legacy DOM hook that calls it directly; MapView already handles its own tick. */
+  if (lrState && lrState._mapInstance) lrState._mapInstance._handleGpsTickInner(tick);
 }
 
 function _lrMapToggleScoring() {
@@ -3065,14 +2933,13 @@ function _lrMapResume() {
   lrRenderHole();
 }
 
+/* G2.5 -- thin wrapper. Original body extracted to mapview.js MapView.unmount.
+   Additionally clears lrState._mapInstance so a future _lrMapMount creates fresh. */
 function _lrMapUnmount() {
-  if (_lrGpsWatchId != null) { try { geomStopGpsWatch(_lrGpsWatchId); } catch(e) {} _lrGpsWatchId = null; }
-  if (_lrUserMarker) { try { _lrUserMarker.remove(); } catch(e) {} _lrUserMarker = null; }
-  if (_lrTargetMarker) { try { _lrTargetMarker.remove(); } catch(e) {} _lrTargetMarker = null; }
-  if (_lrTeeMarker) { try { _lrTeeMarker.remove(); } catch(e) {} _lrTeeMarker = null; }  /* G2b */
-  if (_lrAimMarker) { try { _lrAimMarker.remove(); } catch(e) {} _lrAimMarker = null; }  /* G2b-R */
-  if (_lrMapInstance) { try { _lrMapInstance.remove(); } catch(e) {} _lrMapInstance = null; }
-  _lrUserLonLat = null;
+  if (lrState && lrState._mapInstance) {
+    try { lrState._mapInstance.unmount(); } catch(e) {}
+    lrState._mapInstance = null;
+  }
 }
 
 // -- Expose to window (required for HTML onclick handlers) --
