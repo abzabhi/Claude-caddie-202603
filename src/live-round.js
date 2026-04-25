@@ -2190,6 +2190,7 @@ var _lrSearchMarker   = null;    /* center-hint marker on entry modal */
 /* G2b-R additions */
 var _lrAimMarker      = null;    /* draggable aim reticle */
 var _lrUserLonLat     = null;    /* [lon, lat] latest GPS fix */
+var _lrSearchResults  = [];      /* course picker results, indexed by picker buttons */
 
 function _lrMapHasGeotag() {
   if (!lrState || !lrState.courseId) return false;
@@ -2349,7 +2350,8 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       await _lrMapLoadCourseById(results[0].osmId, results[0].center);
       return;
     }
-    /* Multiple courses — show picker */
+    /* Multiple courses — store results and show picker */
+    _lrSearchResults = results;
     _lrSearchSetStatus('', false);
     var el = document.getElementById('lrSearchStatus');
     if (el) {
@@ -2357,9 +2359,8 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       el.style.background = 'rgba(0,0,0,.72)';
       el.innerHTML =
         '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found \u2014 select one:</div>'
-        + results.map(function(r) {
-          var cj = encodeURIComponent(JSON.stringify(r.center));
-          return '<button onclick="_lrMapPickCourse(\'' + escHtml(r.osmId) + '\',' + cj + ')" '
+        + results.map(function(r, i) {
+          return '<button onclick="_lrMapPickCourse(' + i + ')" '
             + 'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.1);'
             + 'border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#fff;'
             + 'font-family:\'DM Mono\',monospace;font-size:.62rem;padding:6px 8px;'
@@ -2372,12 +2373,12 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
   }
 }
 
-/* Called from picker buttons. centerJson is URI-encoded JSON [lon,lat] array. */
-async function _lrMapPickCourse(osmId, centerJson) {
-  var center;
-  try { center = JSON.parse(decodeURIComponent(centerJson)); } catch(e) { center = null; }
+/* Called from picker buttons with index into _lrSearchResults. */
+async function _lrMapPickCourse(idx) {
+  var r = _lrSearchResults && _lrSearchResults[idx];
+  if (!r) { _lrSearchSetStatus('Invalid selection.', true); return; }
   _lrSearchSetStatus('Loading course geometry\u2026', false);
-  await _lrMapLoadCourseById(osmId, center);
+  await _lrMapLoadCourseById(r.osmId, r.center || null);
 }
 
 /* Inner loader shared by single-result auto-load and picker selection.
