@@ -240,12 +240,15 @@ lrState = {
   _scoringCollapsed: false,
   _gpsOn: false,
   _gpsPrompted: false,
-  /* G2b -- multi-waypoint path + draggable tee + entry modal + bottom sheet */
-  _mapPath: [],                /* [[lon,lat], ...] user waypoints between tee and green */
+  /* G2b-R -- single draggable aim reticle replaces multi-waypoint chain.
+     Reset to tee->green midpoint on each hole load. */
+  _mapAim: null,               /* [lon, lat] aim marker; null => init at midpoint on mount */
   _mapTeeLonLat: null,         /* user-dragged tee override; null => geometry tee */
   _mapSearchDone: false,       /* entry modal already shown+answered this round */
   _mapSheetOpen: false,        /* bottom sheet expanded */
-  /* _mapSelectedPoint: null -- G2b removed; superseded by _mapPath */
+  /* _mapPath: [] -- G2b-R removed; superseded by single _mapAim. Waypoint-chain
+     rendering + _lrMapRemoveWaypoint/_lrMapClearPath kept as commented stubs. */
+  /* _mapSelectedPoint: null -- G2b removed; superseded by _mapAim */
 };
 
 lrShowScreen('lrHoleScreen');
@@ -419,6 +422,16 @@ if(shared) {
   scroll.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
 }
 
+/* G2b-R -- Resume-map pill. Shown in classic view only when geometry is loaded
+   for this round and the user has minimized the map. Tap restores map view. */
+if (_lrMapGeo && lrState && !lrState._mapOpen) {
+  scroll.innerHTML =
+      '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
+    +   '<button class="btn" style="font-size:.6rem;padding:4px 12px;border-radius:16px" '
+    +     'onclick="_lrMapResume()">\uD83D\uDDFA Resume map</button>'
+    + '</div>' + scroll.innerHTML;
+}
+
 /* Phase 4: advanced mode collapsible */
 scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
 
@@ -570,20 +583,28 @@ _lrEditingIndex     = null;
 _lrObConfirmPending = false;
 _lrDeleteConfirmIdx = null;
 _lrGirPromptPending = false;
-/* G2b -- clear per-hole waypoints + tee override; previous hole's line must not linger */
+/* G2b-R -- reset per-hole aim + tee override. Map instance persists across holes. */
 if (lrState) {
-  lrState._mapPath = [];
+  lrState._mapAim = null;      /* midpoint recomputed on mount for new hole */
   lrState._mapTeeLonLat = null;
 }
 lrRenderHole();
 _lrPersist();
-/* G2b -- fly map to new hole + clear rendered path line (map instance survives) */
+/* G2b-R -- fly map to new hole + clear rendered aim line; marker will be replaced by _lrMapMount */
 if (_lrMapInstance && _lrMapGeo) {
   _lrMapShowHole(lrState.curHole + 1);
   try { geomRenderPath(_lrMapInstance, []); } catch(e) {}
+  /* remove old aim marker so _lrMapMount places a fresh one at new midpoint */
+  if (_lrAimMarker) { try { _lrAimMarker.remove(); } catch(e) {} _lrAimMarker = null; }
 }
-/* G2 original:
-if (_lrMapInstance && _lrMapGeo) { _lrMapShowHole(lrState.curHole + 1); } */
+/* G2b original (multi-waypoint):
+if (lrState) { lrState._mapPath = []; lrState._mapTeeLonLat = null; }
+lrRenderHole();
+_lrPersist();
+if (_lrMapInstance && _lrMapGeo) {
+  _lrMapShowHole(lrState.curHole + 1);
+  try { geomRenderPath(_lrMapInstance, []); } catch(e) {}
+} */
 }
 
 // \u2500\u2500 Minimize / expand \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -2165,6 +2186,8 @@ var _lrTargetMarker   = null;    /* maplibregl.Marker -- G2b retained for legacy
 var _lrTeeMarker      = null;    /* draggable tee maplibregl.Marker */
 var _lrSearchMap      = null;    /* map instance inside entry modal */
 var _lrSearchMarker   = null;    /* center-hint marker on entry modal */
+/* G2b-R additions */
+var _lrAimMarker      = null;    /* draggable aim reticle */
 var _lrUserLonLat     = null;    /* [lon, lat] latest GPS fix */
 
 function _lrMapHasGeotag() {
@@ -2421,6 +2444,10 @@ function _lrDistancesHtml() {
   return '<div style="padding:8px 10px;background:var(--sf);border-radius:6px;margin-top:6px">' + lines.join('') + '</div>';
 }
 */
+/* G2b-R -- Distance rendering moved to floating on-map overlays (_lrUpdateFloatingDists).
+   This function now returns an empty string; kept so any lingering caller is a no-op.
+
+   G2b (multi-waypoint chain) preserved below:
 function _lrDistancesHtml() {
   var hole = _lrMapGeo && _lrMapGeo.holes ? _lrCurHoleGeo() : null;
   var green = hole && hole.green;
@@ -2429,74 +2456,14 @@ function _lrDistancesHtml() {
   var path = (lrState && lrState._mapPath) || [];
   var gps = _lrUserLonLat;
   var gpsOn = !!(lrState && lrState._gpsOn && gps);
-
-  /* Start point = GPS if on+available, else user-dragged tee, else geometry tee. */
   var startPt = gpsOn ? gps : (userTee || teeGeo);
   var startLabel = gpsOn ? 'GPS' : (userTee ? 'Tee*' : 'Tee');
-
-  function rowHtml(label, val, removeIdx) {
-    var right = (val === null || val === undefined)
-      ? '<span style="color:var(--tx)">\u2014</span>'
-      : '<span style="color:var(--tx)">' + val + ' yds</span>';
-    var rm = (removeIdx !== undefined)
-      ? '<button class="btn sec" style="font-size:.54rem;padding:1px 6px;margin-left:6px" '
-        + 'onclick="_lrMapRemoveWaypoint(' + removeIdx + ')">\u2715</button>'
-      : '';
-    return '<div style="display:flex;justify-content:space-between;align-items:center;'
-      + 'font-size:.62rem;padding:2px 0">'
-      + '<span style="color:var(--tx3)">' + label + '</span>'
-      + '<span style="display:flex;align-items:center">' + right + rm + '</span>'
-      + '</div>';
-  }
-
-  var rows = [];
-  var total = 0;
-
-  if (!startPt || !green) {
-    rows.push('<div style="font-size:.6rem;color:var(--tx3);padding:4px 0">'
-      + 'Hole geometry unavailable.</div>');
-  } else if (path.length === 0) {
-    var d = geomDistanceYds(startPt, green);
-    rows.push(rowHtml(startLabel + ' \u2192 Green', d));
-    total = d;
-  } else {
-    /* seg0: start -> wp[0] */
-    var d0 = geomDistanceYds(startPt, path[0]);
-    rows.push(rowHtml(startLabel + ' \u2192 WP1', d0, 0));
-    total += d0;
-    /* segN: wp[i] -> wp[i+1] */
-    for (var i = 0; i < path.length - 1; i++) {
-      var dn = geomDistanceYds(path[i], path[i + 1]);
-      rows.push(rowHtml('WP' + (i + 1) + ' \u2192 WP' + (i + 2), dn, i + 1));
-      total += dn;
-    }
-    /* last: wp[last] -> green */
-    var dLast = geomDistanceYds(path[path.length - 1], green);
-    rows.push(rowHtml('WP' + path.length + ' \u2192 Green', dLast));
-    total += dLast;
-  }
-
-  var totalRow = (startPt && green)
-    ? '<div style="display:flex;justify-content:space-between;font-size:.66rem;'
-      + 'padding:4px 0;border-top:1px solid var(--br);margin-top:4px">'
-      + '<span style="color:var(--tx2)">Total</span>'
-      + '<span style="color:var(--tx);font-weight:600">' + total + ' yds</span></div>'
-    : '';
-
-  var clearBtn = (path.length > 0)
-    ? '<div style="display:flex;justify-content:flex-end;margin-top:4px">'
-      + '<button class="btn sec" style="font-size:.58rem;padding:3px 9px" '
-      + 'onclick="_lrMapClearPath()">Clear path</button></div>'
-    : '';
-
-  var hint = (path.length === 0)
-    ? '<div style="font-size:.54rem;color:var(--tx3);margin-top:4px;text-align:center">'
-      + 'Tap map to add a waypoint. Drag tee to shift start.</div>'
-    : '';
-
-  return '<div id="lrPathPanel" style="padding:8px 10px;background:var(--sf);border-radius:6px">'
-    + rows.join('') + totalRow + clearBtn + hint + '</div>';
+  function rowHtml(label, val, removeIdx) { ... }
+  // rows + totalRow + clearBtn + hint ...
+  return '<div id="lrPathPanel" ...>' + rows.join('') + totalRow + clearBtn + hint + '</div>';
 }
+*/
+function _lrDistancesHtml() { return ''; }
 
 function _lrCurHoleGeo() {
   if (!_lrMapGeo || !_lrMapGeo.holes) return null;
@@ -2537,11 +2504,34 @@ function _lrMapPanelHtml(h, pi, shared) {
     + (collapsed ? '' : '<div style="margin-top:10px">' + scoreHtml + '</div>');
 }
 */
+/* G2b-R -- Full-viewport map. Map = the page. Banners overlay; no boxed canvas.
+   Compact top banner (hole/par/yds/SI pill) over map. Bottom sheet for scoring.
+   Floating distance bubbles rendered via _lrUpdateFloatingDists after mount.
+   Classic bottom nav (Prev/hole-pill/Next) lives in outer DOM, unchanged.
+
+   G2b (boxed-map version) preserved below:
 function _lrMapPanelHtml(h, pi, shared) {
   var sheetOpen = !!(lrState && lrState._mapSheetOpen);
   var scoreMode = (lrState && lrState._mapMode) || 'simple';
-  /* Sheet heights: simple keeps map mostly visible; advanced takes over. */
   var sheetH = sheetOpen ? (scoreMode === 'advanced' ? '85vh' : '34vh') : '0px';
+  var scoreHtml = '';
+  if (sheetOpen) {
+    if (scoreMode === 'simple') { ... } else { ... }
+  }
+  var gpsBtn, zoomGreenBtn, exitBtn, sheetToggleLabel;
+  return '<div id="lrMapRoot" style="position:relative;width:100%;height:72vh;...">'
+    + _lrMapBannerHtml(h)
+    + '<div ... floating controls>gps/green/exit</div>'
+    + '<div id="lrMapCanvas" style="flex:1;..."></div>'
+    + '<div id="lrMapSheet" ...>' + mode+toggle + distances + scoreHtml + '</div>'
+    + '</div>';
+}
+*/
+function _lrMapPanelHtml(h, pi, shared) {
+  var sheetOpen = !!(lrState && lrState._mapSheetOpen);
+  var scoreMode = (lrState && lrState._mapMode) || 'simple';
+  /* Simple mode keeps map mostly visible; advanced takes more room. */
+  var sheetH = sheetOpen ? (scoreMode === 'advanced' ? '75vh' : '30vh') : '0px';
 
   var scoreHtml = '';
   if (sheetOpen) {
@@ -2550,49 +2540,74 @@ function _lrMapPanelHtml(h, pi, shared) {
         ? lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true)
         : lrScoreBlock(lrState.players[pi], lrState.curHole, h, pi, false);
     } else {
-      /* Advanced: reuse existing renderer (force-open pattern from G2). */
       scoreHtml = _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
       if (!_lrAdvancedOpen) { _lrAdvancedOpen = true; scoreHtml = _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared); }
     }
   }
 
   var gpsBtn = (lrState && lrState._gpsOn)
-    ? '<button class="btn" style="font-size:.6rem;padding:4px 9px" onclick="_lrMapGpsToggle()">\uD83D\uDCE1 GPS on</button>'
-    : '<button class="btn sec" style="font-size:.6rem;padding:4px 9px" onclick="_lrMapGpsToggle()">\uD83D\uDCE1 GPS off</button>';
-  var zoomGreenBtn = '<button class="btn sec" style="font-size:.6rem;padding:4px 9px" onclick="_lrZoomGreen()">\u26F3 Green</button>';
-  var exitBtn = '<button class="btn sec" style="font-size:.6rem;padding:4px 9px" onclick="_lrMapExit()">\u2715 Map</button>';
+    ? '<button class="btn" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4)" onclick="_lrMapGpsToggle()">\uD83D\uDCE1</button>'
+    : '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapGpsToggle()">\uD83D\uDCE1</button>';
+  var zoomGreenBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrZoomGreen()">\u26F3</button>';
+  var minBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapMinimize()" title="Minimize">\u2014</button>';
 
   var sheetToggleLabel = sheetOpen ? '\u2B07 Close' : '\u2B06 Score';
 
-  /* Outer wrapper is position:relative so floating controls + sheet can absolute-position. */
+  /* Compact top banner (one-row pill) replaces the tall _lrMapBannerHtml box. */
+  var hole = lrState.holes[lrState.curHole];
+  var holeN = hole ? hole.n : '-';
+  var par = hole ? hole.par : '-';
+  var yds = hole ? (hole.yds || '-') : '-';
+  var si  = hole ? (hole.si  || '-') : '-';
+  var topBanner =
+      '<div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:30;'
+    +   'background:rgba(0,0,0,.72);border-radius:22px;padding:6px 14px;'
+    +   'display:flex;align-items:center;gap:14px;color:#fff;font-family:\'DM Mono\',monospace;'
+    +   'font-size:.68rem;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.4)">'
+    +   '<span style="font-weight:700;font-size:.78rem">' + holeN + '</span>'
+    +   '<span style="opacity:.65">Par</span><span style="font-weight:600">' + par + '</span>'
+    +   '<span style="opacity:.65">Yds</span><span style="font-weight:600">' + yds + '</span>'
+    +   '<span style="opacity:.65">SI</span><span style="font-weight:600">' + si + '</span>'
+    + '</div>';
+
+  /* Outer root: fixed to fill viewport minus classic bottom-nav area (which lives
+     in outer DOM). Uses absolute inset to overlay within the lrScroll container. */
   return ''
-    + '<div id="lrMapRoot" style="position:relative;width:100%;height:72vh;'
-    +   'display:flex;flex-direction:column;overflow:hidden">'
-    /* --- Persistent top banner --- */
-    +   _lrMapBannerHtml(h)
-    /* --- Floating controls (top-right of map) --- */
-    +   '<div style="position:absolute;top:64px;right:10px;z-index:30;'
+    + '<div id="lrMapRoot" style="position:relative;width:100%;height:76vh;overflow:hidden;'
+    +   'border-radius:10px;background:#111">'
+    +   topBanner
+    /* Floating right-side controls */
+    +   '<div style="position:absolute;top:8px;right:8px;z-index:30;'
     +     'display:flex;flex-direction:column;gap:6px;align-items:flex-end">'
-    +     gpsBtn + zoomGreenBtn + exitBtn
+    +     minBtn + gpsBtn + zoomGreenBtn
     +   '</div>'
-    /* --- Map canvas fills remaining space --- */
-    +   '<div id="lrMapCanvas" style="flex:1;min-height:0;width:100%;'
-    +     'border-radius:8px;overflow:hidden;background:#111"></div>'
-    /* --- Bottom sheet --- */
-    +   '<div id="lrMapSheet" style="position:absolute;left:0;right:0;bottom:0;'
-    +     'background:var(--bg);border-top:1px solid var(--br);z-index:25;'
+    /* Floating distance bubbles (populated by _lrUpdateFloatingDists) */
+    +   '<div id="lrAimDistBubble" style="position:absolute;z-index:25;'
+    +     'background:rgba(0,0,0,.78);color:#fff;border-radius:999px;'
+    +     'padding:4px 10px;font-family:\'DM Mono\',monospace;font-size:.68rem;'
+    +     'font-weight:700;pointer-events:none;transform:translate(-50%,-140%);'
+    +     'box-shadow:0 2px 8px rgba(0,0,0,.45);display:none">&mdash;</div>'
+    +   '<div id="lrPlayerDistPill" style="position:absolute;left:10px;bottom:10px;z-index:25;'
+    +     'background:#fff;color:#111;border-radius:999px;'
+    +     'padding:5px 12px 5px 5px;font-family:\'DM Mono\',monospace;font-size:.66rem;'
+    +     'font-weight:700;display:flex;align-items:center;gap:8px;'
+    +     'box-shadow:0 2px 8px rgba(0,0,0,.45);pointer-events:none">'
+    +     '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">&mdash;</span>'
+    +     '<span style="font-size:.56rem;color:#444">to aim</span>'
+    +   '</div>'
+    /* Map canvas fills everything */
+    +   '<div id="lrMapCanvas" style="position:absolute;inset:0;background:#111"></div>'
+    /* Bottom sheet (overlays bottom of map area) */
+    +   '<div id="lrMapSheet" style="position:absolute;left:0;right:0;bottom:0;z-index:28;'
+    +     'background:var(--bg);border-top:1px solid var(--br);'
     +     'display:flex;flex-direction:column;max-height:85vh;'
-    +     'box-shadow:0 -4px 14px rgba(0,0,0,.35)">'
-    /* Sheet handle row: mode dropdown + sheet toggle */
+    +     'box-shadow:0 -4px 14px rgba(0,0,0,.45)">'
     +     '<div style="display:flex;justify-content:space-between;align-items:center;'
-    +       'padding:6px 10px;border-bottom:1px solid var(--br);gap:8px">'
+    +       'padding:6px 10px;gap:8px;border-bottom:' + (sheetOpen ? '1px solid var(--br)' : 'none') + '">'
     +       _lrMapModeDropdownHtml()
-    +       '<button class="btn" style="font-size:.6rem;padding:4px 10px" '
+    +       '<button class="btn" style="font-size:.62rem;padding:4px 12px;border-radius:16px" '
     +         'onclick="_lrMapToggleSheet()">' + sheetToggleLabel + '</button>'
     +     '</div>'
-    /* Distance chain -- always visible */
-    +     '<div style="padding:6px 10px">' + _lrDistancesHtml() + '</div>'
-    /* Score/shot-log area -- only when sheet open */
     +     (sheetOpen
         ? '<div style="flex:1;overflow-y:auto;padding:8px 10px;max-height:' + sheetH + '">'
           + scoreHtml + '</div>'
@@ -2611,35 +2626,42 @@ function _lrMapMount() {
     _lrMapInstance = null;
     _lrUserMarker = null;
     _lrTargetMarker = null;
-    _lrTeeMarker = null;  /* G2b */
+    _lrTeeMarker = null;    /* G2b */
+    _lrAimMarker = null;    /* G2b-R */
   }
   if (!_lrMapInstance) {
-    _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 16 });
+    /* G2b-R -- initial zoom tightened from 16 to 18 (tee-level satellite detail). */
+    _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 18 });
     _lrMapInstance.on('load', function(){
       geomRenderGeometry(_lrMapInstance, _lrMapGeo);
       _lrMapShowHole(lrState.curHole + 1);
-      _lrPlaceTeeMarker();                     /* G2b */
-      _lrRenderActivePath();                   /* G2b */
+      _lrPlaceTeeMarker();
+      _lrPlaceAimMarker();           /* G2b-R */
+      _lrRenderAimLine();            /* G2b-R */
+      _lrUpdateFloatingDists();      /* G2b-R */
     });
     if (_lrMapInstance.isStyleLoaded && _lrMapInstance.isStyleLoaded()) {
       geomRenderGeometry(_lrMapInstance, _lrMapGeo);
       _lrMapShowHole(lrState.curHole + 1);
-      _lrPlaceTeeMarker();                     /* G2b */
-      _lrRenderActivePath();                   /* G2b */
+      _lrPlaceTeeMarker();
+      _lrPlaceAimMarker();
+      _lrRenderAimLine();
+      _lrUpdateFloatingDists();
     }
     _lrMapInstance.on('click', _lrMapOnClick);
+    /* G2b-R -- floating aim-distance bubble tracks aim marker on map move/zoom. */
+    _lrMapInstance.on('move', _lrUpdateFloatingDists);
   } else {
     /* Same instance being re-shown (e.g. after hole change returns scroll html) */
     _lrPlaceTeeMarker();
-    _lrRenderActivePath();
+    _lrPlaceAimMarker();
+    _lrRenderAimLine();
+    _lrUpdateFloatingDists();
   }
-  /* G2b -- target marker no longer placed; superseded by path line.
-     if (lrState && lrState._mapSelectedPoint) _lrPlaceTargetMarker(lrState._mapSelectedPoint); */
   if (_lrUserLonLat) _lrPlaceUserMarker(_lrUserLonLat);
 }
 
-/* G2b -- apply per-hole flyTo with tee->green bearing. Wraps geomShowHole so the
-   non-map callsites stay unchanged. */
+/* G2b-R -- per-hole flyTo with tee->green bearing. Zoom bumped 17.5 -> 18.5. */
 function _lrMapShowHole(n) {
   if (!_lrMapInstance || !_lrMapGeo) return;
   geomShowHole(_lrMapInstance, _lrMapGeo, n);
@@ -2647,21 +2669,18 @@ function _lrMapShowHole(n) {
     var hole = _lrCurHoleGeo();
     if (hole && hole.tee && hole.green) {
       var brg = geomBearingDeg(hole.tee, hole.green);
-      _lrMapInstance.flyTo({ center: hole.tee, zoom: 17.5, bearing: brg, pitch: 0 });
+      _lrMapInstance.flyTo({ center: hole.tee, zoom: 18.5, bearing: brg, pitch: 0 });
     }
   } catch(e) {}
 }
 
-/* G2b -- place (or re-place) draggable tee marker at user override or geometry tee. */
+/* G2b-R -- draggable tee; dragend updates line + floating distances. */
 function _lrPlaceTeeMarker() {
   if (!_lrMapInstance || !window.maplibregl) return;
   var hole = _lrCurHoleGeo();
   if (!hole || !hole.tee) return;
   var ll = (lrState && lrState._mapTeeLonLat) || hole.tee;
-  if (_lrTeeMarker) {
-    try { _lrTeeMarker.remove(); } catch(e) {}
-    _lrTeeMarker = null;
-  }
+  if (_lrTeeMarker) { try { _lrTeeMarker.remove(); } catch(e) {} _lrTeeMarker = null; }
   var el = document.createElement('div');
   el.style.cssText = 'width:14px;height:14px;background:#d0d8e0;'
     + 'border:2px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,.5);cursor:grab';
@@ -2673,48 +2692,136 @@ function _lrPlaceTeeMarker() {
       lrState._mapTeeLonLat = [p.lng, p.lat];
       _lrPersist();
     }
-    _lrRenderActivePath();
-    _lrRefreshPathUI();
+    _lrRenderAimLine();
+    _lrUpdateFloatingDists();
   });
 }
 
-/* G2b -- compute and render the active-path line using start(GPS or tee) -> waypoints -> green. */
-function _lrRenderActivePath() {
+/* G2b-R -- aim reticle. Initial position = midpoint of start(tee or user-tee) and green.
+   Draggable; drag/dragend update line + floating distances. */
+function _lrPlaceAimMarker() {
+  if (!_lrMapInstance || !window.maplibregl) return;
+  var hole = _lrCurHoleGeo();
+  if (!hole || !hole.green) return;
+  var startPt = (lrState && lrState._mapTeeLonLat) || hole.tee;
+  if (!startPt) return;
+  /* Initialize aim at midpoint if not set. */
+  if (lrState && !lrState._mapAim) {
+    lrState._mapAim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
+    _lrPersist();
+  }
+  if (_lrAimMarker) { try { _lrAimMarker.remove(); } catch(e) {} _lrAimMarker = null; }
+  /* Reticle: 44px crosshair circle, matches screenshot aesthetic. */
+  var el = document.createElement('div');
+  el.style.cssText = 'width:44px;height:44px;border-radius:50%;'
+    + 'border:2px solid #fff;background:rgba(255,255,255,.08);'
+    + 'box-shadow:0 0 6px rgba(0,0,0,.6);cursor:grab;position:relative';
+  el.innerHTML = ''
+    + '<div style="position:absolute;left:50%;top:50%;width:6px;height:6px;'
+    +   'background:#fff;border-radius:50%;transform:translate(-50%,-50%);'
+    +   'box-shadow:0 0 3px rgba(0,0,0,.6)"></div>'
+    /* 4 tick marks */
+    + '<div style="position:absolute;left:50%;top:0;width:2px;height:6px;background:#fff;transform:translateX(-50%)"></div>'
+    + '<div style="position:absolute;left:50%;bottom:0;width:2px;height:6px;background:#fff;transform:translateX(-50%)"></div>'
+    + '<div style="position:absolute;top:50%;left:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>'
+    + '<div style="position:absolute;top:50%;right:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>';
+  _lrAimMarker = new window.maplibregl.Marker({ element: el, draggable: true })
+    .setLngLat(lrState._mapAim).addTo(_lrMapInstance);
+  _lrAimMarker.on('drag', function(){
+    var p = _lrAimMarker.getLngLat();
+    if (lrState) lrState._mapAim = [p.lng, p.lat];
+    _lrRenderAimLine();
+    _lrUpdateFloatingDists();
+  });
+  _lrAimMarker.on('dragend', function(){
+    var p = _lrAimMarker.getLngLat();
+    if (lrState) {
+      lrState._mapAim = [p.lng, p.lat];
+      _lrPersist();
+    }
+  });
+}
+
+/* G2b-R -- render the aim line: start(GPS|userTee|geomTee) -> aim -> green. */
+function _lrRenderAimLine() {
   if (!_lrMapInstance || !_lrMapGeo) return;
   var hole = _lrCurHoleGeo();
   if (!hole || !hole.green) { try { geomRenderPath(_lrMapInstance, []); } catch(e){} return; }
-  var teeGeo = hole.tee;
   var userTee = lrState && lrState._mapTeeLonLat;
   var gpsOn = !!(lrState && lrState._gpsOn && _lrUserLonLat);
-  var startPt = gpsOn ? _lrUserLonLat : (userTee || teeGeo);
-  if (!startPt) { try { geomRenderPath(_lrMapInstance, []); } catch(e){} return; }
-  var path = (lrState && lrState._mapPath) || [];
-  var coords = [startPt].concat(path).concat([hole.green]);
-  try { geomRenderPath(_lrMapInstance, coords); } catch(e) {}
+  var startPt = gpsOn ? _lrUserLonLat : (userTee || hole.tee);
+  var aim = lrState && lrState._mapAim;
+  if (!startPt || !aim) { try { geomRenderPath(_lrMapInstance, []); } catch(e){} return; }
+  try { geomRenderPath(_lrMapInstance, [startPt, aim, hole.green]); } catch(e) {}
 }
 
-/* G2b -- in-place patch of the distance panel only. Avoids full lrRenderHole (which
-   would remount the map and re-fire flyTo). Called on map click, waypoint remove,
-   clear, tee drag, and GPS tick. */
-function _lrRefreshPathUI() {
-  var el = document.getElementById('lrPathPanel');
-  if (!el) { return; }
-  /* Replace the whole distance panel by regenerating _lrDistancesHtml output. */
-  var tmp = document.createElement('div');
-  tmp.innerHTML = _lrDistancesHtml();
-  var fresh = tmp.firstChild;
-  if (fresh && el.parentNode) el.parentNode.replaceChild(fresh, el);
+/* G2b-R -- update the two floating labels.
+   #lrAimDistBubble: yards from aim to green, positioned at aim's screen coords.
+   #lrPlayerDistPill: yards from start(GPS|Tee) to aim, bottom-left label. */
+function _lrUpdateFloatingDists() {
+  if (!_lrMapInstance) return;
+  var hole = _lrCurHoleGeo();
+  if (!hole || !hole.green) return;
+  var aim = lrState && lrState._mapAim;
+  var userTee = lrState && lrState._mapTeeLonLat;
+  var gpsOn = !!(lrState && lrState._gpsOn && _lrUserLonLat);
+  var startPt = gpsOn ? _lrUserLonLat : (userTee || hole.tee);
+
+  var bubble = document.getElementById('lrAimDistBubble');
+  var pill   = document.getElementById('lrPlayerDistPill');
+
+  /* Aim -> green bubble. */
+  if (bubble) {
+    if (aim && hole.green) {
+      var aimToGreen = geomDistanceYds(aim, hole.green);
+      bubble.textContent = aimToGreen + 'y';
+      try {
+        var pt = _lrMapInstance.project(aim);
+        bubble.style.left = pt.x + 'px';
+        bubble.style.top = pt.y + 'px';
+        bubble.style.display = 'block';
+      } catch(e) { bubble.style.display = 'none'; }
+    } else {
+      bubble.style.display = 'none';
+    }
+  }
+
+  /* Start -> aim pill (always shown when geometry available). */
+  if (pill) {
+    var label = gpsOn ? 'from GPS' : (userTee ? 'from tee*' : 'from tee');
+    var startToAim = (startPt && aim) ? geomDistanceYds(startPt, aim) : null;
+    pill.innerHTML = ''
+      + '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">'
+      +   (startToAim === null ? '\u2014' : startToAim + 'y')
+      + '</span>'
+      + '<span style="font-size:.56rem;color:#444">' + label + '</span>';
+  }
 }
 
-/* G2b -- append waypoint to _mapPath, redraw line, patch distance UI in-place. */
+/* G2b-R -- tap-to-move aim. Cheaper than dragging for small adjustments. */
 function _lrMapOnClick(e) {
   if (!lrState) return;
-  if (!lrState._mapPath) lrState._mapPath = [];
-  lrState._mapPath.push([e.lngLat.lng, e.lngLat.lat]);
+  lrState._mapAim = [e.lngLat.lng, e.lngLat.lat];
   _lrPersist();
-  _lrRenderActivePath();
-  _lrRefreshPathUI();
+  if (_lrAimMarker) {
+    try { _lrAimMarker.setLngLat(lrState._mapAim); } catch(err) {}
+  } else {
+    _lrPlaceAimMarker();
+  }
+  _lrRenderAimLine();
+  _lrUpdateFloatingDists();
 }
+
+/* G2b-R -- OBSOLETE stubs. Multi-waypoint handlers retained as comments so nothing
+   breaks if a stale DOM reference tries to fire them, but the new single-aim model
+   makes them no-ops. Preserved per "comment, don't delete" rule.
+function _lrRefreshPathUI() { ... G2b multi-wp in-place patch ... }
+function _lrMapRemoveWaypoint(idx) { ... splice from _mapPath ... }
+function _lrMapClearPath() { ... _mapPath=[] ... }
+*/
+function _lrRefreshPathUI() { _lrUpdateFloatingDists(); }
+function _lrMapRemoveWaypoint() { /* no-op */ }
+function _lrMapClearPath() { /* no-op */ }
 
 /* G2b -- OBSOLETE. Single target marker replaced by path line + draggable tee.
    Original G2 preserved in comment:
@@ -2732,14 +2839,14 @@ function _lrPlaceUserMarker(ll) {
   else _lrUserMarker = new window.maplibregl.Marker({ color: '#4a90e2' }).setLngLat(ll).addTo(_lrMapInstance);
 }
 
-/* G2b -- GPS tick and other path-affecting events patch UI in place, not full rerender.
-   G2 original delegated to lrRenderHole (expensive). */
+/* G2b-R -- generic refresh on GPS tick / external events. */
 function _lrRefreshDistances() {
-  _lrRenderActivePath();
-  _lrRefreshPathUI();
+  _lrRenderAimLine();
+  _lrUpdateFloatingDists();
 }
 
-/* G2b -- remove a waypoint by index. Called from the \u2715 button on each WP row. */
+/* G2b-R -- OBSOLETE multi-waypoint handlers replaced by no-op stubs above.
+   Original G2b bodies preserved here per "comment, don't delete" rule:
 function _lrMapRemoveWaypoint(idx) {
   if (!lrState || !lrState._mapPath) return;
   if (idx < 0 || idx >= lrState._mapPath.length) return;
@@ -2748,8 +2855,6 @@ function _lrMapRemoveWaypoint(idx) {
   _lrRenderActivePath();
   _lrRefreshPathUI();
 }
-
-/* G2b -- clear all waypoints + rendered line. Tee override preserved (user intent). */
 function _lrMapClearPath() {
   if (!lrState) return;
   lrState._mapPath = [];
@@ -2757,13 +2862,14 @@ function _lrMapClearPath() {
   _lrRenderActivePath();
   _lrRefreshPathUI();
 }
+*/
 
-/* G2b -- zoom-to-green shortcut. */
+/* G2b-R -- zoom-to-green shortcut. Zoom 19 -> 17.5 (was too tight). */
 function _lrZoomGreen() {
   if (!_lrMapInstance) return;
   var hole = _lrCurHoleGeo();
   if (!hole || !hole.green) return;
-  _lrMapInstance.flyTo({ center: hole.green, zoom: 19, pitch: 0 });
+  _lrMapInstance.flyTo({ center: hole.green, zoom: 17.5, pitch: 0 });
 }
 
 /* G2b -- bottom sheet open/close. No full rerender; toggles height only via rerender
@@ -2830,9 +2936,10 @@ function _lrMapSetMode(m) {
   lrRenderHole();
 }
 
-/* User-initiated exit from map view for remainder of round. Does not touch storage -- user can re-accept next round.
-   G2b -- also reset per-round map UI state (waypoints, tee override, sheet, search-done gate)
-   so the entry modal fires again if the user wants to come back to map mode. */
+/* G2b-R -- Once loaded, map persists for the rest of the round. Minimize only.
+   No unmount, no state reset. Resume via the floating "Map" pill in classic view.
+
+   G2b original (exit + reset) preserved below:
 function _lrMapExit() {
   if (!lrState) return;
   _lrMapUnmount();
@@ -2844,12 +2951,30 @@ function _lrMapExit() {
   _lrPersist();
   lrRenderHole();
 }
+*/
+function _lrMapMinimize() {
+  if (!lrState) return;
+  lrState._mapOpen = false;
+  _lrPersist();
+  lrRenderHole();
+}
+/* _lrMapExit kept as alias so any legacy caller still works as a minimize. */
+function _lrMapExit() { _lrMapMinimize(); }
+
+/* G2b-R -- re-expand the map from classic view. Called from the floating "Map" pill. */
+function _lrMapResume() {
+  if (!lrState || !_lrMapGeo) return;
+  lrState._mapOpen = true;
+  _lrPersist();
+  lrRenderHole();
+}
 
 function _lrMapUnmount() {
   if (_lrGpsWatchId != null) { try { geomStopGpsWatch(_lrGpsWatchId); } catch(e) {} _lrGpsWatchId = null; }
   if (_lrUserMarker) { try { _lrUserMarker.remove(); } catch(e) {} _lrUserMarker = null; }
   if (_lrTargetMarker) { try { _lrTargetMarker.remove(); } catch(e) {} _lrTargetMarker = null; }
   if (_lrTeeMarker) { try { _lrTeeMarker.remove(); } catch(e) {} _lrTeeMarker = null; }  /* G2b */
+  if (_lrAimMarker) { try { _lrAimMarker.remove(); } catch(e) {} _lrAimMarker = null; }  /* G2b-R */
   if (_lrMapInstance) { try { _lrMapInstance.remove(); } catch(e) {} _lrMapInstance = null; }
   _lrUserLonLat = null;
 }
@@ -2885,4 +3010,6 @@ Object.assign(window, {
   _lrMapSearchModalOpen, _lrMapSearchModalClose, _lrMapSearchSkip,
   _lrMapDoPanLoad, _lrMapDoGpsLoad, _lrMapLoadForRoundFromCenter,
   _lrMapRemoveWaypoint, _lrMapClearPath, _lrZoomGreen, _lrMapToggleSheet,
+  /* G2b-R -- minimize/resume handlers (map persists once loaded) */
+  _lrMapMinimize, _lrMapResume,
 });
