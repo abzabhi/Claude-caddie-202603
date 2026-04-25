@@ -3,7 +3,8 @@ import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js
 import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 import { renderHandicap } from './rounds.js';
 /* G2 -- geomap integration for in-round map view */
-import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomRenderGeometry, geomShowHole,
+import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomSearchByLocation,
+         geomRenderGeometry, geomShowHole,
          geomStartGpsWatch, geomStopGpsWatch, geomDistanceYds,
          geomBearingDeg, geomGetCurrentPosition, geomRenderPath } from './geomap.js';
 
@@ -2332,14 +2333,60 @@ async function _lrMapDoGpsLoad() {
   }
 }
 
-/* Shared loader: fetch geometry from given center. Success => close modal + open map mode.
-   Failure => keep modal open with an inline error; user can retry or skip. */
+/* Shared loader: search for courses near center first, then either auto-load (1 result)
+   or show a picker (>1 results). Both paths use geomLoadByCourse for bounded fetch.
+   Failure => keep modal open with inline error; user can retry or skip. */
 async function _lrMapLoadForRoundFromCenter(lon, lat) {
-  _lrSearchSetStatus('Loading course geometry\u2026', false);
+  _lrSearchSetStatus('Searching for courses\u2026', false);
   try {
-    var geo = await geomLoadByCenter(lon, lat, 1500);
+    var results = await geomSearchByLocation(lon, lat, 2500);
+    if (!results || !results.length) {
+      _lrSearchSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
+      return;
+    }
+    if (results.length === 1) {
+      /* Single course — load immediately, no picker needed */
+      await _lrMapLoadCourseById(results[0].osmId, results[0].center);
+      return;
+    }
+    /* Multiple courses — show picker */
+    _lrSearchSetStatus('', false);
+    var el = document.getElementById('lrSearchStatus');
+    if (el) {
+      el.style.display = 'block';
+      el.style.background = 'rgba(0,0,0,.72)';
+      el.innerHTML =
+        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found \u2014 select one:</div>'
+        + results.map(function(r) {
+          var cj = encodeURIComponent(JSON.stringify(r.center));
+          return '<button onclick="_lrMapPickCourse(\'' + escHtml(r.osmId) + '\',' + cj + ')" '
+            + 'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.1);'
+            + 'border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#fff;'
+            + 'font-family:\'DM Mono\',monospace;font-size:.62rem;padding:6px 8px;'
+            + 'margin-bottom:4px;cursor:pointer">'
+            + escHtml(r.name) + '</button>';
+        }).join('');
+    }
+  } catch (err) {
+    _lrSearchSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown') + '. Retry or skip.', true);
+  }
+}
+
+/* Called from picker buttons. centerJson is URI-encoded JSON [lon,lat] array. */
+async function _lrMapPickCourse(osmId, centerJson) {
+  var center;
+  try { center = JSON.parse(decodeURIComponent(centerJson)); } catch(e) { center = null; }
+  _lrSearchSetStatus('Loading course geometry\u2026', false);
+  await _lrMapLoadCourseById(osmId, center);
+}
+
+/* Inner loader shared by single-result auto-load and picker selection.
+   Uses geomLoadByCourse (bounded fetch); falls back to geomLoadByCenter on NO_COURSE_BOUNDARY. */
+async function _lrMapLoadCourseById(osmId, center) {
+  try {
+    var geo = await geomLoadByCourse(osmId, center || null);
     if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
-      _lrSearchSetStatus('No course geometry found here. Pan to a known course or try GPS.', true);
+      _lrSearchSetStatus('No hole geometry found for this course. Try another or skip.', true);
       return;
     }
     _lrMapGeo = geo;
@@ -2348,7 +2395,25 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
     _lrMapSearchModalClose();
     lrRenderHole();
   } catch (err) {
-    _lrSearchSetStatus('Load failed: ' + (err && err.message ? err.message : 'unknown') + '. Retry or skip.', true);
+    if (err && err.message === 'NO_COURSE_BOUNDARY' && center) {
+      /* Boundary unavailable — fall back to radial fetch */
+      try {
+        var geoFb = await geomLoadByCenter(center[0], center[1], 1500);
+        if (!geoFb || !geoFb.holes || Object.keys(geoFb.holes).length === 0) {
+          _lrSearchSetStatus('No hole geometry found here. Try another or skip.', true);
+          return;
+        }
+        _lrMapGeo = geoFb;
+        try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geoFb)); } catch(e) {}
+        if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
+        _lrMapSearchModalClose();
+        lrRenderHole();
+      } catch (err2) {
+        _lrSearchSetStatus('Load failed: ' + (err2 && err2.message ? err2.message : 'unknown') + '. Retry or skip.', true);
+      }
+    } else {
+      _lrSearchSetStatus('Load failed: ' + (err && err.message ? err.message : 'unknown') + '. Retry or skip.', true);
+    }
   }
 }
 
@@ -3039,6 +3104,7 @@ Object.assign(window, {
   /* G2b -- search modal + path + sheet + green zoom + tee drag handlers */
   _lrMapSearchModalOpen, _lrMapSearchModalClose, _lrMapSearchSkip,
   _lrMapDoPanLoad, _lrMapDoGpsLoad, _lrMapLoadForRoundFromCenter,
+  _lrMapPickCourse, _lrMapLoadCourseById,
   _lrMapRemoveWaypoint, _lrMapClearPath, _lrZoomGreen, _lrMapToggleSheet,
   /* G2b-R -- minimize/resume handlers (map persists once loaded) */
   _lrMapMinimize, _lrMapResume,
