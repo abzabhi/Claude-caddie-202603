@@ -2632,8 +2632,17 @@ function _lrMapMount() {
   if (!_lrMapInstance) {
     /* G2b-R -- initial zoom tightened from 16 to 18 (tee-level satellite detail). */
     _lrMapInstance = geomCreateMap(el, { center: _lrMapGeo.center, zoom: 18 });
+    /* G2b-R2 -- inline polygon-source set, skipping geomRenderGeometry's fitBounds
+       which would zoom out to the entire course. We only want hole-level framing
+       in live round; _lrMapShowHole below handles the per-hole flyTo. */
+    var _lrApplyPolys = function(){
+      try {
+        var src = _lrMapInstance.getSource('course-polygons');
+        if (src && _lrMapGeo && _lrMapGeo.polygons) src.setData(_lrMapGeo.polygons);
+      } catch(e) {}
+    };
     _lrMapInstance.on('load', function(){
-      geomRenderGeometry(_lrMapInstance, _lrMapGeo);
+      _lrApplyPolys();
       _lrMapShowHole(lrState.curHole + 1);
       _lrPlaceTeeMarker();
       _lrPlaceAimMarker();           /* G2b-R */
@@ -2641,7 +2650,7 @@ function _lrMapMount() {
       _lrUpdateFloatingDists();      /* G2b-R */
     });
     if (_lrMapInstance.isStyleLoaded && _lrMapInstance.isStyleLoaded()) {
-      geomRenderGeometry(_lrMapInstance, _lrMapGeo);
+      _lrApplyPolys();
       _lrMapShowHole(lrState.curHole + 1);
       _lrPlaceTeeMarker();
       _lrPlaceAimMarker();
@@ -2661,10 +2670,10 @@ function _lrMapMount() {
   if (_lrUserLonLat) _lrPlaceUserMarker(_lrUserLonLat);
 }
 
-/* G2b-R -- per-hole flyTo with tee->green bearing. Zoom bumped 17.5 -> 18.5. */
+/* G2b-R2 -- per-hole flyTo. Replaces geomShowHole's internal flyTo (zoom 17.5)
+   with a single tighter flyTo (zoom 18.5). Avoids competing-flyTo jank. */
 function _lrMapShowHole(n) {
   if (!_lrMapInstance || !_lrMapGeo) return;
-  geomShowHole(_lrMapInstance, _lrMapGeo, n);
   try {
     var hole = _lrCurHoleGeo();
     if (hole && hole.tee && hole.green) {
