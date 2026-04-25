@@ -130,27 +130,28 @@ function getFavCourseId() {
   document.getElementById('courseCards').innerHTML = sorted.map(c=>{
     const isHome = c.id===homeId;
     const isFav  = c.id===favId && c.id!==homeId;
-    const pinHTML = isHome ? `<span class="course-pin home">\uD83C\uDFE0 Home</span>`
-                  : isFav  ? `<span class="course-pin fav">\u2B50 Favourite</span>` : '';
     const cardCls = isHome?'course-card is-home':isFav?'course-card is-fav':'course-card';
-    const togLbl  = isHome ? '\uD83C\uDFE0 Home Course' : 'Set as Home';
-    const togCls  = isHome ? 'home-tog active' : 'home-tog';
+    const homeBadge = isHome ? `<span class="course-pin home" style="font-size:.55rem">\uD83C\uDFE0 Home</span>`
+                   : isFav   ? `<span class="course-pin fav"  style="font-size:.55rem">\u2B50 Fav</span>` : '';
+    const homeBtn = isHome
+      ? `<button class="home-tog active" style="font-size:.55rem;padding:2px 6px" onclick="event.stopPropagation();toggleHomeCourse('${c.id}')" title="Remove home">\uD83C\uDFE0</button>`
+      : `<button class="home-tog"        style="font-size:.55rem;padding:2px 6px" onclick="event.stopPropagation();toggleHomeCourse('${c.id}')" title="Set as home">\u2302</button>`;
+    const pinBtn = crsIsGeotagged(c)
+      ? `<button class="btn" style="font-size:.55rem;padding:2px 6px;background:var(--ok,#2d8a3e);border-color:var(--ok,#2d8a3e)" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')" title="Re-pin location">\uD83D\uDCCD</button>`
+      : `<button class="btn sec" style="font-size:.55rem;padding:2px 6px" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')" title="Pin location">\uD83D\uDCCD</button>`;
     return `
       <div class="${cardCls}" onclick="editCourse('${c.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div style="min-width:0">
-            <div class="course-name">${pinHTML}${c.name||'Unnamed'}</div>
-            <div class="course-meta">${c.city?c.city+' \u00B7 ':''}Par ${c.par} \u00B7 ${c.yardage}yds \u00B7 Rating ${c.rating}/Slope ${c.slope}${c.tees?.length?' \u00B7 '+c.tees.length+' tees':''}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="min-width:0;flex:1">
+            <div class="course-name" style="margin-bottom:2px">${homeBadge}${c.name||'Unnamed'}</div>
+            <div class="course-meta">${c.city?c.city+' \u00B7 ':''}Par ${c.par} \u00B7 ${c.yardage}yds \u00B7 ${c.rating}/${c.slope}${c.tees?.length?' \u00B7 '+c.tees.length+'t':''}</div>
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start">
-            <button class="${togCls}" onclick="event.stopPropagation();toggleHomeCourse('${c.id}')">${togLbl}</button>
-            ${crsIsGeotagged(c)
-              ? `<span class="course-pin" style="background:var(--ok,#2d8a3e);color:#fff;font-size:.58rem;padding:3px 7px;border-radius:10px;cursor:pointer;align-self:center" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')" title="Re-pin location">\uD83D\uDCCD Pinned</span>`
-              : `<button class="btn sec" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();crsOpenGeotagModal('${c.id}')">\uD83D\uDCCD Pin</button>`}
-            <div>
-              <button id="delBtn-${c.id}" class="btn danger" style="font-size:.62rem;padding:4px 8px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Delete</button>
-              <div id="delWarn-${c.id}" style="font-size:.62rem;color:var(--danger);font-family:'DM Mono',monospace;margin-top:3px;display:none;max-width:160px;line-height:1.4"></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            <div style="display:flex;gap:4px">
+              ${homeBtn}${pinBtn}
+              <button id="delBtn-${c.id}" class="btn danger" style="font-size:.55rem;padding:2px 6px" onclick="event.stopPropagation();deleteCourse('${c.id}')">Del</button>
             </div>
+            <div id="delWarn-${c.id}" style="font-size:.58rem;color:var(--danger);font-family:'DM Mono',monospace;display:none;max-width:140px;line-height:1.3;text-align:right"></div>
           </div>
         </div>
       </div>`;
