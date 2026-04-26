@@ -936,6 +936,288 @@ export async function geomGeocodeCity(city) {
   };
 }
 
+/* ============================================================================
+   G5 -- Unified locate-course modal. Single source of truth for both the
+   live-round entry flow and the courses-tab geotag flow.
+
+   Contract:
+     geomOpenLocateModal({
+       course,                    // {id, name, city, osmCenter?}
+       onSelect,                  // (osmId, center) => void  -- user picked a course
+       onSkip                     // optional () => void      -- user skipped
+     })
+
+   Behavior:
+     - Pinned course (course.osmCenter present): map opens at osmCenter zoom 15,
+       crosshair shown, no city bar. User pans/GPS -> Search here -> picker.
+     - Unpinned course: city bar shown, map mounts on city resolve OR GPS use,
+       crosshair revealed, yellow marker dropped on resolved city, user pans/GPS
+       -> Search here -> picker.
+     - Picker: 1 result auto-selects (calls onSelect). >1 shows clickable list.
+     - Skip / X: closes overlay, calls onSkip if provided.
+
+   Module-level state below is reset by _geomLocateClose. Single-instance only:
+   opening a second modal while one is live closes the first.
+   ============================================================================ */
+var _geomLocateMap        = null;
+var _geomLocateCityMarker = null;
+var _geomLocateResults    = [];
+var _geomLocateCallbacks  = null;  /* { onSelect, onSkip } */
+
+export function geomOpenLocateModal(opts) {
+  opts = opts || {};
+  /* Defensive: close any prior instance before opening a new one */
+  _geomLocateClose(true);
+  _geomLocateCallbacks = { onSelect: opts.onSelect || null, onSkip: opts.onSkip || null };
+
+  const course = opts.course || null;
+  const pinned = !!(course && course.osmCenter && course.osmCenter.length === 2
+    && isFinite(course.osmCenter[0]) && isFinite(course.osmCenter[1]));
+  const start = pinned ? [course.osmCenter[0], course.osmCenter[1]] : null;
+  const defaultCity = (course && course.city) ? String(course.city).replace(/"/g, '&quot;') : '';
+  const courseName = (course && course.name) ? String(course.name).replace(/</g, '&lt;') : '';
+
+  const cityBarHtml = pinned ? '' :
+      '<div style="padding:8px 12px;border-bottom:1px solid var(--br);'
+    +   'display:flex;gap:6px;align-items:center;background:var(--bg2,#1a1a1a)">'
+    +   '<input id="geomLocCityInput" type="text" value="' + defaultCity + '" '
+    +     'placeholder="City (e.g. Verona, NY)" '
+    +     'style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+    +     'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.7rem;'
+    +     'padding:5px 8px;outline:none">'
+    +   '<button class="btn" style="font-size:.65rem;padding:5px 12px" '
+    +     'onclick="_geomLocateCitySearch()">Find city</button>'
+    + '</div>';
+
+  const headerSubtitle = pinned
+    ? 'Pan the map or use GPS, then tap Load course here.'
+    : 'Find your city, then pan the crosshair to your course.';
+  const headerTitle = courseName ? ('Locate: ' + courseName) : 'Locate course';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'geomLocateOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--bg);'
+    + 'display:flex;flex-direction:column;font-family:\'DM Mono\',monospace';
+  overlay.innerHTML =
+      '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;'
+    +   'justify-content:space-between;align-items:center;gap:10px">'
+    +   '<div>'
+    +     '<div style="font-size:.82rem;color:var(--tx);font-weight:600">' + headerTitle + '</div>'
+    +     '<div style="font-size:.58rem;color:var(--tx3);margin-top:2px">' + headerSubtitle + '</div>'
+    +   '</div>'
+    +   '<button class="btn sec" style="font-size:.65rem;padding:5px 12px" '
+    +     'onclick="_geomLocateSkip()">Skip</button>'
+    + '</div>'
+    + cityBarHtml
+    + '<div id="geomLocCanvas" style="flex:1;min-height:0;background:#111;position:relative">'
+    +   '<div id="geomLocCrosshair" style="position:absolute;left:50%;top:50%;'
+    +     'width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;z-index:10;'
+    +     'border:2px solid #f1c40f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.35);'
+    +     (pinned ? '' : 'display:none') + '"></div>'
+    +   '<div id="geomLocStatus" style="position:absolute;left:10px;right:10px;top:10px;'
+    +     'z-index:11;padding:8px 10px;background:rgba(0,0,0,.55);border-radius:6px;'
+    +     'color:#fff;font-size:.62rem;display:none"></div>'
+    +   (pinned ? '' :
+        '<div id="geomLocEmptyHint" style="position:absolute;inset:0;display:flex;'
+      +   'align-items:center;justify-content:center;color:var(--tx3);font-size:.7rem;'
+      +   'text-align:center;padding:20px">Enter a city above to begin.</div>')
+    + '</div>'
+    + '<div style="padding:10px 12px;border-top:1px solid var(--br);display:flex;gap:8px">'
+    +   '<button class="btn" style="flex:1;font-size:.68rem;padding:9px 10px" '
+    +     'onclick="_geomLocatePanLoad()">\uD83D\uDCCD Load course here</button>'
+    +   '<button class="btn sec" style="flex:1;font-size:.68rem;padding:9px 10px" '
+    +     'onclick="_geomLocateGpsLoad()">\uD83D\uDCE1 Use my GPS</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  if (pinned) {
+    setTimeout(function(){
+      try {
+        const el = document.getElementById('geomLocCanvas');
+        if (!el) return;
+        _geomLocateMap = geomCreateMap(el, { center: start, zoom: 15 });
+      } catch(e) {
+        _geomLocateSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
+      }
+    }, 0);
+  } else {
+    setTimeout(function(){
+      const inp = document.getElementById('geomLocCityInput');
+      if (inp) inp.focus();
+    }, 50);
+  }
+}
+
+function _geomLocateSetStatus(msg, isErr) {
+  const el = document.getElementById('geomLocStatus');
+  if (!el) return;
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.style.background = isErr ? 'rgba(180,40,40,.75)' : 'rgba(0,0,0,.55)';
+  el.textContent = msg;
+}
+
+function _geomLocateClose(silent) {
+  const o = document.getElementById('geomLocateOverlay');
+  if (o) o.remove();
+  if (_geomLocateMap) { try { _geomLocateMap.remove(); } catch(e) {} _geomLocateMap = null; }
+  if (_geomLocateCityMarker) { try { _geomLocateCityMarker.remove(); } catch(e) {} _geomLocateCityMarker = null; }
+  _geomLocateResults = [];
+  if (!silent && _geomLocateCallbacks && _geomLocateCallbacks.onSkip) {
+    try { _geomLocateCallbacks.onSkip(); } catch(e) {}
+  }
+  if (!silent) _geomLocateCallbacks = null;
+}
+
+function _geomLocateSkip() {
+  _geomLocateClose(false);
+}
+
+async function _geomLocateCitySearch() {
+  const inp = document.getElementById('geomLocCityInput');
+  const city = inp ? inp.value.trim() : '';
+  if (!city) { _geomLocateSetStatus('Enter a city first.', true); return; }
+  _geomLocateSetStatus('Searching\u2026', false);
+  try {
+    const geo = await geomGeocodeCity(city);
+    const center = geo.center;
+    const hint = document.getElementById('geomLocEmptyHint');
+    if (hint) hint.style.display = 'none';
+    const ch = document.getElementById('geomLocCrosshair');
+    if (ch) ch.style.display = '';
+    if (!_geomLocateMap) {
+      const el = document.getElementById('geomLocCanvas');
+      if (!el) { _geomLocateSetStatus('Map container missing.', true); return; }
+      try { _geomLocateMap = geomCreateMap(el, { center: center, zoom: 13 }); }
+      catch(e) {
+        _geomLocateSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
+        return;
+      }
+      _geomLocateMap.once('load', function(){ _geomLocatePostCityMount(center, geo.bounds); });
+    } else {
+      _geomLocatePostCityMount(center, geo.bounds);
+    }
+    _geomLocateSetStatus('Pan crosshair to course, then tap "Load course here".', false);
+  } catch (err) {
+    const msg = err && err.message ? err.message : 'unknown';
+    if (msg === 'CITY_NOT_FOUND') {
+      _geomLocateSetStatus('City not found. Try adding state/province (e.g. "Verona, NY").', true);
+    } else if (msg === 'CITY_REQUIRED') {
+      _geomLocateSetStatus('Enter a city first.', true);
+    } else {
+      _geomLocateSetStatus('City search failed: ' + msg, true);
+    }
+  }
+}
+
+function _geomLocatePostCityMount(center, bounds) {
+  if (!_geomLocateMap || !window.maplibregl) return;
+  if (_geomLocateCityMarker) {
+    try { _geomLocateCityMarker.setLngLat(center); } catch(e) {}
+  } else {
+    try {
+      _geomLocateCityMarker = new window.maplibregl.Marker({ color: '#f1c40f' })
+        .setLngLat(center).addTo(_geomLocateMap);
+    } catch(e) { _geomLocateCityMarker = null; }
+  }
+  if (bounds) {
+    try {
+      _geomLocateMap.fitBounds(
+        [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
+        { padding: 30, maxZoom: 14, duration: 600 }
+      );
+    } catch(e) {}
+  } else {
+    try { _geomLocateMap.flyTo({ center: center, zoom: 13 }); } catch(e) {}
+  }
+}
+
+async function _geomLocatePanLoad() {
+  if (!_geomLocateMap) {
+    _geomLocateSetStatus('Find a city first, then pan the crosshair to your course.', true);
+    return;
+  }
+  const c = _geomLocateMap.getCenter();
+  await _geomLocateSearchAndPick(c.lng, c.lat);
+}
+
+async function _geomLocateGpsLoad() {
+  _geomLocateSetStatus('Getting GPS fix\u2026', false);
+  try {
+    const pos = await geomGetCurrentPosition();  /* [lon, lat, accuracy] */
+    if (!_geomLocateMap) {
+      const el = document.getElementById('geomLocCanvas');
+      const hint = document.getElementById('geomLocEmptyHint');
+      if (hint) hint.style.display = 'none';
+      const ch = document.getElementById('geomLocCrosshair');
+      if (ch) ch.style.display = '';
+      if (el) {
+        try { _geomLocateMap = geomCreateMap(el, { center: [pos[0], pos[1]], zoom: 16 }); }
+        catch(e) {
+          _geomLocateSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
+          return;
+        }
+      }
+    } else {
+      _geomLocateMap.flyTo({ center: [pos[0], pos[1]], zoom: 16 });
+    }
+    await _geomLocateSearchAndPick(pos[0], pos[1]);
+  } catch (err) {
+    _geomLocateSetStatus('GPS failed: ' + (err && err.message ? err.message : 'unknown') + '. Pan the map and try again.', true);
+  }
+}
+
+async function _geomLocateSearchAndPick(lon, lat) {
+  _geomLocateSetStatus('Searching for courses\u2026', false);
+  try {
+    const results = await geomSearchByLocation(lon, lat, 2500);
+    if (!results || !results.length) {
+      _geomLocateSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
+      return;
+    }
+    if (results.length === 1) {
+      _geomLocateInvokeSelect(results[0].osmId, results[0].center);
+      return;
+    }
+    _geomLocateResults = results;
+    _geomLocateSetStatus('', false);
+    const el = document.getElementById('geomLocStatus');
+    if (el) {
+      el.style.display = 'block';
+      el.style.background = 'rgba(0,0,0,.72)';
+      el.innerHTML =
+        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found \u2014 select one:</div>'
+        + results.map(function(r, i) {
+          return '<button onclick="_geomLocatePickCourse(' + i + ')" '
+            + 'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.1);'
+            + 'border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#fff;'
+            + 'font-family:\'DM Mono\',monospace;font-size:.62rem;padding:6px 8px;'
+            + 'margin-bottom:4px;cursor:pointer">'
+            + (r.name || 'Unnamed').replace(/</g, '&lt;') + '</button>';
+        }).join('');
+    }
+  } catch (err) {
+    _geomLocateSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown') + '. Retry or skip.', true);
+  }
+}
+
+function _geomLocatePickCourse(idx) {
+  const r = _geomLocateResults && _geomLocateResults[idx];
+  if (!r) { _geomLocateSetStatus('Invalid selection.', true); return; }
+  _geomLocateInvokeSelect(r.osmId, r.center || null);
+}
+
+function _geomLocateInvokeSelect(osmId, center) {
+  const cb = _geomLocateCallbacks && _geomLocateCallbacks.onSelect;
+  /* Close first so the modal disappears even if callback throws */
+  _geomLocateClose(true);
+  if (cb) {
+    try { cb(osmId, center); }
+    catch(e) { console.error('[geomap] locate-modal onSelect failed:', e); }
+  }
+  _geomLocateCallbacks = null;
+}
+
 if (typeof window !== 'undefined') {
   Object.assign(window, {
     geomCreateMap,
@@ -954,6 +1236,9 @@ if (typeof window !== 'undefined') {
     geomStartGpsWatch,
     geomStopGpsWatch,
     geomGetCurrentPosition,
-    geomGeocodeCity  /* G4 */
+    geomGeocodeCity,  /* G4 */
+    geomOpenLocateModal,  /* G5 */
+    _geomLocateCitySearch, _geomLocatePanLoad, _geomLocateGpsLoad,
+    _geomLocateSkip, _geomLocatePickCourse  /* G5 -- inline onclick handlers */
   });
 }
