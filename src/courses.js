@@ -593,7 +593,12 @@ async function _crsGeotagDoNameSearch(courseId) {
     _crsGeotagSetStatus(results.length ? `${results.length} match(es)` : 'No matches');
     _crsGeotagRenderResults(courseId, results, null);
   } catch (err) {
-    _crsGeotagSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown'));
+    const msg = err && err.message ? err.message : 'unknown';
+    if (msg === 'CITY_NOT_FOUND') {
+      _crsGeotagSetStatus('City not found. Try adding state/province (e.g. "Verona, NY").');
+    } else {
+      _crsGeotagSetStatus('Search failed: ' + msg);
+    }
   }
 }
 
