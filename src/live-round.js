@@ -3,10 +3,12 @@ import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js
 import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 import { renderHandicap } from './rounds.js';
 /* G2 -- geomap integration for in-round map view */
+/* G4 -- geomGeocodeCity added for unified locate-modal city search */
 import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomSearchByLocation,
          geomRenderGeometry, geomShowHole,
          geomStartGpsWatch, geomStopGpsWatch, geomDistanceYds,
-         geomBearingDeg, geomGetCurrentPosition, geomRenderPath } from './geomap.js';
+         geomBearingDeg, geomGetCurrentPosition, geomRenderPath,
+         geomGeocodeCity } from './geomap.js';
 /* G2.5 -- view-layer primitives extracted into class. live-round retains
    round-specific glue; MapView owns markers, GPS watch, polygon source/layer,
    floating bubble/pill, draggable aim+tee. */
@@ -2199,6 +2201,7 @@ var _lrUserLonLat     = null;
 var _lrSearchMap      = null;    /* map instance inside entry modal */
 var _lrSearchMarker   = null;    /* center-hint marker on entry modal */
 var _lrSearchResults  = [];      /* course picker results, indexed by picker buttons */
+var _lrCityMarker     = null;    /* G4 -- yellow MapLibre marker dropped on resolved city */
 
 function _lrMapHasGeotag() {
   if (!lrState || !lrState.courseId) return false;
@@ -2253,14 +2256,53 @@ function _lrMapPromptAccept() {
    (skippable). Offers two entry paths: pan map + "Load here", or GPS + "Use
    my location". Both end up calling _lrMapLoadForRoundFromCenter(lon,lat).
    Skip closes the modal and leaves the round in classic (non-map) view. */
+/* G5 -- Body extracted to geomap.js geomOpenLocateModal. Original G2b/G4 body
+   commented out below per "comment, don't delete" rule. The function shell
+   stays so existing callers (e.g. lrStartSetup line 264) keep working.
+   Skip behavior: onSkip callback sets _mapSearchDone like the original close path.
+   Pinned-vs-unpinned UX, city search, GPS, pan, picker -- all unified in the
+   shared modal. Outcome differs only via onSelect (-> _lrMapLoadCourseById). */
 function _lrMapSearchModalOpen() {
   if (!lrState || lrState._mapSearchDone) return;
-  /* Reuse existing geotag if the course was pre-pinned: start the pan map there. */
+  var c = (lrState && lrState.courseId)
+    ? courses.find(function(x){ return x.id === lrState.courseId; }) : null;
+  geomOpenLocateModal({
+    course: c,
+    onSelect: function(osmId, center) {
+      if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
+      _lrMapLoadCourseById(osmId, center);
+    },
+    onSkip: function() {
+      if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
+    }
+  });
+}
+
+/* G5 -- ORIGINAL G2b/G4 BODY (replaced by geomOpenLocateModal call above).
+   Preserved per "comment, don't delete" rule. Safe to remove once verified.
+-------------------------------------------------------------------------------
+function _lrMapSearchModalOpen_OLD() {
+  if (!lrState || lrState._mapSearchDone) return;
   var start = null;
-  if (_lrMapHasGeotag()) {
-    var c = courses.find(function(x){ return x.id === lrState.courseId; });
-    if (c && c.osmCenter) start = [c.osmCenter[0], c.osmCenter[1]];
-  }
+  var pinned = _lrMapHasGeotag();
+  var c = (lrState && lrState.courseId)
+    ? courses.find(function(x){ return x.id === lrState.courseId; }) : null;
+  if (pinned && c && c.osmCenter) start = [c.osmCenter[0], c.osmCenter[1]];
+  var defaultCity = (c && c.city) ? String(c.city).replace(/"/g, '&quot;') : '';
+  var cityBarHtml = pinned ? '' :
+      '<div id="lrCityBar" style="padding:8px 12px;border-bottom:1px solid var(--br);'
+    +   'display:flex;gap:6px;align-items:center;background:var(--bg2,#1a1a1a)">'
+    +   '<input id="lrCityInput" type="text" value="' + defaultCity + '" '
+    +     'placeholder="City (e.g. Verona, NY)" '
+    +     'style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+    +     'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.7rem;'
+    +     'padding:5px 8px;outline:none">'
+    +   '<button class="btn" style="font-size:.65rem;padding:5px 12px" '
+    +     'onclick="_lrMapDoCitySearch()">Find city</button>'
+    + '</div>';
+  var headerSubtitle = pinned
+    ? 'Pan the map or use GPS. Optional -- skip to use classic scoring.'
+    : 'Find your city, then pan the crosshair to your course.';
   var overlay = document.createElement('div');
   overlay.id = 'lrMapSearchOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--bg);'
@@ -2271,39 +2313,55 @@ function _lrMapSearchModalOpen() {
     +   '<div>'
     +     '<div style="font-size:.82rem;color:var(--tx);font-weight:600">Locate course</div>'
     +     '<div style="font-size:.58rem;color:var(--tx3);margin-top:2px">'
-    +       'Pan the map or use GPS. Optional \u2014 skip to use classic scoring.'
+    +       headerSubtitle
     +     '</div>'
     +   '</div>'
     +   '<button class="btn sec" style="font-size:.65rem;padding:5px 12px" '
     +     'onclick="_lrMapSearchSkip()">Skip</button>'
     + '</div>'
+    + cityBarHtml
     + '<div id="lrSearchCanvas" style="flex:1;min-height:0;background:#111;position:relative">'
     +   '<div id="lrSearchCrosshair" style="position:absolute;left:50%;top:50%;'
     +     'width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;z-index:10;'
-    +     'border:2px solid #f1c40f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.35)"></div>'
+    +     'border:2px solid #f1c40f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.35);'
+    +     (pinned ? '' : 'display:none') + '"></div>'
     +   '<div id="lrSearchStatus" style="position:absolute;left:10px;right:10px;top:10px;'
     +     'z-index:11;padding:8px 10px;background:rgba(0,0,0,.55);border-radius:6px;'
     +     'color:#fff;font-size:.62rem;display:none"></div>'
+    +   (pinned ? '' :
+        '<div id="lrSearchEmptyHint" style="position:absolute;inset:0;display:flex;'
+      +   'align-items:center;justify-content:center;color:var(--tx3);font-size:.7rem;'
+      +   'text-align:center;padding:20px">Enter a city above to begin.</div>')
     + '</div>'
     + '<div style="padding:10px 12px;border-top:1px solid var(--br);display:flex;gap:8px">'
     +   '<button class="btn" style="flex:1;font-size:.68rem;padding:9px 10px" '
-    +     'onclick="_lrMapDoPanLoad()">\uD83D\uDCCD Load course here</button>'
+    +     'onclick="_lrMapDoPanLoad()">Load course here</button>'
     +   '<button class="btn sec" style="flex:1;font-size:.68rem;padding:9px 10px" '
-    +     'onclick="_lrMapDoGpsLoad()">\uD83D\uDCE1 Use my GPS</button>'
+    +     'onclick="_lrMapDoGpsLoad()">Use my GPS</button>'
     + '</div>';
   document.body.appendChild(overlay);
-  /* Mount map inside the overlay. Slight delay so flex sizing is applied first. */
-  setTimeout(function(){
-    try {
-      var el = document.getElementById('lrSearchCanvas');
-      if (!el) return;
-      _lrSearchMap = geomCreateMap(el, { center: start || [-0.1, 51.5], zoom: start ? 15 : 3 });
-    } catch(e) {
-      _lrSearchSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
-    }
-  }, 0);
+  if (pinned) {
+    setTimeout(function(){
+      try {
+        var el = document.getElementById('lrSearchCanvas');
+        if (!el) return;
+        _lrSearchMap = geomCreateMap(el, { center: start, zoom: 15 });
+      } catch(e) {
+        _lrSearchSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
+      }
+    }, 0);
+  } else {
+    setTimeout(function(){
+      var inp = document.getElementById('lrCityInput');
+      if (inp) inp.focus();
+    }, 50);
+  }
 }
+------------------------------------------------------------------------------- */
 
+/* G5 -- All helpers below superseded by geomOpenLocateModal in geomap.js.
+   Commented out per "comment, don't delete" rule. Safe to remove once verified.
+-------------------------------------------------------------------------------
 function _lrSearchSetStatus(msg, isErr) {
   var el = document.getElementById('lrSearchStatus');
   if (!el) return;
@@ -2318,6 +2376,7 @@ function _lrMapSearchModalClose() {
   if (o) o.remove();
   if (_lrSearchMap) { try { _lrSearchMap.remove(); } catch(e) {} _lrSearchMap = null; }
   _lrSearchMarker = null;
+  if (_lrCityMarker) { try { _lrCityMarker.remove(); } catch(e) {} _lrCityMarker = null; }
   if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
 }
 
@@ -2326,27 +2385,106 @@ function _lrMapSearchSkip() {
 }
 
 async function _lrMapDoPanLoad() {
-  if (!_lrSearchMap) return;
+  if (!_lrSearchMap) {
+    _lrSearchSetStatus('Find a city first, then pan the crosshair to your course.', true);
+    return;
+  }
   var c = _lrSearchMap.getCenter();
   await _lrMapLoadForRoundFromCenter(c.lng, c.lat);
 }
 
 async function _lrMapDoGpsLoad() {
-  _lrSearchSetStatus('Getting GPS fix\u2026', false);
+  _lrSearchSetStatus('Getting GPS fix...', false);
   try {
-    var pos = await geomGetCurrentPosition();  /* [lon, lat, accuracy] */
-    if (_lrSearchMap) _lrSearchMap.flyTo({ center: [pos[0], pos[1]], zoom: 16 });
+    var pos = await geomGetCurrentPosition();
+    if (!_lrSearchMap) {
+      var el = document.getElementById('lrSearchCanvas');
+      var hint = document.getElementById('lrSearchEmptyHint');
+      if (hint) hint.style.display = 'none';
+      var ch = document.getElementById('lrSearchCrosshair');
+      if (ch) ch.style.display = '';
+      if (el) {
+        try { _lrSearchMap = geomCreateMap(el, { center: [pos[0], pos[1]], zoom: 16 }); }
+        catch(e) {
+          _lrSearchSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
+          return;
+        }
+      }
+    } else {
+      _lrSearchMap.flyTo({ center: [pos[0], pos[1]], zoom: 16 });
+    }
     await _lrMapLoadForRoundFromCenter(pos[0], pos[1]);
   } catch (err) {
     _lrSearchSetStatus('GPS failed: ' + (err && err.message ? err.message : 'unknown') + '. Pan the map and try again.', true);
   }
 }
 
-/* Shared loader: search for courses near center first, then either auto-load (1 result)
-   or show a picker (>1 results). Both paths use geomLoadByCourse for bounded fetch.
-   Failure => keep modal open with inline error; user can retry or skip. */
+async function _lrMapDoCitySearch() {
+  var inp = document.getElementById('lrCityInput');
+  var city = inp ? inp.value.trim() : '';
+  if (!city) { _lrSearchSetStatus('Enter a city first.', true); return; }
+  _lrSearchSetStatus('Searching...', false);
+  try {
+    var geo = await geomGeocodeCity(city);
+    var center = geo.center;
+    var hint = document.getElementById('lrSearchEmptyHint');
+    if (hint) hint.style.display = 'none';
+    var ch = document.getElementById('lrSearchCrosshair');
+    if (ch) ch.style.display = '';
+    if (!_lrSearchMap) {
+      var el = document.getElementById('lrSearchCanvas');
+      if (!el) { _lrSearchSetStatus('Map container missing.', true); return; }
+      try { _lrSearchMap = geomCreateMap(el, { center: center, zoom: 13 }); }
+      catch(e) {
+        _lrSearchSetStatus('Map failed to initialise: ' + (e && e.message ? e.message : 'unknown'), true);
+        return;
+      }
+      _lrSearchMap.once('load', function(){
+        _lrCitySearchPostMount(center, geo.bounds);
+      });
+    } else {
+      if (geo.bounds) {
+        _lrSearchMap.fitBounds([[geo.bounds[1], geo.bounds[0]], [geo.bounds[3], geo.bounds[2]]], { padding: 30, maxZoom: 14, duration: 600 });
+      } else {
+        _lrSearchMap.flyTo({ center: center, zoom: 13 });
+      }
+      _lrCitySearchPostMount(center, geo.bounds);
+    }
+    _lrSearchSetStatus('Pan crosshair to course, then tap "Load course here".', false);
+  } catch (err) {
+    var msg = err && err.message ? err.message : 'unknown';
+    if (msg === 'CITY_NOT_FOUND') {
+      _lrSearchSetStatus('City not found. Try adding state/province (e.g. "Verona, NY").', true);
+    } else if (msg === 'CITY_REQUIRED') {
+      _lrSearchSetStatus('Enter a city first.', true);
+    } else {
+      _lrSearchSetStatus('City search failed: ' + msg, true);
+    }
+  }
+}
+
+function _lrCitySearchPostMount(center, bounds) {
+  if (!_lrSearchMap || !window.maplibregl) return;
+  if (_lrCityMarker) {
+    try { _lrCityMarker.setLngLat(center); } catch(e) {}
+  } else {
+    try {
+      _lrCityMarker = new window.maplibregl.Marker({ color: '#f1c40f' })
+        .setLngLat(center).addTo(_lrSearchMap);
+    } catch(e) { _lrCityMarker = null; }
+  }
+  if (bounds) {
+    try {
+      _lrSearchMap.fitBounds(
+        [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
+        { padding: 30, maxZoom: 14, duration: 600 }
+      );
+    } catch(e) {}
+  }
+}
+
 async function _lrMapLoadForRoundFromCenter(lon, lat) {
-  _lrSearchSetStatus('Searching for courses\u2026', false);
+  _lrSearchSetStatus('Searching for courses...', false);
   try {
     var results = await geomSearchByLocation(lon, lat, 2500);
     if (!results || !results.length) {
@@ -2354,11 +2492,9 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       return;
     }
     if (results.length === 1) {
-      /* Single course — load immediately, no picker needed */
       await _lrMapLoadCourseById(results[0].osmId, results[0].center);
       return;
     }
-    /* Multiple courses — store results and show picker */
     _lrSearchResults = results;
     _lrSearchSetStatus('', false);
     var el = document.getElementById('lrSearchStatus');
@@ -2366,12 +2502,12 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       el.style.display = 'block';
       el.style.background = 'rgba(0,0,0,.72)';
       el.innerHTML =
-        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found \u2014 select one:</div>'
+        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found -- select one:</div>'
         + results.map(function(r, i) {
           return '<button onclick="_lrMapPickCourse(' + i + ')" '
             + 'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.1);'
             + 'border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#fff;'
-            + 'font-family:\'DM Mono\',monospace;font-size:.62rem;padding:6px 8px;'
+            + 'font-family:DM Mono,monospace;font-size:.62rem;padding:6px 8px;'
             + 'margin-bottom:4px;cursor:pointer">'
             + escHtml(r.name) + '</button>';
         }).join('');
@@ -2381,13 +2517,13 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
   }
 }
 
-/* Called from picker buttons with index into _lrSearchResults. */
 async function _lrMapPickCourse(idx) {
   var r = _lrSearchResults && _lrSearchResults[idx];
   if (!r) { _lrSearchSetStatus('Invalid selection.', true); return; }
-  _lrSearchSetStatus('Loading course geometry\u2026', false);
+  _lrSearchSetStatus('Loading course geometry...', false);
   await _lrMapLoadCourseById(r.osmId, r.center || null);
 }
+------------------------------------------------------------------------------- */
 
 /* Inner loader shared by single-result auto-load and picker selection.
    Uses geomLoadByCourse (bounded fetch); falls back to geomLoadByCenter on NO_COURSE_BOUNDARY. */
@@ -2973,9 +3109,11 @@ Object.assign(window, {
      _lrMapPromptIfNeeded, _lrMapPromptDismiss, _lrMapPromptAccept, */
   _lrMapLoadForRound, _lrMapGpsToggle, _lrMapToggleScoring, _lrMapSetMode, _lrMapExit,
   /* G2b -- search modal + path + sheet + green zoom + tee drag handlers */
-  _lrMapSearchModalOpen, _lrMapSearchModalClose, _lrMapSearchSkip,
-  _lrMapDoPanLoad, _lrMapDoGpsLoad, _lrMapLoadForRoundFromCenter,
-  _lrMapPickCourse, _lrMapLoadCourseById,
+  _lrMapSearchModalOpen,
+  /* G5 -- below handlers superseded by geomOpenLocateModal in geomap.js:
+     _lrMapSearchModalClose, _lrMapSearchSkip, _lrMapDoPanLoad, _lrMapDoGpsLoad,
+     _lrMapLoadForRoundFromCenter, _lrMapPickCourse, _lrMapDoCitySearch */
+  _lrMapLoadCourseById,
   _lrMapRemoveWaypoint, _lrMapClearPath, _lrZoomGreen, _lrMapToggleSheet,
   /* G2b-R -- minimize/resume handlers (map persists once loaded) */
   _lrMapMinimize, _lrMapResume,
