@@ -1,6 +1,6 @@
 import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse } from './store.js';
 import { setVizInitDone } from './viz.js';
-import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap } from './geomap.js'; /* G2 */
+import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap, geomOpenLocateModal } from './geomap.js'; /* G2, G5 */
 
 const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
 const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/courses/';
@@ -10,9 +10,12 @@ let currentEditTeeId = null;
 let _deleteConfirmId = null;
 let _deleteConfirmTimer = null;
 
-var _crsGeotagMapInst        = null;  /* raw MapLibre instance for geotag picker */
-var _crsGeotagMapOpen        = false; /* whether map panel is visible */
-var _crsGeotagActiveCourseId = null;  /* courseId of currently open geotag modal */
+/* G5 -- Module state below superseded by geomOpenLocateModal in geomap.js.
+   Commented out per "comment, don't delete" rule.
+var _crsGeotagMapInst        = null;
+var _crsGeotagMapOpen        = false;
+var _crsGeotagActiveCourseId = null;
+*/
 
 async function _fetchCourseIndex() {
   const CACHE_KEY='gordy:courseIndex', CACHE_TS='gordy:courseIndex:ts', TTL=24*60*60*1000;
@@ -471,12 +474,132 @@ function crsGeotagApply(courseId, osmCenter, osmCourseId) {
   renderCourseList();
 }
 
+/* G5 -- _crsGeotagCloseModal kept as defensive no-op. The legacy crsGeotagApply
+   (still exported) calls this; in the new flow geomOpenLocateModal closes its
+   own overlay before invoking onSelect, so this becomes a no-op. Retained in
+   case any legacy code path opens the old #crsGeotagModal element. */
 function _crsGeotagCloseModal() {
   const el = document.getElementById('crsGeotagModal');
   if (el) el.remove();
 }
 
+/* G5 -- All _crsGeotag* helpers below superseded by geomOpenLocateModal in geomap.js.
+   Commented out per "comment, don't delete" rule. Safe to remove once verified.
+-------------------------------------------------------------------------------
+function _crsGeotagSetStatus(msg) {
+  const el = document.getElementById('crsGeotagStatus');
+  if (el) el.textContent = msg || '';
+}
+
+function _crsGeotagRenderResults(courseId, results, origin) {
+  const host = document.getElementById('crsGeotagResults');
+  if (!host) return;
+  if (!results || !results.length) { host.innerHTML = '<div style="font-size:.62rem;color:var(--tx3)">No matches found.</div>'; return; }
+
+  const rows = results.map(r => {
+    const lon = r.center[0], lat = r.center[1];
+    let distTxt = '';
+    if (origin && window.turf) {
+      const d = window.turf.distance(
+        window.turf.point(origin), window.turf.point(r.center), { units: 'kilometers' });
+      distTxt = ' . ' + d.toFixed(1) + ' km';
+    }
+    const osmId = r.osmId.split('/')[1] || '';
+    const nameEsc = (r.name || 'Unnamed').replace(/'/g, '\\\'').replace(/</g, '&lt;');
+    const nameDisp = (r.name || 'Unnamed').replace(/</g, '&lt;');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;'
+      + 'padding:8px;border:1px solid var(--br);border-radius:6px;margin-bottom:6px">'
+      + '<div style="min-width:0">'
+      + '<div style="font-size:.7rem;color:var(--tx)">' + nameDisp + '</div>'
+      + '<div style="font-size:.58rem;color:var(--tx3)">' + lat.toFixed(4) + ', ' + lon.toFixed(4) + distTxt + '</div>'
+      + '</div>'
+      + '<button class="btn" style="font-size:.65rem;padding:4px 10px;flex-shrink:0"'
+      + ' onclick="crsGeotagApply(\'' + courseId + '\', [' + lon + ', ' + lat + '], ' + (osmId || 'null') + ')">Select</button>'
+      + '</div>';
+  }).join('');
+  host.innerHTML = rows;
+}
+
+async function _crsGeotagDoNameSearch(courseId) {
+  const cityEl = document.getElementById('crsGeotagCity');
+  const city = cityEl ? cityEl.value.trim() : '';
+  if (!city) { _crsGeotagSetStatus('Enter a city first.'); return; }
+  _crsGeotagSetStatus('Searching...');
+  try {
+    const results = await crsGeotagSearchByName(courseId, city);
+    _crsGeotagSetStatus(results.length ? results.length + ' match(es)' : 'No matches');
+    _crsGeotagRenderResults(courseId, results, null);
+  } catch (err) {
+    const msg = err && err.message ? err.message : 'unknown';
+    if (msg === 'CITY_NOT_FOUND') {
+      _crsGeotagSetStatus('City not found. Try adding state/province (e.g. "Verona, NY").');
+    } else {
+      _crsGeotagSetStatus('Search failed: ' + msg);
+    }
+  }
+}
+
+async function _crsGeotagDoGpsSearch(courseId) {
+  _crsGeotagSetStatus('Getting location...');
+  try {
+    const loc = await geomGetCurrentPosition();
+    _crsGeotagSetStatus('Searching nearby...');
+    const results = await geomSearchByLocation(loc[0], loc[1], 10000);
+    _crsGeotagSetStatus(results.length ? results.length + ' nearby course(s)' : 'No courses within 10km');
+    _crsGeotagRenderResults(courseId, results, [loc[0], loc[1]]);
+  } catch (err) {
+    _crsGeotagSetStatus('Location failed: ' + (err && err.message ? err.message : 'denied'));
+  }
+}
+
+function _crsGeotagToggleMap() {
+  const panel = document.getElementById('crsGeotagMapPanel');
+  if (!panel) return;
+  _crsGeotagMapOpen = !_crsGeotagMapOpen;
+  panel.style.display = _crsGeotagMapOpen ? 'block' : 'none';
+  if (_crsGeotagMapOpen && !_crsGeotagMapInst) {
+    const c = _crsGeotagActiveCourseId ? courses.find(x => x.id === _crsGeotagActiveCourseId) : null;
+    const center = (c && crsIsGeotagged(c)) ? c.osmCenter : [-98, 38];
+    _crsGeotagMapInst = geomCreateMap('crsGeotagMapCanvas', { center, zoom: 13 });
+  }
+}
+
+async function _crsGeotagMapSearchHere() {
+  if (!_crsGeotagMapInst) return;
+  const { lng, lat } = _crsGeotagMapInst.getCenter();
+  _crsGeotagSetStatus('Searching...');
+  try {
+    const results = await geomSearchByLocation(lng, lat, 5000);
+    _crsGeotagSetStatus(results.length ? results.length + ' match(es)' : 'No courses within 5km');
+    _crsGeotagRenderResults(_crsGeotagActiveCourseId, results, [lng, lat]);
+  } catch (err) {
+    _crsGeotagSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown'));
+  }
+}
+------------------------------------------------------------------------------- */
+
+/* G5 -- Body extracted to geomap.js geomOpenLocateModal. Original 3-path body
+   (city/GPS/map) commented out below per "comment, don't delete" rule. The
+   function shell stays so existing callers (renderCourseList buttons line 144-145)
+   keep working. onSelect translates to crsGeotagApply(courseId, center, osmId). */
 function crsOpenGeotagModal(courseId) {
+  const c = courses.find(x => x.id === courseId);
+  if (!c) return;
+  geomOpenLocateModal({
+    course: c,
+    onSelect: function(osmId, center) {
+      /* osmId is e.g. "way/12345" or "relation/678"; crsGeotagApply expects
+         the numeric portion as second arg, center as first. */
+      const numId = osmId ? (parseInt(String(osmId).split('/')[1], 10) || null) : null;
+      crsGeotagApply(courseId, center, numId);
+    }
+  });
+}
+
+/* G5 -- ORIGINAL 3-path geotag modal body (replaced by geomOpenLocateModal call above).
+   Preserved per "comment, don't delete" rule. Safe to remove once verified.
+-------------------------------------------------------------------------------
+function crsOpenGeotagModal_OLD(courseId) {
   const c = courses.find(x => x.id === courseId);
   if (!c) return;
   _crsGeotagCloseModal();
@@ -492,62 +615,58 @@ function crsOpenGeotagModal(courseId) {
   const safeName = (c.name || 'Unnamed').replace(/</g, '&lt;');
   const defaultCity = (c.city || '').replace(/"/g, '&quot;');
   const pinnedLine = crsIsGeotagged(c)
-    ? `<div style="font-size:.6rem;color:var(--tx3);margin-bottom:8px">Currently pinned at ${c.osmCenter[1].toFixed(4)}, ${c.osmCenter[0].toFixed(4)}</div>`
+    ? '<div style="font-size:.6rem;color:var(--tx3);margin-bottom:8px">Currently pinned at ' + c.osmCenter[1].toFixed(4) + ', ' + c.osmCenter[0].toFixed(4) + '</div>'
     : '';
 
-  wrap.innerHTML = `
-    <div style="background:var(--bg);border:1px solid var(--br);border-radius:8px;
-                max-width:440px;width:100%;max-height:85vh;overflow-y:auto;
-                padding:18px;font-family:'DM Mono',monospace;color:var(--tx)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:.85rem;font-weight:600">\uD83D\uDCCD Pin ${safeName}</div>
-        <button class="btn sec" style="font-size:.7rem;padding:3px 9px" onclick="_crsGeotagCloseModal()">\u2715</button>
-      </div>
-      ${pinnedLine}
-      <div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px;line-height:1.4">
-        Search OpenStreetMap for this course to enable map features in live rounds.
-      </div>
-
-      <div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">
-        <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">A. Search by city</div>
-        <div style="display:flex;gap:6px">
-          <input id="crsGeotagCity" type="text" value="${defaultCity}" placeholder="City"
-            style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;
-                   color:var(--tx);font-family:'DM Mono',monospace;font-size:.7rem;
-                   padding:5px 8px;outline:none">
-          <button class="btn" style="font-size:.7rem;padding:5px 12px"
-            onclick="_crsGeotagDoNameSearch('${courseId}')">Find</button>
-        </div>
-      </div>
-
-      <div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">
-        <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">B. Use my location</div>
-        <button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"
-          onclick="_crsGeotagDoGpsSearch('${courseId}')">\uD83D\uDCE1 Search nearby courses</button>
-      </div>
-
-      <div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">
-        <div style="font-size:.65rem;font-weight:600;margin-bottom:6px">C. Search by map</div>
-        <button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"
-          onclick="_crsGeotagToggleMap()">🗺 Pan to course location</button>
-        <div id="crsGeotagMapPanel" style="display:none;margin-top:8px">
-          <div id="crsGeotagMapCanvas" style="width:100%;height:250px;border-radius:8px;overflow:hidden"></div>
-          <button class="btn" style="font-size:.7rem;padding:5px 12px;width:100%;margin-top:6px"
-            onclick="_crsGeotagMapSearchHere()">Search courses here</button>
-        </div>
-      </div>
-
-      <div id="crsGeotagStatus" style="font-size:.62rem;color:var(--tx3);margin:8px 0;min-height:14px"></div>
-      <div id="crsGeotagResults"></div>
-
-      <div style="margin-top:14px;text-align:right">
-        <button class="btn sec" style="font-size:.7rem;padding:5px 14px" onclick="_crsGeotagCloseModal()">Cancel</button>
-      </div>
-    </div>`;
+  wrap.innerHTML =
+      '<div style="background:var(--bg);border:1px solid var(--br);border-radius:8px;'
+    +             'max-width:440px;width:100%;max-height:85vh;overflow-y:auto;'
+    +             'padding:18px;font-family:DM Mono,monospace;color:var(--tx)">'
+    +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +     '<div style="font-size:.85rem;font-weight:600">Pin ' + safeName + '</div>'
+    +     '<button class="btn sec" style="font-size:.7rem;padding:3px 9px" onclick="_crsGeotagCloseModal()">x</button>'
+    +   '</div>'
+    +   pinnedLine
+    +   '<div style="font-size:.62rem;color:var(--tx3);margin-bottom:10px;line-height:1.4">'
+    +     'Search OpenStreetMap for this course to enable map features in live rounds.'
+    +   '</div>'
+    +   '<div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">'
+    +     '<div style="font-size:.65rem;font-weight:600;margin-bottom:6px">A. Search by city</div>'
+    +     '<div style="display:flex;gap:6px">'
+    +       '<input id="crsGeotagCity" type="text" value="' + defaultCity + '" placeholder="City"'
+    +         ' style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+    +                'color:var(--tx);font-family:DM Mono,monospace;font-size:.7rem;'
+    +                'padding:5px 8px;outline:none">'
+    +       '<button class="btn" style="font-size:.7rem;padding:5px 12px"'
+    +         ' onclick="_crsGeotagDoNameSearch(\'' + courseId + '\')">Find</button>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">'
+    +     '<div style="font-size:.65rem;font-weight:600;margin-bottom:6px">B. Use my location</div>'
+    +     '<button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"'
+    +       ' onclick="_crsGeotagDoGpsSearch(\'' + courseId + '\')">Search nearby courses</button>'
+    +   '</div>'
+    +   '<div style="border:1px solid var(--br);border-radius:6px;padding:10px;margin-bottom:10px">'
+    +     '<div style="font-size:.65rem;font-weight:600;margin-bottom:6px">C. Search by map</div>'
+    +     '<button class="btn sec" style="font-size:.7rem;padding:5px 12px;width:100%"'
+    +       ' onclick="_crsGeotagToggleMap()">Pan to course location</button>'
+    +     '<div id="crsGeotagMapPanel" style="display:none;margin-top:8px">'
+    +       '<div id="crsGeotagMapCanvas" style="width:100%;height:250px;border-radius:8px;overflow:hidden"></div>'
+    +       '<button class="btn" style="font-size:.7rem;padding:5px 12px;width:100%;margin-top:6px"'
+    +         ' onclick="_crsGeotagMapSearchHere()">Search courses here</button>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div id="crsGeotagStatus" style="font-size:.62rem;color:var(--tx3);margin:8px 0;min-height:14px"></div>'
+    +   '<div id="crsGeotagResults"></div>'
+    +   '<div style="margin-top:14px;text-align:right">'
+    +     '<button class="btn sec" style="font-size:.7rem;padding:5px 14px" onclick="_crsGeotagCloseModal()">Cancel</button>'
+    +   '</div>'
+    + '</div>';
 
   document.body.appendChild(wrap);
   setTimeout(() => { const inp = document.getElementById('crsGeotagCity'); if (inp) inp.focus(); }, 50);
 }
+------------------------------------------------------------------------------- */
 
 function _crsGeotagSetStatus(msg) {
   const el = document.getElementById('crsGeotagStatus');
@@ -657,7 +776,8 @@ Object.assign(window, {
   addCourseFromRepo, onRepoSearch, _stripGeometry,
   /* G2 geotag */
   crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsOpenGeotagModal,
-  _crsGeotagCloseModal, _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch,
-  _crsGeotagToggleMap, _crsGeotagMapSearchHere
+  _crsGeotagCloseModal
+  /* G5 -- below superseded by geomOpenLocateModal in geomap.js:
+     _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch, _crsGeotagToggleMap, _crsGeotagMapSearchHere */
 });
 Object.assign(window, { cancelAddTee, cancelCourseEdit, confirmAddTee, editCourse, onRepoSearch, saveCourse, showAddTeeRow });
