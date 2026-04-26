@@ -2644,6 +2644,8 @@ function _lrMapPanelHtml(h, pi, shared) {
     ? '<button class="btn" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4)" onclick="_lrMapGpsToggle()">\uD83D\uDCE1</button>'
     : '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapGpsToggle()">\uD83D\uDCE1</button>';
   var zoomGreenBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrZoomGreen()">\u26F3</button>';
+  var radialsOn = !!(lrState._mapInstance && lrState._mapInstance.getRadialsVisible && lrState._mapInstance.getRadialsVisible());
+  var radialsBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:' + (radialsOn ? '1' : '.5') + '" onclick="_lrToggleRadials(this)" title="Toggle distance radials">\u25CE</button>';
   var minBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapMinimize()" title="Minimize">\u2014</button>';
 
   var sheetToggleLabel = sheetOpen ? '\u2B07 Close' : '\u2B06 Score';
@@ -2674,7 +2676,7 @@ function _lrMapPanelHtml(h, pi, shared) {
     /* Floating right-side controls */
     +   '<div style="position:absolute;top:8px;right:8px;z-index:30;'
     +     'display:flex;flex-direction:column;gap:6px;align-items:flex-end">'
-    +     minBtn + gpsBtn + zoomGreenBtn
+    +     minBtn + gpsBtn + zoomGreenBtn + radialsBtn
     +   '</div>'
     /* Floating distance bubbles (populated by _lrUpdateFloatingDists) */
     +   '<div id="lrAimDistBubble" style="position:absolute;z-index:25;'
@@ -2844,6 +2846,14 @@ function _lrZoomGreen() {
   if (lrState && lrState._mapInstance) lrState._mapInstance.zoomGreen();
 }
 
+/* Toggle distance radials (green rings + aim arcs). Updates button opacity in
+   place to avoid a full lrRenderHole re-render. */
+function _lrToggleRadials(btn) {
+  if (!lrState || !lrState._mapInstance) return;
+  lrState._mapInstance.toggleRadials();
+  if (btn) btn.style.opacity = lrState._mapInstance.getRadialsVisible() ? '1' : '.5';
+}
+
 /* G2b -- bottom sheet open/close. No full rerender; toggles height only via rerender
    of the sheet section. Cheap because scoreHtml inside is reused; the map instance
    survives the innerHTML swap because lrMapMount detects container reuse. */
@@ -2976,7 +2986,7 @@ Object.assign(window, {
   _lrMapSearchModalOpen, _lrMapSearchModalClose, _lrMapSearchSkip,
   _lrMapDoPanLoad, _lrMapDoGpsLoad, _lrMapLoadForRoundFromCenter,
   _lrMapPickCourse, _lrMapLoadCourseById,
-  _lrMapRemoveWaypoint, _lrMapClearPath, _lrZoomGreen, _lrMapToggleSheet,
+  _lrMapRemoveWaypoint, _lrMapClearPath, _lrZoomGreen, _lrToggleRadials, _lrMapToggleSheet,
   /* G2b-R -- minimize/resume handlers (map persists once loaded) */
   _lrMapMinimize, _lrMapResume,
 });
