@@ -194,10 +194,10 @@ export async function geomSearchByName(city, courseName) {
   if (!city || !courseName) return [];
 
   /* ------------------------------------------------------------------ */
-  /* Stage 1: Resolve city via Nominatim                                 */
+  /* Stage 1: Resolve city via Nominatim.                                */
   /* Fetch up to 5 results; prefer administrative boundary relations     */
-  /* so we get a proper area polygon rather than a point or POI.        */
-  /* No countrycodes filter — supports CA, US, and beyond.              */
+  /* to get a real bounding box rather than a point result.             */
+  /* No countrycodes filter — supports CA, US, and beyond.             */
   /* ------------------------------------------------------------------ */
   const geoUrl = 'https://nominatim.openstreetmap.org/search?q='
     + encodeURIComponent(city)
@@ -208,7 +208,7 @@ export async function geomSearchByName(city, courseName) {
   if (!geoData || !geoData.length) return [];
 
   /* Pick best result: prefer boundary+administrative relation, then any
-     boundary relation, then first result as fallback. */
+     relation, then first result. */
   var best = null;
   for (var gi = 0; gi < geoData.length; gi++) {
     var g = geoData[gi];
@@ -228,92 +228,72 @@ export async function geomSearchByName(city, courseName) {
   const safeName = courseName.replace(/["\\/]/g, '\\$&');
 
   /* ------------------------------------------------------------------ */
-  /* Stage 2: Build Overpass area ID if we have a polygon element.       */
-  /* Relations → 3600000000 + osm_id                                    */
-  /* Ways      → 2400000000 + osm_id  (less common for city boundaries) */
-  /* Nodes     → no area, skip to radius fallback (Stage 3)             */
+  /* Stage 2: Build search bbox.                                         */
+  /* Nominatim always returns a boundingbox [s,n,w,e] for city results. */
+  /* Use it directly — no Overpass area indexing dependency, no hangs.  */
+  /* Overpass bbox order: s,w,n,e.                                      */
+  /* If no boundingbox (rare, node-only result): fall back to 10km pad. */
   /* ------------------------------------------------------------------ */
-  var areaId = null;
-  if (best.osm_type === 'relation' && best.osm_id) {
-    areaId = 3600000000 + parseInt(best.osm_id, 10);
-  } else if (best.osm_type === 'way' && best.osm_id) {
-    areaId = 2400000000 + parseInt(best.osm_id, 10);
+  var overpassBbox;
+  if (best.boundingbox && best.boundingbox.length === 4) {
+    /* Nominatim: [s, n, w, e] — reorder to Overpass: s, w, n, e */
+    var s = parseFloat(best.boundingbox[0]);
+    var n = parseFloat(best.boundingbox[1]);
+    var w = parseFloat(best.boundingbox[2]);
+    var e = parseFloat(best.boundingbox[3]);
+    /* Sanity-expand tiny bbox (point results) by ~5km (~0.045 deg) */
+    if ((n - s) < 0.05) { s -= 0.045; n += 0.045; }
+    if ((e - w) < 0.05) { w -= 0.065; e += 0.065; }
+    overpassBbox = s + ',' + w + ',' + n + ',' + e;
+  } else {
+    /* Fallback: pad ~10km in degrees */
+    overpassBbox = (cLat - 0.09) + ',' + (cLon - 0.13) + ',' + (cLat + 0.09) + ',' + (cLon + 0.13);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Stage 3: Overpass — exact name first, regex fallback.              */
+  /* Both use the city bbox — fast, indexed, no area propagation lag.   */
+  /* ------------------------------------------------------------------ */
   var elements = null;
 
-  if (areaId) {
-    /* Attempt A: area-bounded exact name match */
-    const qA =
-      '[out:json][timeout:25];\n' +
-      'area(' + areaId + ')->.cityArea;\n' +
-      '(\n' +
-      '  nwr["leisure"="golf_course"]["name"="' + safeName + '"](area.cityArea);\n' +
-      ');\n' +
-      'out center;';
-    try {
-      const resA = await _fetchWithTimeout(
-        'https://overpass-api.de/api/interpreter',
-        { method: 'POST', body: qA }
-      );
-      if (resA.ok) {
-        const dataA = await resA.json();
-        if (dataA.elements && dataA.elements.length) {
-          elements = dataA.elements;
-        }
-      }
-    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; /* else fall through */ }
-
-    /* Attempt B: area-bounded case-insensitive regex (only if A got nothing) */
-    if (!elements) {
-      const qB =
-        '[out:json][timeout:25];\n' +
-        'area(' + areaId + ')->.cityArea;\n' +
-        '(\n' +
-        '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](area.cityArea);\n' +
-        ');\n' +
-        'out center;';
-      try {
-        const resB = await _fetchWithTimeout(
-          'https://overpass-api.de/api/interpreter',
-          { method: 'POST', body: qB }
-        );
-        if (resB.ok) {
-          const dataB = await resB.json();
-          if (dataB.elements && dataB.elements.length) {
-            elements = dataB.elements;
-          }
-        }
-      } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Stage 3: Radius fallback — no area ID, or area attempts got zero.  */
-  /* 10km is tight enough to avoid cross-city bleed, wide enough for   */
-  /* edge-of-town courses.                                              */
-  /* ------------------------------------------------------------------ */
-  if (!elements) {
-    const qC =
-      '[out:json][timeout:25];\n' +
-      '(\n' +
-      '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](around:10000,' + cLat + ',' + cLon + ');\n' +
-      ');\n' +
-      'out center;';
-    const resC = await _fetchWithTimeout(
+  /* Attempt A: exact name match inside bbox */
+  const qA =
+    '[out:json][timeout:20];\n' +
+    '(\n' +
+    '  nwr["leisure"="golf_course"]["name"="' + safeName + '"](' + overpassBbox + ');\n' +
+    ');\n' +
+    'out center;';
+  try {
+    const resA = await _fetchWithTimeout(
       'https://overpass-api.de/api/interpreter',
-      { method: 'POST', body: qC }
+      { method: 'POST', body: qA }
     );
-    if (!resC.ok) throw new Error('Overpass HTTP ' + resC.status);
-    const dataC = await resC.json();
-    if (dataC.elements && dataC.elements.length) {
-      elements = dataC.elements;
+    if (resA.ok) {
+      const dataA = await resA.json();
+      if (dataA.elements && dataA.elements.length) elements = dataA.elements;
     }
+  } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+
+  /* Attempt B: case-insensitive regex inside bbox (only if A got nothing) */
+  if (!elements) {
+    const qB =
+      '[out:json][timeout:20];\n' +
+      '(\n' +
+      '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](' + overpassBbox + ');\n' +
+      ');\n' +
+      'out center;';
+    const resB = await _fetchWithTimeout(
+      'https://overpass-api.de/api/interpreter',
+      { method: 'POST', body: qB }
+    );
+    if (!resB.ok) throw new Error('Overpass HTTP ' + resB.status);
+    const dataB = await resB.json();
+    if (dataB.elements && dataB.elements.length) elements = dataB.elements;
   }
 
   if (!elements || !elements.length) return [];
 
-  /* Sort by distance to city center, same as before */
+  /* Sort by distance to city center */
   const cityPt = window.turf.point([cLon, cLat]);
   const results = elements.map(_shapeSearchResult);
   results.sort(function(a, b) {
