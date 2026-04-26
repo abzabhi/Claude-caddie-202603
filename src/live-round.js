@@ -1358,7 +1358,7 @@ var _lrGirPromptPending  = false;
 
 // -- Persist active round to localStorage on every meaningful state change --
 function _lrPersist() {
-  if (window.lrState) localStorage.setItem('gordy:activeRound', JSON.stringify(window.lrState));
+  if (window.lrState) localStorage.setItem('gordy:activeRound', JSON.stringify(window.lrState, function(k,v){ return k==='_mapInstance' ? undefined : v; }));
   if (window.updateSessionPill) window.updateSessionPill();
 }
 
