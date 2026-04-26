@@ -908,6 +908,34 @@ export async function geomLoadByCourse(osmCourseId, fallbackCenter) {
 
 
 
+/* ============================================================================
+   G4 -- City geocoding only (no Overpass). Used by unified locate-modal flow.
+   Mirrors the osmtest pattern: simple Nominatim query, take top result.
+   Returns { center:[lon,lat], bounds:[s,w,n,e]|null, displayName }.
+   Throws Error('CITY_NOT_FOUND') on empty response.
+   ============================================================================ */
+export async function geomGeocodeCity(city) {
+  if (!city || !String(city).trim()) throw new Error('CITY_REQUIRED');
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&q='
+    + encodeURIComponent(city);
+  const res = await _fetchWithTimeout(url);
+  if (!res.ok) throw new Error('Nominatim HTTP ' + res.status);
+  const data = await res.json();
+  if (!data || !data.length) throw new Error('CITY_NOT_FOUND');
+  const p = data[0];
+  let bounds = null;
+  if (p.boundingbox && p.boundingbox.length === 4) {
+    /* Nominatim bbox: [s, n, w, e] -> normalize to [s, w, n, e] */
+    bounds = [parseFloat(p.boundingbox[0]), parseFloat(p.boundingbox[2]),
+              parseFloat(p.boundingbox[1]), parseFloat(p.boundingbox[3])];
+  }
+  return {
+    center: [parseFloat(p.lon), parseFloat(p.lat)],
+    bounds: bounds,
+    displayName: p.display_name || ''
+  };
+}
+
 if (typeof window !== 'undefined') {
   Object.assign(window, {
     geomCreateMap,
@@ -925,6 +953,7 @@ if (typeof window !== 'undefined') {
     geomLieAtPoint,
     geomStartGpsWatch,
     geomStopGpsWatch,
-    geomGetCurrentPosition
+    geomGetCurrentPosition,
+    geomGeocodeCity  /* G4 */
   });
 }
