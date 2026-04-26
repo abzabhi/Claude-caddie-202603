@@ -2626,7 +2626,7 @@ function _lrMapPanelHtml(h, pi, shared) {
   var sheetOpen = !!(lrState && lrState._mapSheetOpen);
   var scoreMode = (lrState && lrState._mapMode) || 'simple';
   /* Simple mode keeps map mostly visible; advanced takes more room. */
-  var sheetH = sheetOpen ? (scoreMode === 'advanced' ? '75vh' : '30vh') : '0px';
+  var sheetH = sheetOpen ? (scoreMode === 'advanced' ? '60vh' : '30vh') : '0px';
 
   var scoreHtml = '';
   if (sheetOpen) {
