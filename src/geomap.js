@@ -225,14 +225,12 @@ export async function geomSearchByName(city, courseName) {
 
   const cLat = parseFloat(best.lat);
   const cLon = parseFloat(best.lon);
-  const safeName = courseName.replace(/["\\/]/g, '\\$&');
+  /* Sanitize for Overpass regex: strip all special ERE chars to avoid
+     query rejection. Better to search a simplified name than crash. */
+  const safeName = courseName.replace(/[.^$*+?{}[\]|()\\"/]/g, ' ').trim();
 
   /* ------------------------------------------------------------------ */
-  /* Stage 2: Build search bbox.                                         */
-  /* Nominatim always returns a boundingbox [s,n,w,e] for city results. */
-  /* Use it directly — no Overpass area indexing dependency, no hangs.  */
-  /* Overpass bbox order: s,w,n,e.                                      */
-  /* If no boundingbox (rare, node-only result): fall back to 10km pad. */
+  /* Stage 2: Build search bbox from Nominatim boundingbox.             */
   /* ------------------------------------------------------------------ */
   var overpassBbox;
   if (best.boundingbox && best.boundingbox.length === 4) {
@@ -246,49 +244,74 @@ export async function geomSearchByName(city, courseName) {
     if ((e - w) < 0.05) { w -= 0.065; e += 0.065; }
     overpassBbox = s + ',' + w + ',' + n + ',' + e;
   } else {
-    /* Fallback: pad ~10km in degrees */
     overpassBbox = (cLat - 0.09) + ',' + (cLon - 0.13) + ',' + (cLat + 0.09) + ',' + (cLon + 0.13);
   }
 
   /* ------------------------------------------------------------------ */
-  /* Stage 3: Overpass — exact name first, regex fallback.              */
-  /* Both use the city bbox — fast, indexed, no area propagation lag.   */
+  /* Stage 3: Overpass — three attempts, all bbox-based.                */
+  /* A: exact name. B: regex. C: all courses in city (name-free).       */
   /* ------------------------------------------------------------------ */
   var elements = null;
 
   /* Attempt A: exact name match inside bbox */
-  const qA =
-    '[out:json][timeout:20];\n' +
-    '(\n' +
-    '  nwr["leisure"="golf_course"]["name"="' + safeName + '"](' + overpassBbox + ');\n' +
-    ');\n' +
-    'out center;';
-  try {
-    const resA = await _fetchWithTimeout(
-      'https://overpass-api.de/api/interpreter',
-      { method: 'POST', body: qA }
-    );
-    if (resA.ok) {
-      const dataA = await resA.json();
-      if (dataA.elements && dataA.elements.length) elements = dataA.elements;
-    }
-  } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+  if (safeName) {
+    try {
+      const qA =
+        '[out:json][timeout:20];\n' +
+        '(\n' +
+        '  nwr["leisure"="golf_course"]["name"="' + safeName + '"](' + overpassBbox + ');\n' +
+        ');\n' +
+        'out center;';
+      const resA = await _fetchWithTimeout(
+        'https://overpass-api.de/api/interpreter',
+        { method: 'POST', body: qA }
+      );
+      if (resA.ok) {
+        const dataA = await resA.json();
+        if (dataA.elements && dataA.elements.length) elements = dataA.elements;
+      }
+    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+  }
 
-  /* Attempt B: case-insensitive regex inside bbox (only if A got nothing) */
+  /* Attempt B: case-insensitive regex inside bbox */
+  if (!elements && safeName) {
+    try {
+      const qB =
+        '[out:json][timeout:20];\n' +
+        '(\n' +
+        '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](' + overpassBbox + ');\n' +
+        ');\n' +
+        'out center;';
+      const resB = await _fetchWithTimeout(
+        'https://overpass-api.de/api/interpreter',
+        { method: 'POST', body: qB }
+      );
+      if (resB.ok) {
+        const dataB = await resB.json();
+        if (dataB.elements && dataB.elements.length) elements = dataB.elements;
+      }
+    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+  }
+
+  /* Attempt C: all leisure=golf_course in bbox, no name filter.
+     User picks from the list — better than returning nothing. */
   if (!elements) {
-    const qB =
-      '[out:json][timeout:20];\n' +
-      '(\n' +
-      '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](' + overpassBbox + ');\n' +
-      ');\n' +
-      'out center;';
-    const resB = await _fetchWithTimeout(
-      'https://overpass-api.de/api/interpreter',
-      { method: 'POST', body: qB }
-    );
-    if (!resB.ok) throw new Error('Overpass HTTP ' + resB.status);
-    const dataB = await resB.json();
-    if (dataB.elements && dataB.elements.length) elements = dataB.elements;
+    try {
+      const qC =
+        '[out:json][timeout:20];\n' +
+        '(\n' +
+        '  nwr["leisure"="golf_course"](' + overpassBbox + ');\n' +
+        ');\n' +
+        'out center;';
+      const resC = await _fetchWithTimeout(
+        'https://overpass-api.de/api/interpreter',
+        { method: 'POST', body: qC }
+      );
+      if (resC.ok) {
+        const dataC = await resC.json();
+        if (dataC.elements && dataC.elements.length) elements = dataC.elements;
+      }
+    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
   }
 
   if (!elements || !elements.length) return [];
