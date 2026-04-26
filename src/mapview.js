@@ -88,7 +88,6 @@ export class MapView {
       this._targetMarker= null;
       this._teeMarker   = null;
       this._aimMarker   = null;
-      this._aim         = null;
     }
     var self = this;
     if (!this._map) {
