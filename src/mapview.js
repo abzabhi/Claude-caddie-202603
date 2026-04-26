@@ -111,7 +111,6 @@ export class MapView {
         self._renderAimLine();
         self._updateFloatingDists();
         self._renderRadials();
-        self._ensureRadialsToggleBtn();
       });
       if (this._map.isStyleLoaded && this._map.isStyleLoaded()) {
         applyPolys();
@@ -121,7 +120,6 @@ export class MapView {
         this._renderAimLine();
         this._updateFloatingDists();
         this._renderRadials();
-        this._ensureRadialsToggleBtn();
       }
       this._map.on('click', this._handleMapClick);
       /* G2b-R -- floating aim-distance bubble tracks aim marker on map move/zoom. */
@@ -133,7 +131,6 @@ export class MapView {
       this._renderAimLine();
       this._updateFloatingDists();
       this._renderRadials();
-      this._ensureRadialsToggleBtn();
     }
     if (this._userLonLat) this._placeUserMarker(this._userLonLat);
   }
@@ -570,8 +567,6 @@ export class MapView {
   setRadialsVisible(on) {
     this._radialsOn = !!on;
     this._renderRadials();
-    var btn = document.getElementById(this._idPrefix + 'RadialsToggle');
-    if (btn) btn.style.opacity = this._radialsOn ? '1' : '0.5';
   }
 
   getRadialsVisible() { return this._radialsOn; }
@@ -653,26 +648,5 @@ export class MapView {
       } catch(e) {}
     }
     try { src.setData({ type: 'FeatureCollection', features: feats }); } catch(e) {}
-  }
-
-  _ensureRadialsToggleBtn() {
-    if (!this._map) return;
-    var id = this._idPrefix + 'RadialsToggle';
-    if (document.getElementById(id)) return;
-    var container = this._map.getContainer && this._map.getContainer();
-    if (!container) return;
-    var btn = document.createElement('button');
-    btn.id = id;
-    btn.type = 'button';
-    btn.title = 'Toggle distance radials';
-    btn.innerHTML = '\u25CE'; /* ◎ */
-    btn.style.cssText = 'position:absolute;top:48px;right:8px;z-index:5;'
-      + 'width:32px;height:32px;border-radius:50%;border:2px solid #fff;'
-      + 'background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:1;'
-      + 'cursor:pointer;padding:0;opacity:' + (this._radialsOn ? '1' : '0.5')
-      + ';box-shadow:0 1px 4px rgba(0,0,0,.4)';
-    var self = this;
-    btn.onclick = function(){ self.toggleRadials(); };
-    container.appendChild(btn);
   }
 }
