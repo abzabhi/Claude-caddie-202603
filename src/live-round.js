@@ -2750,8 +2750,10 @@ function _lrMapMount() {
     lrState._mapInstance.setGeometry(_lrMapGeo);
     lrState._mapInstance._holeN = lrState.curHole + 1;
   }
-  /* Sync round-state into view before mount/re-mount. */
-  if (lrState._mapAim)        lrState._mapInstance._aim         = lrState._mapAim;
+  /* Sync tee override into view before mount/re-mount.
+     Note: _aim is NOT synced here — MapView owns aim state; onAimChange keeps
+     lrState._mapAim in sync for persist only. Restoring it on remount caused
+     stale aim to survive hole transitions. */
   if (lrState._mapTeeLonLat)  lrState._mapInstance._teeOverride = lrState._mapTeeLonLat;
   lrState._mapInstance.mount();
 }
