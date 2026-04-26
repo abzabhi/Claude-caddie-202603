@@ -64,6 +64,7 @@ export class MapView {
     this._aim           = null;     /* [lng,lat] aim reticle position */
     this._teeOverride   = null;     /* [lng,lat] user-dragged tee, or null */
     this._minimized     = false;
+    this._radialsOn     = false;    /* green rings + aim arcs toggle */
 
     /* Bind event handlers once so add/remove listener references match. */
     this._handleMapClick     = this._handleMapClick.bind(this);
@@ -109,6 +110,8 @@ export class MapView {
         self._placeAimMarker();
         self._renderAimLine();
         self._updateFloatingDists();
+        self._renderRadials();
+        self._ensureRadialsToggleBtn();
       });
       if (this._map.isStyleLoaded && this._map.isStyleLoaded()) {
         applyPolys();
@@ -117,6 +120,8 @@ export class MapView {
         this._placeAimMarker();
         this._renderAimLine();
         this._updateFloatingDists();
+        this._renderRadials();
+        this._ensureRadialsToggleBtn();
       }
       this._map.on('click', this._handleMapClick);
       /* G2b-R -- floating aim-distance bubble tracks aim marker on map move/zoom. */
@@ -127,6 +132,8 @@ export class MapView {
       this._placeAimMarker();
       this._renderAimLine();
       this._updateFloatingDists();
+      this._renderRadials();
+      this._ensureRadialsToggleBtn();
     }
     if (this._userLonLat) this._placeUserMarker(this._userLonLat);
   }
@@ -138,6 +145,8 @@ export class MapView {
     if (this._targetMarker) { try { this._targetMarker.remove(); } catch(e) {} this._targetMarker = null; }
     if (this._teeMarker)    { try { this._teeMarker.remove();    } catch(e) {} this._teeMarker    = null; }
     if (this._aimMarker)    { try { this._aimMarker.remove();    } catch(e) {} this._aimMarker    = null; }
+    var btn = document.getElementById(this._idPrefix + 'RadialsToggle');
+    if (btn && btn.parentNode) { try { btn.parentNode.removeChild(btn); } catch(e) {} }
     if (this._map)          { try { this._map.remove();          } catch(e) {} this._map          = null; }
     this._userLonLat = null;
   }
@@ -183,6 +192,7 @@ export class MapView {
       this._placeAimMarker();
       this._renderAimLine();
       this._updateFloatingDists();
+      this._renderRadials();
     }
   }
 
@@ -213,6 +223,7 @@ export class MapView {
     }
     this._renderAimLine();
     this._updateFloatingDists();
+    this._renderRadials();
     if (this._onAimChange) { try { this._onAimChange(lngLat); } catch(e) {} }
   }
 
@@ -223,6 +234,7 @@ export class MapView {
     if (this._aimMarker) { try { this._aimMarker.remove(); } catch(e) {} this._aimMarker = null; }
     if (this._map) { try { geomRenderPath(this._map, []); } catch(e) {} }
     this._updateFloatingDists();
+    this._renderRadials();
   }
 
   /* ============================================================
@@ -401,6 +413,7 @@ export class MapView {
       self._aim = [p.lng, p.lat];
       self._renderAimLine();
       self._updateFloatingDists();
+      self._renderRadials();
     });
     this._aimMarker.on('dragend', function(){
       var p = self._aimMarker.getLngLat();
@@ -506,6 +519,7 @@ export class MapView {
     }
     this._renderAimLine();
     this._updateFloatingDists();
+    this._renderRadials();
     if (this._onAimChange) { try { this._onAimChange(this._aim); } catch(err) {} }
     if (this._onMapClick)  { try { this._onMapClick(e);          } catch(err) {} }
   }
@@ -547,5 +561,118 @@ export class MapView {
     var hole = this._curHoleGeo();
     if (!hole || !hole.green) return;
     this._map.flyTo({ center: hole.green, zoom: 17.5, pitch: 0 });
+  }
+
+  /* ============================================================
+     Distance radials (green rings + aim arcs)
+     ============================================================ */
+
+  setRadialsVisible(on) {
+    this._radialsOn = !!on;
+    this._renderRadials();
+    var btn = document.getElementById(this._idPrefix + 'RadialsToggle');
+    if (btn) btn.style.opacity = this._radialsOn ? '1' : '0.5';
+  }
+
+  getRadialsVisible() { return this._radialsOn; }
+
+  toggleRadials() { this.setRadialsVisible(!this._radialsOn); }
+
+  _ensureRadialLayer() {
+    if (!this._map) return;
+    try {
+      if (!this._map.getSource('mv-radials')) {
+        this._map.addSource('mv-radials', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
+        });
+      }
+      if (!this._map.getLayer('mv-radials-line')) {
+        this._map.addLayer({
+          id: 'mv-radials-line',
+          type: 'line',
+          source: 'mv-radials',
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 1.5,
+            'line-opacity': 0.7
+          }
+        });
+      }
+    } catch(e) {}
+  }
+
+  _renderRadials() {
+    if (!this._map) return;
+    this._ensureRadialLayer();
+    var src;
+    try { src = this._map.getSource('mv-radials'); } catch(e) { return; }
+    if (!src) return;
+    if (!this._radialsOn || !window.turf) {
+      try { src.setData({ type: 'FeatureCollection', features: [] }); } catch(e) {}
+      return;
+    }
+    var feats = [];
+    var hole = this._curHoleGeo();
+    /* Green rings: 10/20/30 ft */
+    if (hole && hole.green) {
+      var rFt = [10, 20, 30];
+      for (var i = 0; i < rFt.length; i++) {
+        try {
+          var c = window.turf.circle(hole.green, rFt[i], { units: 'feet', steps: 64 });
+          /* Convert polygon to line for cleaner stroke */
+          feats.push({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: c.geometry.coordinates[0] },
+            properties: {}
+          });
+        } catch(e) {}
+      }
+    }
+    /* Aim arcs: 7 perpendicular segments at offsets -30..+30 yd, lengths 60-2*|d| */
+    if (this._aim && hole && hole.green) {
+      try {
+        var brgAimToGreen = geomBearingDeg(this._aim, hole.green);
+        var perp = brgAimToGreen + 90;
+        var offsets = [-30, -20, -10, 0, 10, 20, 30];
+        for (var j = 0; j < offsets.length; j++) {
+          var d = offsets[j];
+          var L = 60 - 2 * Math.abs(d);
+          /* Center point: positive d = past aim (toward green), negative d = short of aim.
+             Use brg+180 with positive distance for negative d to avoid turf negative-distance ambiguity. */
+          var centerBrg = (d >= 0) ? brgAimToGreen : (brgAimToGreen + 180);
+          var center = window.turf.destination(this._aim, Math.abs(d), centerBrg, { units: 'yards' }).geometry.coordinates;
+          var endA = window.turf.destination(center, L / 2, perp,        { units: 'yards' }).geometry.coordinates;
+          var endB = window.turf.destination(center, L / 2, perp + 180,  { units: 'yards' }).geometry.coordinates;
+          feats.push({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [endA, endB] },
+            properties: {}
+          });
+        }
+      } catch(e) {}
+    }
+    try { src.setData({ type: 'FeatureCollection', features: feats }); } catch(e) {}
+  }
+
+  _ensureRadialsToggleBtn() {
+    if (!this._map) return;
+    var id = this._idPrefix + 'RadialsToggle';
+    if (document.getElementById(id)) return;
+    var container = this._map.getContainer && this._map.getContainer();
+    if (!container) return;
+    var btn = document.createElement('button');
+    btn.id = id;
+    btn.type = 'button';
+    btn.title = 'Toggle distance radials';
+    btn.innerHTML = '\u25CE'; /* ◎ */
+    btn.style.cssText = 'position:absolute;top:48px;right:8px;z-index:5;'
+      + 'width:32px;height:32px;border-radius:50%;border:2px solid #fff;'
+      + 'background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:1;'
+      + 'cursor:pointer;padding:0;opacity:' + (this._radialsOn ? '1' : '0.5')
+      + ';box-shadow:0 1px 4px rgba(0,0,0,.4)';
+    var self = this;
+    btn.onclick = function(){ self.toggleRadials(); };
+    container.appendChild(btn);
   }
 }
