@@ -64,7 +64,6 @@ export class MapView {
     this._aim           = null;     /* [lng,lat] aim reticle position */
     this._teeOverride   = null;     /* [lng,lat] user-dragged tee, or null */
     this._minimized     = false;
-    this._radialsOn     = false;    /* green rings + aim arcs toggle */
 
     /* Bind event handlers once so add/remove listener references match. */
     this._handleMapClick     = this._handleMapClick.bind(this);
@@ -561,17 +560,8 @@ export class MapView {
   }
 
   /* ============================================================
-     Distance radials (green rings + aim arcs)
+     Distance radials (green rings + aim arcs) -- always rendered
      ============================================================ */
-
-  setRadialsVisible(on) {
-    this._radialsOn = !!on;
-    this._renderRadials();
-  }
-
-  getRadialsVisible() { return this._radialsOn; }
-
-  toggleRadials() { this.setRadialsVisible(!this._radialsOn); }
 
   _ensureRadialLayer() {
     if (!this._map) return;
@@ -603,15 +593,15 @@ export class MapView {
     var src;
     try { src = this._map.getSource('mv-radials'); } catch(e) { return; }
     if (!src) return;
-    if (!this._radialsOn || !window.turf) {
+    if (!window.turf) {
       try { src.setData({ type: 'FeatureCollection', features: [] }); } catch(e) {}
       return;
     }
     var feats = [];
     var hole = this._curHoleGeo();
-    /* Green rings: 10/20/30 ft */
+    /* Green rings: 15/30/45 ft */
     if (hole && hole.green) {
-      var rFt = [10, 20, 30];
+      var rFt = [15, 30, 45];
       for (var i = 0; i < rFt.length; i++) {
         try {
           var c = window.turf.circle(hole.green, rFt[i], { units: 'feet', steps: 64 });
@@ -624,19 +614,22 @@ export class MapView {
         } catch(e) {}
       }
     }
-    /* Aim arcs: 7 perpendicular segments at offsets -30..+30 yd, lengths 60-2*|d| */
+    /* Aim arcs: 7 perpendicular segments at offsets -30..+30 yd.
+       Lengths: d=0->60, |d|=10->60, |d|=20->50, |d|=30->40 (yards). */
     if (this._aim && hole && hole.green) {
       try {
         var brgAimToGreen = geomBearingDeg(this._aim, hole.green);
         var perp = brgAimToGreen + 90;
         var offsets = [-30, -20, -10, 0, 10, 20, 30];
+        var lenByAbs = { 0: 60, 10: 60, 20: 50, 30: 40 };
         for (var j = 0; j < offsets.length; j++) {
           var d = offsets[j];
-          var L = 60 - 2 * Math.abs(d);
+          var L = lenByAbs[Math.abs(d)];
           /* Center point: positive d = past aim (toward green), negative d = short of aim.
              Use brg+180 with positive distance for negative d to avoid turf negative-distance ambiguity. */
           var centerBrg = (d >= 0) ? brgAimToGreen : (brgAimToGreen + 180);
-          var center = window.turf.destination(this._aim, Math.abs(d), centerBrg, { units: 'yards' }).geometry.coordinates;
+          var center = (d === 0) ? this._aim
+            : window.turf.destination(this._aim, Math.abs(d), centerBrg, { units: 'yards' }).geometry.coordinates;
           var endA = window.turf.destination(center, L / 2, perp,        { units: 'yards' }).geometry.coordinates;
           var endB = window.turf.destination(center, L / 2, perp + 180,  { units: 'yards' }).geometry.coordinates;
           feats.push({
