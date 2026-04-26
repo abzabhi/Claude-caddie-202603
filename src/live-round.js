@@ -2528,16 +2528,18 @@ async function _lrMapPickCourse(idx) {
 /* Inner loader shared by single-result auto-load and picker selection.
    Uses geomLoadByCourse (bounded fetch); falls back to geomLoadByCenter on NO_COURSE_BOUNDARY. */
 async function _lrMapLoadCourseById(osmId, center) {
+  /* G5 -- Note: locate-modal in geomap.js closes its own overlay BEFORE invoking
+     onSelect, so _lrMapSearchModalClose calls below are no-ops (kept defensive)
+     and status messages have no DOM target. Errors logged to console instead. */
   try {
     var geo = await geomLoadByCourse(osmId, center || null);
     if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
-      _lrSearchSetStatus('No hole geometry found for this course. Try another or skip.', true);
+      console.error('[live-round] No hole geometry found for course', osmId);
       return;
     }
     _lrMapGeo = geo;
     try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
     if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
-    _lrMapSearchModalClose();
     lrRenderHole();
   } catch (err) {
     if (err && err.message === 'NO_COURSE_BOUNDARY' && center) {
@@ -2545,19 +2547,18 @@ async function _lrMapLoadCourseById(osmId, center) {
       try {
         var geoFb = await geomLoadByCenter(center[0], center[1], 1500);
         if (!geoFb || !geoFb.holes || Object.keys(geoFb.holes).length === 0) {
-          _lrSearchSetStatus('No hole geometry found here. Try another or skip.', true);
+          console.error('[live-round] No hole geometry found at fallback center', center);
           return;
         }
         _lrMapGeo = geoFb;
         try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geoFb)); } catch(e) {}
         if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
-        _lrMapSearchModalClose();
         lrRenderHole();
       } catch (err2) {
-        _lrSearchSetStatus('Load failed: ' + (err2 && err2.message ? err2.message : 'unknown') + '. Retry or skip.', true);
+        console.error('[live-round] Load failed (fallback):', err2 && err2.message ? err2.message : err2);
       }
     } else {
-      _lrSearchSetStatus('Load failed: ' + (err && err.message ? err.message : 'unknown') + '. Retry or skip.', true);
+      console.error('[live-round] Load failed:', err && err.message ? err.message : err);
     }
   }
 }
