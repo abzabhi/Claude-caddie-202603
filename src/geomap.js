@@ -199,32 +199,18 @@ export async function geomSearchByName(city, courseName) {
   /* to get a real bounding box rather than a point result.             */
   /* No countrycodes filter — supports CA, US, and beyond.             */
   /* ------------------------------------------------------------------ */
-  const geoUrl = 'https://nominatim.openstreetmap.org/search?q='
-    + encodeURIComponent(city)
-    + '&format=json&limit=5&addressdetails=1';
+  const geoUrl = 'https://nominatim.openstreetmap.org/search?format=json&q='
+    + encodeURIComponent(city);
   const geoRes = await _fetchWithTimeout(geoUrl);
   if (!geoRes.ok) throw new Error('Nominatim HTTP ' + geoRes.status);
   const geoData = await geoRes.json();
-  if (!geoData || !geoData.length) return [];
+  if (!geoData || !geoData.length) throw new Error('CITY_NOT_FOUND');
 
-  /* Pick best result: prefer boundary+administrative relation, then any
-     relation, then first result. */
-  var best = null;
-  for (var gi = 0; gi < geoData.length; gi++) {
-    var g = geoData[gi];
-    if (g.class === 'boundary' && g.type === 'administrative' && g.osm_type === 'relation') {
-      best = g; break;
-    }
-  }
-  if (!best) {
-    for (var gi2 = 0; gi2 < geoData.length; gi2++) {
-      if (geoData[gi2].osm_type === 'relation') { best = geoData[gi2]; break; }
-    }
-  }
-  if (!best) best = geoData[0];
+  /* Take Nominatim's top relevance result directly (matches osmtest). */
+  const place = geoData[0];
 
-  const cLat = parseFloat(best.lat);
-  const cLon = parseFloat(best.lon);
+  const cLat = parseFloat(place.lat);
+  const cLon = parseFloat(place.lon);
   /* Sanitize for Overpass regex: strip all special ERE chars to avoid
      query rejection. Better to search a simplified name than crash. */
   const safeName = courseName.replace(/[.^$*+?{}[\]|()\\"/]/g, ' ').trim();
@@ -233,12 +219,12 @@ export async function geomSearchByName(city, courseName) {
   /* Stage 2: Build search bbox from Nominatim boundingbox.             */
   /* ------------------------------------------------------------------ */
   var overpassBbox;
-  if (best.boundingbox && best.boundingbox.length === 4) {
+  if (place.boundingbox && place.boundingbox.length === 4) {
     /* Nominatim: [s, n, w, e] — reorder to Overpass: s, w, n, e */
-    var s = parseFloat(best.boundingbox[0]);
-    var n = parseFloat(best.boundingbox[1]);
-    var w = parseFloat(best.boundingbox[2]);
-    var e = parseFloat(best.boundingbox[3]);
+    var s = parseFloat(place.boundingbox[0]);
+    var n = parseFloat(place.boundingbox[1]);
+    var w = parseFloat(place.boundingbox[2]);
+    var e = parseFloat(place.boundingbox[3]);
     /* Sanity-expand tiny bbox (point results) by ~5km (~0.045 deg) */
     if ((n - s) < 0.05) { s -= 0.045; n += 0.045; }
     if ((e - w) < 0.05) { w -= 0.065; e += 0.065; }
