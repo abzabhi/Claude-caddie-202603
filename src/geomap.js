@@ -153,7 +153,18 @@ export function geomCreateMap(container, opts) {
       id: 'path-line',
       type: 'line',
       source: 'active-path',
-      paint: { 'line-color': '#f1c40f', 'line-width': 3, 'line-dasharray': [2, 2] }
+      paint: {
+        'line-color': [
+          'match',
+          ['get', 'pathIdx'],
+          0, '#f1c40f',   /* path 1 — existing yellow */
+          1, '#e67e22',   /* path 2 — orange */
+          2, '#3498db',   /* path 3 — blue */
+          '#f1c40f'       /* default — match path 1 */
+        ],
+        'line-width': 3,
+        'line-dasharray': [2, 2]
+      }
     });
 
     map.addLayer({
@@ -167,7 +178,18 @@ export function geomCreateMap(container, opts) {
         'text-size': 14,
         'text-keep-upright': false
       },
-      paint: { 'text-color': '#f1c40f', 'text-halo-color': '#000', 'text-halo-width': 1 }
+      paint: {
+        'text-color': [
+          'match',
+          ['get', 'pathIdx'],
+          0, '#f1c40f',   /* path 1 — existing yellow */
+          1, '#e67e22',   /* path 2 — orange */
+          2, '#3498db',   /* path 3 — blue */
+          '#f1c40f'       /* default — match path 1 */
+        ],
+        'text-halo-color': '#000',
+        'text-halo-width': 1
+      }
     });
   });
 
@@ -603,7 +625,26 @@ export function geomRenderPath(map, points) {
     src.setData({ type: 'FeatureCollection', features: [] });
     return;
   }
-  src.setData(window.turf.featureCollection([window.turf.lineString(points)]));
+  src.setData(window.turf.featureCollection([window.turf.lineString(points, { pathIdx: 0 })]));
+}
+
+/**
+ * Render up to 3 path chains simultaneously. Each entry of pathsArr is
+ * { points: [[lng,lat],...], pathIdx: 0|1|2 } or falsy (skip).
+ * Empty/short point arrays are skipped (need >= 2 points to form a line).
+ * pathIdx must be 0, 1, or 2.
+ */
+export function geomRenderPaths(map, pathsArr) {
+  if (!map) return;
+  const src = map.getSource('active-path');
+  if (!src) return;
+  const feats = [];
+  (pathsArr || []).forEach(p => {
+    if (!p || !p.points || p.points.length < 2) return;
+    const idx = (p.pathIdx === 1 || p.pathIdx === 2) ? p.pathIdx : 0;
+    feats.push(window.turf.lineString(p.points, { pathIdx: idx }));
+  });
+  src.setData(window.turf.featureCollection(feats));
 }
 
 // -----------------------------------------------------------------------------
@@ -1229,6 +1270,7 @@ if (typeof window !== 'undefined') {
     geomRenderGeometry,
     geomShowHole,
     geomRenderPath,
+    geomRenderPaths,
     geomDistanceYds,
     geomBearingDeg,
     geomPointInPolygon,
