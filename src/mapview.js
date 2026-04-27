@@ -15,7 +15,7 @@
    Imports geomap.js helpers that wrap MapLibre + turf calls.
 */
 
-import { geomCreateMap, geomRenderPath, geomDistanceYds, geomBearingDeg,
+import { geomCreateMap, geomRenderPath, geomRenderPaths, geomDistanceYds, geomBearingDeg,
          geomStartGpsWatch, geomStopGpsWatch } from './geomap.js';
 
 export class MapView {
@@ -47,6 +47,15 @@ export class MapView {
     this._onGpsTick   = opts.onGpsTick   || null;
     this._onGpsError  = opts.onGpsError  || null;
     this._onMapClick  = opts.onMapClick  || null;
+    this._onWaypointsChange = opts.onWaypointsChange || null;   /* multi-aim only */
+
+    this._multiAim   = !!opts.multiAim;
+    this._styleMode  = (opts.styleMode === 'plain') ? 'plain' : 'satellite';
+
+    /* Multi-aim state: 3 paths, each an array of [lng,lat] waypoints. */
+    this._waypoints  = [[], [], []];
+    this._pathVis    = [true, true, true];
+    this._activePath = 0;
 
     /* View-owned state -- markers, map instance, GPS watch */
     this._map           = null;     /* MapLibre Map instance */
@@ -104,6 +113,9 @@ export class MapView {
       };
       this._map.on('load', function(){
         applyPolys();
+        if (self._styleMode === 'plain') {
+          try { self._map.setLayoutProperty('esri-imagery', 'visibility', 'none'); } catch(e) {}
+        }
         self._showHoleInternal(self._holeN);
         self._placeTeeMarker();
         self._placeAimMarker();
@@ -113,6 +125,9 @@ export class MapView {
       });
       if (this._map.isStyleLoaded && this._map.isStyleLoaded()) {
         applyPolys();
+        if (this._styleMode === 'plain') {
+          try { this._map.setLayoutProperty('esri-imagery', 'visibility', 'none'); } catch(e) {}
+        }
         this._showHoleInternal(this._holeN);
         this._placeTeeMarker();
         this._placeAimMarker();
@@ -143,6 +158,9 @@ export class MapView {
     if (this._aimMarker)    { try { this._aimMarker.remove();    } catch(e) {} this._aimMarker    = null; }
     var btn = document.getElementById(this._idPrefix + 'RadialsToggle');
     if (btn && btn.parentNode) { try { btn.parentNode.removeChild(btn); } catch(e) {} }
+    this._waypoints = [[], [], []];
+    this._pathVis   = [true, true, true];
+    this._activePath = 0;
     if (this._map)          { try { this._map.remove();          } catch(e) {} this._map          = null; }
     this._userLonLat = null;
   }
@@ -166,6 +184,19 @@ export class MapView {
   }
 
   getGeometry() { return this._geo; }
+
+  setStyleMode(mode) {
+    this._styleMode = (mode === 'plain') ? 'plain' : 'satellite';
+    if (!this._map) return;
+    try {
+      this._map.setLayoutProperty('esri-imagery', 'visibility',
+        this._styleMode === 'plain' ? 'none' : 'visible');
+    } catch(e) {}
+  }
+
+  getStyleMode() { return this._styleMode; }
+
+  getMap() { return this._map; }
 
   /* showHole(holeN, opts):
      - holeN: 1-indexed hole number
@@ -231,6 +262,76 @@ export class MapView {
     if (this._map) { try { geomRenderPath(this._map, []); } catch(e) {} }
     this._updateFloatingDists();
     this._renderRadials();
+  }
+
+  /* ============================================================
+     Multi-aim chain (opt-in via opts.multiAim)
+     ============================================================ */
+
+  setWaypoints(pathIdx, arr) {
+    if (pathIdx < 0 || pathIdx > 2) return;
+    this._waypoints[pathIdx] = (arr || []).slice();
+    this._renderAimLine();
+    this._renderRadials();
+    this._updateFloatingDists();
+  }
+
+  getWaypoints(pathIdx) {
+    if (pathIdx < 0 || pathIdx > 2) return [];
+    return this._waypoints[pathIdx].slice();
+  }
+
+  addWaypoint(pathIdx, lngLat) {
+    if (pathIdx < 0 || pathIdx > 2) return;
+    if (!lngLat || lngLat.length !== 2) return;
+    this._waypoints[pathIdx].push([lngLat[0], lngLat[1]]);
+    this._renderAimLine();
+    this._renderRadials();
+    this._updateFloatingDists();
+    if (this._onWaypointsChange) {
+      try { this._onWaypointsChange(pathIdx, this._waypoints[pathIdx].slice()); } catch(e) {}
+    }
+  }
+
+  removeWaypoint(pathIdx, idx) {
+    if (pathIdx < 0 || pathIdx > 2) return;
+    if (idx < 0 || idx >= this._waypoints[pathIdx].length) return;
+    this._waypoints[pathIdx].splice(idx, 1);
+    this._renderAimLine();
+    this._renderRadials();
+    this._updateFloatingDists();
+    if (this._onWaypointsChange) {
+      try { this._onWaypointsChange(pathIdx, this._waypoints[pathIdx].slice()); } catch(e) {}
+    }
+  }
+
+  clearWaypoints(pathIdx) {
+    if (pathIdx < 0 || pathIdx > 2) return;
+    this._waypoints[pathIdx] = [];
+    this._renderAimLine();
+    this._renderRadials();
+    this._updateFloatingDists();
+    if (this._onWaypointsChange) {
+      try { this._onWaypointsChange(pathIdx, []); } catch(e) {}
+    }
+  }
+
+  setActivePathIdx(idx) {
+    if (idx < 0 || idx > 2) return;
+    this._activePath = idx;
+  }
+
+  getActivePathIdx() { return this._activePath; }
+
+  setPathVisible(pathIdx, vis) {
+    if (pathIdx < 0 || pathIdx > 2) return;
+    this._pathVis[pathIdx] = !!vis;
+    this._renderAimLine();
+  }
+
+  getPathVisible(pathIdx) {
+    if (pathIdx < 0 || pathIdx > 2) return false;
+    return !!this._pathVis[pathIdx];
   }
 
   /* ============================================================
@@ -366,6 +467,7 @@ export class MapView {
   /* G2b-R -- aim reticle. Initial position = midpoint of start(tee or user-tee) and green.
      Draggable; drag/dragend update line + floating distances. */
   _placeAimMarker() {
+    if (this._multiAim) return;  /* viz consumer manages waypoint markers itself */
     if (!this._map || !window.maplibregl) return;
     var hole = this._curHoleGeo();
     if (!hole || !hole.green) return;
@@ -422,7 +524,29 @@ export class MapView {
   _renderAimLine() {
     if (!this._map || !this._geo) return;
     var hole = this._curHoleGeo();
-    if (!hole || !hole.green) { try { geomRenderPath(this._map, []); } catch(e){} return; }
+    if (!hole) { try { geomRenderPath(this._map, []); } catch(e){} return; }
+
+    if (this._multiAim) {
+      /* Multi-aim: render up to 3 chains. Each chain starts at tee (or override),
+         then waypoints in order. Green is NOT auto-appended — chain ends at last waypoint.
+         Hidden paths are skipped. */
+      var teePt = this._teeOverride || hole.tee || (hole.line && hole.line[0]);
+      if (!teePt) { try { geomRenderPath(this._map, []); } catch(e){} return; }
+      var pathsArr = [];
+      for (var i = 0; i < 3; i++) {
+        if (!this._pathVis[i]) continue;
+        var wps = this._waypoints[i];
+        if (!wps || !wps.length) continue;
+        var pts = [teePt];
+        for (var j = 0; j < wps.length; j++) pts.push(wps[j]);
+        pathsArr.push({ points: pts, pathIdx: i });
+      }
+      try { geomRenderPaths(this._map, pathsArr); } catch(e) {}
+      return;
+    }
+
+    /* Single-aim (legacy) — behavior unchanged below. */
+    if (!hole.green) { try { geomRenderPath(this._map, []); } catch(e){} return; }
     var gpsActive = !!(this._gpsOn && this._userLonLat);
     var startPt = gpsActive ? this._userLonLat : (this._teeOverride || hole.tee);
     var aim = this._aim;
@@ -434,6 +558,7 @@ export class MapView {
      #<idPrefix>AimDistBubble: yards from aim to green, positioned at aim's screen coords.
      #<idPrefix>PlayerDistPill: yards from start(GPS|Tee) to aim, bottom-left label. */
   _updateFloatingDists() {
+    if (this._multiAim) return;  /* viz consumer renders its own distance UI */
     if (!this._map) return;
     var hole = this._curHoleGeo();
     if (!hole || !hole.green) return;
@@ -507,6 +632,13 @@ export class MapView {
 
   /* G2b-R -- tap-to-move aim. Cheaper than dragging for small adjustments. */
   _handleMapClick(e) {
+    if (this._multiAim) {
+      /* Multi-aim: append to active path's waypoints */
+      this.addWaypoint(this._activePath, [e.lngLat.lng, e.lngLat.lat]);
+      if (this._onMapClick) { try { this._onMapClick(e); } catch(err) {} }
+      return;
+    }
+    /* Single-aim (legacy) — behavior unchanged */
     this._aim = [e.lngLat.lng, e.lngLat.lat];
     if (this._aimMarker) {
       try { this._aimMarker.setLngLat(this._aim); } catch(err) {}
@@ -588,6 +720,7 @@ export class MapView {
   }
 
   _renderRadials() {
+    if (this._multiAim) return;  /* viz consumer renders per-node visualisations itself */
     if (!this._map) return;
     this._ensureRadialLayer();
     var src;
