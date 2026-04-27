@@ -2,6 +2,10 @@ import { calcVizMaxRange } from './clubs.js';
 import { vizFlightKey, vizTierIdx, vizNormCdf, vizLightenHex, vizEllipsePath, localISO, aggregateObservedDispersion } from './geo.js'; /* CLEAN11 */ /* ASKB-1 */
 import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLIGHT_DATA, BIAS_DATA, ZONE_RING_RADII } from './constants.js';
 import { vizGetDisp } from './dispersion.js';
+/* VIZMAP-2 -- map-backed hole planner */
+import { geomLoadByCourse, geomLoadByCenter, geomOpenLocateModal,
+         geomDistanceYds, geomBearingDeg } from './geomap.js';
+import { MapView } from './mapview.js';
 
 /* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
@@ -16,6 +20,29 @@ export let vizPathVisible=[true,false,false];
 export let vizHoleEdits={}; // scratchpad: hole number → {paths, visible} of club IDs
 export let vizShotCount=1; // kept for legacy compat — path planner uses vizPaths directly
 export let vizPlannerOpen=false;
+
+/* VIZMAP-2 -- display mode toggle: synthetic | map. Defaults to synthetic. */
+export let vizHoleViewMode = (function(){
+  try { var v = localStorage.getItem('vc:viz:holeView'); return v === 'map' ? 'map' : 'synthetic'; }
+  catch(e) { return 'synthetic'; }
+})();
+
+/* VIZMAP-2 -- map mode sub-state (module-local, NOT persisted). */
+var vizMapState = {
+  geo: null,                     /* {holes, polygons, center, bounds, boundary?} | null */
+  fetchStatus: 'idle',           /* 'idle' | 'loading' | 'loaded' | 'failed' */
+  fetchError: null,
+  mapInstance: null,             /* MapView */
+  styleMode: (function(){ try { return localStorage.getItem('vc:viz:mapStyle')==='plain'?'plain':'satellite'; } catch(e) { return 'satellite'; } })(),
+  activePath: 0,                 /* 0|1|2, drives append-target on click */
+  askbMode: (function(){ try { var v=localStorage.getItem('vc:viz:askbMode'); return v==='radial'||v==='ellipse'||v==='none'?v:'ellipse'; } catch(e) { return 'ellipse'; } })(),
+  waypointMarkers: [[], [], []], /* maplibregl.Marker[] per path, parallel to vizHoleEdits[h].waypoints */
+  askbSvg: null,                 /* SVG overlay element ref */
+  pendingClubs: [null, null, null],  /* per-path: clubId selected but waypoint not yet placed */
+  teeOverride: null,             /* [lng,lat] | null — per-mount tee override */
+  _lastWaypointCounts: [0, 0, 0],
+  _askbMoveBound: false
+};
 
 export let vizDispSelectedSessions = new Set();
 export let vizDispSelectedKeys     = new Set();
@@ -249,10 +276,552 @@ export function vizSetLegendChips(legs,chips){
     return`<span style="padding:3px 8px;border-radius:4px;font-size:.6rem;border:1px solid var(--br);${cls}">${escHtml(c.label)} ${c.p}% fw</span>`;}).join('');
 }
 
+// ── VIZMAP-2: frame helpers ───────────────────────────────────────────────────
+
+function _vizHoleAxis(hole) {
+  /* Returns { tee:[lng,lat], green:[lng,lat], bearing:number(0-360) } or null.
+     Uses teeOverride if set (per-hole tee drag). */
+  if (!hole) return null;
+  var teePt = vizMapState.teeOverride || hole.tee;
+  if (!teePt || !hole.green) return null;
+  var brg = ((window.turf.bearing(window.turf.point(teePt), window.turf.point(hole.green)) % 360) + 360) % 360;
+  return { tee: teePt, green: hole.green, bearing: brg };
+}
+
+function _vizFrameToLngLat(axis, alongYds, offsetYds) {
+  /* Forward: project (along, off) from tee along axis bearing, then perp-offset. */
+  var fwdPt  = window.turf.destination(window.turf.point(axis.tee), alongYds, axis.bearing, { units:'yards' });
+  var perpBrg = (axis.bearing + 90 + 360) % 360;
+  var finalPt = window.turf.destination(fwdPt, offsetYds, perpBrg, { units:'yards' });
+  return finalPt.geometry.coordinates;
+}
+
+function _vizLngLatToFrame(axis, lngLat) {
+  /* Inverse: distance + bearing from tee, decompose into (along, off). */
+  var dYds = window.turf.distance(window.turf.point(axis.tee), window.turf.point(lngLat), { units:'yards' });
+  var brg  = window.turf.bearing(window.turf.point(axis.tee), window.turf.point(lngLat));
+  var rel  = ((brg - axis.bearing + 540) % 360) - 180;  /* -180..180 */
+  var rad  = rel * Math.PI / 180;
+  return {
+    alongYds:  +(dYds * Math.cos(rad)).toFixed(2),
+    offsetYds: +(dYds * Math.sin(rad)).toFixed(2)
+  };
+}
+
+// ── VIZMAP-2: helpers ─────────────────────────────────────────────────────────
+
+function _vizCurHoleGeo() {
+  if (!vizMapState.geo || !vizMapState.geo.holes) return null;
+  var want = String(vizSelectedHole);
+  for (var key in vizMapState.geo.holes) {
+    if (String(vizMapState.geo.holes[key].ref) === want) return vizMapState.geo.holes[key];
+  }
+  return null;
+}
+
+function _vizEnsureHoleEdit() {
+  if (!vizHoleEdits[vizSelectedHole]) {
+    vizHoleEdits[vizSelectedHole] = { paths: [[],[],[]], visible: vizPathVisible.slice(), waypoints: [[],[],[]] };
+  }
+  if (!vizHoleEdits[vizSelectedHole].waypoints) {
+    vizHoleEdits[vizSelectedHole].waypoints = [[],[],[]];
+  }
+}
+
+function _vizMapToast(msg) {
+  var existing = document.getElementById('vizMapToast');
+  if (existing) { try { existing.parentNode.removeChild(existing); } catch(e) {} }
+  var el = document.createElement('div');
+  el.id = 'vizMapToast';
+  el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);'
+    + 'background:rgba(0,0,0,.8);color:#fff;font-family:\'DM Mono\',monospace;font-size:.7rem;'
+    + 'padding:7px 16px;border-radius:20px;z-index:9999;pointer-events:none;transition:opacity .4s';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){
+    el.style.opacity = '0';
+    setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 450);
+  }, 1800);
+}
+
+// ── VIZMAP-2: sync ────────────────────────────────────────────────────────────
+
+function _vizSyncWaypointsToMap() {
+  if (!vizMapState.mapInstance) return;
+  var hole = _vizCurHoleGeo();
+  var axis = _vizHoleAxis(hole);
+  if (!axis) {
+    for (var p = 0; p < 3; p++) vizMapState.mapInstance.setWaypoints(p, []);
+    return;
+  }
+  var edit = vizHoleEdits[vizSelectedHole];
+  var fw = (edit && edit.waypoints) || [[],[],[]];
+  for (var p = 0; p < 3; p++) {
+    var arr = fw[p] || [];
+    var lonlatArr = arr.map(function(f){ return _vizFrameToLngLat(axis, f.alongYds, f.offsetYds); });
+    vizMapState.mapInstance.setWaypoints(p, lonlatArr);
+  }
+  /* Recalibrate _lastWaypointCounts to avoid stale-add detection */
+  vizMapState._lastWaypointCounts = [fw[0].length, fw[1].length, fw[2].length];
+}
+
+// ── VIZMAP-2: waypoint markers ────────────────────────────────────────────────
+
+function _vizPlaceWaypointMarkers() {
+  if (!vizMapState.mapInstance) return;
+  var map = vizMapState.mapInstance.getMap();
+  if (!map) return;
+  /* Tear down existing */
+  for (var i = 0; i < 3; i++) {
+    (vizMapState.waypointMarkers[i] || []).forEach(function(m){ try { m.remove(); } catch(e){} });
+    vizMapState.waypointMarkers[i] = [];
+  }
+  /* Rebuild from MapView's waypoints (lonlat) */
+  var colors = ['#f1c40f', '#e67e22', '#3498db'];
+  for (var p = 0; p < 3; p++) {
+    if (!vizPathVisible[p]) continue;
+    var wps = vizMapState.mapInstance.getWaypoints(p);
+    for (var j = 0; j < wps.length; j++) (function(pIdx, wIdx, ll, color){
+      var el = document.createElement('div');
+      el.style.cssText = 'width:18px;height:18px;border-radius:50%;border:2px solid #fff;'
+        + 'background:' + color + ';box-shadow:0 0 4px rgba(0,0,0,.6);cursor:grab';
+      var marker = new window.maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat(ll).addTo(map);
+      marker.on('dragend', function(){
+        var pos = marker.getLngLat();
+        _vizUpdateWaypointPosition(pIdx, wIdx, [pos.lng, pos.lat]);
+      });
+      vizMapState.waypointMarkers[pIdx].push(marker);
+    })(p, j, wps[j], colors[p]);
+  }
+}
+
+function _vizUpdateWaypointPosition(pathIdx, wpIdx, lngLat) {
+  var hole = _vizCurHoleGeo();
+  var axis = _vizHoleAxis(hole);
+  if (!axis) return;
+  var frame = _vizLngLatToFrame(axis, lngLat);
+  _vizEnsureHoleEdit();
+  vizHoleEdits[vizSelectedHole].waypoints[pathIdx][wpIdx] = frame;
+  /* Update MapView's lonlat copy so its chain renders correctly */
+  var allWps = vizMapState.mapInstance.getWaypoints(pathIdx);
+  allWps[wpIdx] = lngLat;
+  vizMapState.mapInstance.setWaypoints(pathIdx, allWps);
+  _vizMapRenderAskb();
+  _vizMapRenderChainPanel();
+}
+
+// ── VIZMAP-2: Ask-B overlay ───────────────────────────────────────────────────
+
+function _vizMapEnsureAskbLayer() {
+  if (!vizMapState.mapInstance) return;
+  var canvas = document.getElementById('vizMapCanvas');
+  if (!canvas) return;
+  if (vizMapState.askbSvg && canvas.contains(vizMapState.askbSvg)) return;
+  var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'vizMapAskbSvg';
+  svg.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10');
+  canvas.appendChild(svg);
+  vizMapState.askbSvg = svg;
+  /* Bind move/zoom listener once. */
+  var map = vizMapState.mapInstance.getMap();
+  if (map && !vizMapState._askbMoveBound) {
+    map.on('move', _vizMapRepositionAskb);
+    vizMapState._askbMoveBound = true;
+  }
+}
+
+function _vizMapRenderAskb() {
+  if (!vizMapState.askbSvg) return;
+  if (vizMapState.askbMode === 'none') { vizMapState.askbSvg.innerHTML = ''; return; }
+  if (!vizMapState.mapInstance) return;
+  var map = vizMapState.mapInstance.getMap();
+  if (!map) return;
+  var hcp = getHandicap() || 25;
+  var handed = profile.handed || 'Right-handed';
+  var html = '';
+  for (var p = 0; p < 3; p++) {
+    if (!vizPathVisible[p]) continue;
+    var wps = vizMapState.mapInstance.getWaypoints(p);
+    var clubs = vizPaths[p];
+    for (var j = 0; j < wps.length; j++) {
+      var clubId = clubs[j];
+      if (!clubId) continue;
+      var club = bag.find(function(c){ return c.id === clubId; });
+      if (!club) continue;
+      var disp = vizGetDisp(club, hcp, handed, profile.yardType||'Total', vizYardMode);
+      if (!disp || !disp.carry) continue;
+      var pt = map.project(wps[j]);
+      /* Yards-to-pixels scale: project a point 1 yard north of waypoint and measure. */
+      var ll1 = window.turf.destination(window.turf.point(wps[j]), 1, 0, { units:'yards' }).geometry.coordinates;
+      var pt1 = map.project(ll1);
+      var pxPerYd = Math.hypot(pt1.x - pt.x, pt1.y - pt.y);
+      if (!isFinite(pxPerYd) || pxPerYd <= 0) continue;
+      var color = ['#f1c40f','#e67e22','#3498db'][p];
+      if (vizMapState.askbMode === 'ellipse' && askbShow.calc) {
+        html += '<g transform="translate(' + pt.x + ',' + pt.y + ')">'
+          + vizRenderEllipse(p*10+j, 0, 0,
+              disp.rxR*pxPerYd, disp.rxL*pxPerYd, disp.dl*pxPerYd, disp.ds*pxPerYd,
+              disp.tilt, color, disp.pR, disp.pL, disp.pS, disp.pLn, vizDisplayMode)
+          + '</g>';
+      } else if (vizMapState.askbMode === 'radial') {
+        var obs = askbGetObserved(club);
+        if (obs) {
+          var refR = ((disp.latH + (disp.dl + disp.ds)/2) / 2) * pxPerYd * 0.85;
+          html += '<g transform="translate(' + pt.x + ',' + pt.y + ')">'
+            + vizRenderObservedMarker(0, 0, refR, obs, color)
+            + '</g>';
+        }
+      }
+    }
+  }
+  vizMapState.askbSvg.innerHTML = html;
+}
+
+function _vizMapRepositionAskb() {
+  /* Re-run full render — innerHTML swap is cheap and projection cost dominates. */
+  _vizMapRenderAskb();
+}
+
+// ── VIZMAP-2: chain panel ─────────────────────────────────────────────────────
+
+function _vizMapRenderChainPanel() {
+  var el = document.getElementById('vizMapChainPanel');
+  if (!el) return;
+  var colors = ['#f1c40f', '#e67e22', '#3498db'];
+  var pathNames = ['P1', 'P2', 'P3'];
+  var shelfIds = vizSelectedClubs.size ? vizSelectedClubs : new Set(bag.filter(function(c){ return c.tested && c.type !== 'Putter'; }).map(function(c){ return c.id; }));
+  var allClubs = bag.filter(function(c){ return c.tested && c.type !== 'Putter'; });
+  var clubOpts = '<option value="">\u2014 pick club \u2014</option>'
+    + allClubs.map(function(c){ return '<option value="' + c.id + '">' + escHtml(c.identifier||c.type) + '</option>'; }).join('');
+
+  var hole = _vizCurHoleGeo();
+  var axis = _vizHoleAxis(hole);
+
+  var html = '';
+  for (var p = 0; p < 3; p++) {
+    if (!vizPathVisible[p]) continue;
+    var col = colors[p];
+    var isActive = vizMapState.activePath === p;
+    var wps = vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(p) : [];
+    var clubs = vizPaths[p];
+
+    html += '<div style="margin-bottom:8px;border-left:3px solid ' + col + ';padding-left:8px">';
+    html += '<div style="font-size:.62rem;font-weight:700;color:' + col + ';margin-bottom:4px">' + pathNames[p] + (isActive ? ' \u25c4 active' : '') + '</div>';
+
+    /* Shot rows */
+    for (var s = 0; s < wps.length; s++) {
+      var clubId = clubs[s] || '';
+      var distYds = '';
+      if (axis) {
+        var edit = vizHoleEdits[vizSelectedHole];
+        var fw = edit && edit.waypoints && edit.waypoints[p];
+        if (fw && fw[s]) {
+          if (s === 0) {
+            distYds = Math.round(Math.sqrt(fw[s].alongYds*fw[s].alongYds + fw[s].offsetYds*fw[s].offsetYds)) + 'y';
+          } else if (fw[s-1]) {
+            var da = fw[s].alongYds - fw[s-1].alongYds;
+            var do_ = fw[s].offsetYds - fw[s-1].offsetYds;
+            distYds = Math.round(Math.sqrt(da*da + do_*do_)) + 'y';
+          }
+        }
+      }
+      html += '<div id="vizMapChainRow-' + p + '-' + s + '" style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:.62rem">';
+      html += '<span style="color:var(--tx3);min-width:18px">' + (s+1) + '.</span>';
+      html += '<select onchange="vizUpdatePath(' + p + ',' + s + ',this.value)" style="font-size:.62rem;min-width:90px">' + clubOpts + '</select>';
+      if (distYds) html += '<span style="color:var(--tx3);font-size:.58rem">' + distYds + '</span>';
+      html += '<button onclick="_vizMapRemoveShot(' + p + ',' + s + ')" style="font-size:.6rem;padding:1px 5px;background:transparent;border:1px solid var(--br);border-radius:3px;cursor:pointer;color:var(--tx3)">\u00D7</button>';
+      html += '</div>';
+    }
+
+    /* Next shot picker (active path only) */
+    if (isActive) {
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-top:4px">';
+      html += '<select onchange="_vizMapPickClubForActivePath(this.value);this.value=\'\'" style="font-size:.62rem;min-width:90px">' + clubOpts + '</select>';
+      if (vizMapState.pendingClubs[p]) {
+        var pendClub = bag.find(function(c){ return c.id === vizMapState.pendingClubs[p]; });
+        html += '<span style="font-size:.58rem;color:var(--tx3)">Tap map \u2192 ' + escHtml(pendClub ? (pendClub.identifier||pendClub.type) : '') + '</span>';
+      }
+      html += '<button onclick="_vizMapClearActivePath()" style="font-size:.6rem;padding:1px 5px;background:transparent;border:1px solid var(--br);border-radius:3px;cursor:pointer;color:var(--tx3)">Clear</button>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  el.innerHTML = html || '<div style="font-size:.62rem;color:var(--tx3);padding:4px">No paths visible.</div>';
+
+  /* Set select values after render */
+  for (var p2 = 0; p2 < 3; p2++) {
+    var clubs2 = vizPaths[p2];
+    for (var s2 = 0; s2 < clubs2.length; s2++) {
+      var row = document.getElementById('vizMapChainRow-' + p2 + '-' + s2);
+      if (row) {
+        var sel = row.querySelector('select');
+        if (sel) sel.value = clubs2[s2] || '';
+      }
+    }
+  }
+}
+
+// ── VIZMAP-2: panel HTML ──────────────────────────────────────────────────────
+
+function _vizMapStyleToggleHtml() {
+  var m = vizMapState.styleMode;
+  return '<div style="display:flex;gap:3px">'
+    + '<button onclick="_vizMapSetStyle(\'satellite\')" style="font-size:.6rem;padding:3px 8px;border-radius:4px 0 0 4px;border:1px solid var(--br);cursor:pointer;background:' + (m==='satellite'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='satellite'?'var(--ac2)':'var(--tx2)') + '">Satellite</button>'
+    + '<button onclick="_vizMapSetStyle(\'plain\')" style="font-size:.6rem;padding:3px 8px;border-radius:0 4px 4px 0;border:1px solid var(--br);border-left:none;cursor:pointer;background:' + (m==='plain'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='plain'?'var(--ac2)':'var(--tx2)') + '">Plain</button>'
+    + '</div>';
+}
+
+function _vizMapAskbToggleHtml() {
+  var m = vizMapState.askbMode;
+  return '<div style="display:flex;gap:3px">'
+    + '<button onclick="_vizMapSetAskb(\'ellipse\')" style="font-size:.6rem;padding:3px 8px;border-radius:4px 0 0 4px;border:1px solid var(--br);cursor:pointer;background:' + (m==='ellipse'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='ellipse'?'var(--ac2)':'var(--tx2)') + '">Ellipse</button>'
+    + '<button onclick="_vizMapSetAskb(\'radial\')" style="font-size:.6rem;padding:3px 8px;border-radius:0;border:1px solid var(--br);border-left:none;cursor:pointer;background:' + (m==='radial'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='radial'?'var(--ac2)':'var(--tx2)') + '">Radial</button>'
+    + '<button onclick="_vizMapSetAskb(\'none\')" style="font-size:.6rem;padding:3px 8px;border-radius:0 4px 4px 0;border:1px solid var(--br);border-left:none;cursor:pointer;background:' + (m==='none'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='none'?'var(--ac2)':'var(--tx2)') + '">None</button>'
+    + '</div>';
+}
+
+function _vizMapActivePathRadioHtml() {
+  var colors = ['#f1c40f', '#e67e22', '#3498db'];
+  var html = '<div style="display:flex;gap:4px;margin-left:auto">';
+  for (var i = 0; i < 3; i++) {
+    var isActive = vizMapState.activePath === i;
+    var isVis = vizPathVisible[i];
+    html += '<div style="display:flex;align-items:center;gap:2px">'
+      + '<button onclick="_vizMapTogglePathVis(' + i + ')" style="width:10px;height:10px;border-radius:50%;border:2px solid ' + colors[i] + ';background:' + (isVis?colors[i]:'transparent') + ';cursor:pointer;padding:0" title="Toggle P' + (i+1) + '"></button>'
+      + '<button onclick="_vizMapSetActivePath(' + i + ')" style="font-size:.58rem;padding:2px 6px;border-radius:4px;border:1px solid var(--br);cursor:pointer;background:' + (isActive?'var(--gr3)':'var(--bg)') + ';color:' + (isActive?'var(--ac2)':'var(--tx2)') + '">P' + (i+1) + '</button>'
+      + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function _vizMapPanelHtml() {
+  var st = vizMapState.fetchStatus;
+  var modeHdr = '<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
+    + '<button onclick="_vizSetHoleViewMode(\'synthetic\')" style="font-size:.6rem;padding:3px 8px;border-radius:4px;border:1px solid var(--br);cursor:pointer;background:var(--bg);color:var(--tx2)">Synthetic</button>'
+    + '<button style="font-size:.6rem;padding:3px 8px;border-radius:4px;border:1px solid var(--gr2);cursor:pointer;background:var(--gr3);color:var(--ac2)">Map</button>'
+    + '</div>';
+  if (st === 'idle') {
+    return modeHdr + '<div style="padding:12px;text-align:center"><button class="btn" onclick="_vizMapLoadClick()">Load map for this course</button></div>';
+  }
+  if (st === 'loading') {
+    return modeHdr + '<div style="padding:12px;text-align:center;color:var(--tx3);font-size:.7rem">Loading map\u2026</div>';
+  }
+  if (st === 'failed') {
+    return modeHdr + '<div style="padding:12px;text-align:center;color:var(--danger);font-size:.7rem">Map load failed: '
+      + escHtml(vizMapState.fetchError || 'unknown')
+      + '<br><button class="btn sec" style="margin-top:6px" onclick="_vizMapLoadClick()">Retry</button></div>';
+  }
+  /* loaded */
+  var hole = _vizCurHoleGeo();
+  var holeBanner = (!hole || !hole.tee || !hole.green)
+    ? '<div style="padding:6px 8px;font-size:.62rem;color:var(--danger)">Map data missing for this hole.</div>'
+    : '';
+  return modeHdr
+    + '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
+    +   _vizMapStyleToggleHtml()
+    +   _vizMapAskbToggleHtml()
+    +   _vizMapActivePathRadioHtml()
+    + '</div>'
+    + holeBanner
+    + '<div id="vizMapCanvas" style="position:relative;width:100%;height:60vh;background:#111"></div>'
+    + '<div id="vizMapChainPanel" style="padding:6px 8px"></div>';
+}
+
+function _vizMapRenderPanel() {
+  var card = document.getElementById('vizSvgCard');
+  if (!card) return;
+  if (vizHoleViewMode !== 'map' || vizMode !== 'hole') return;
+  card.innerHTML = _vizMapPanelHtml();
+  /* After DOM update, mount map if geo loaded */
+  if (vizMapState.fetchStatus === 'loaded') {
+    _vizMapMount();
+    _vizMapRenderChainPanel();
+  }
+}
+
+// ── VIZMAP-2: lifecycle ───────────────────────────────────────────────────────
+
+function _vizMapUnmount() {
+  if (vizMapState.mapInstance) {
+    try { vizMapState.mapInstance.unmount(); } catch(e) {}
+    vizMapState.mapInstance = null;
+  }
+  /* Clear viz-managed markers */
+  for (var i = 0; i < 3; i++) {
+    (vizMapState.waypointMarkers[i] || []).forEach(function(m){ try { m.remove(); } catch(e){} });
+    vizMapState.waypointMarkers[i] = [];
+  }
+  if (vizMapState.askbSvg && vizMapState.askbSvg.parentNode) {
+    vizMapState.askbSvg.parentNode.removeChild(vizMapState.askbSvg);
+  }
+  vizMapState.askbSvg = null;
+  vizMapState._askbMoveBound = false;
+  vizMapState.teeOverride = null;
+  vizMapState.pendingClubs = [null, null, null];
+}
+
+function _vizMapMount() {
+  if (!vizMapState.geo) return;
+  if (!vizMapState.mapInstance) {
+    vizMapState.mapInstance = new MapView({
+      containerId: 'vizMapCanvas',
+      geo:         vizMapState.geo,
+      holeN:       vizSelectedHole,
+      idPrefix:    'viz',
+      multiAim:    true,
+      styleMode:   vizMapState.styleMode,
+      onMapClick:  function(){},  /* click handled via onWaypointsChange */
+      onTeeChange: function(ll) {
+        vizMapState.teeOverride = ll;
+        _vizSyncWaypointsToMap();
+        _vizPlaceWaypointMarkers();
+        _vizMapRenderAskb();
+        _vizMapRenderChainPanel();
+      },
+      onWaypointsChange: _vizMapOnWaypointsChange
+    });
+  } else {
+    vizMapState.mapInstance.setGeometry(vizMapState.geo);
+    vizMapState.mapInstance.showHole(vizSelectedHole, { resetAim: false });
+  }
+  /* Sync waypoints from vizHoleEdits into MapView (frame -> lonlat). */
+  _vizSyncWaypointsToMap();
+  vizMapState.mapInstance.setActivePathIdx(vizMapState.activePath);
+  for (var i = 0; i < 3; i++) {
+    vizMapState.mapInstance.setPathVisible(i, !!vizPathVisible[i]);
+  }
+  vizMapState.mapInstance.mount();
+  /* Place per-waypoint draggable markers. */
+  _vizPlaceWaypointMarkers();
+  /* Build/refresh the SVG overlay for Ask-B. */
+  _vizMapEnsureAskbLayer();
+  _vizMapRenderAskb();
+}
+
+function _vizMapOnWaypointsChange(pathIdx, newArr) {
+  var prev = vizMapState._lastWaypointCounts || [0,0,0];
+  var added = newArr.length > (prev[pathIdx] || 0);
+  if (added) {
+    var pending = vizMapState.pendingClubs[pathIdx];
+    if (!pending) {
+      /* No club pre-selected — reject the add. */
+      vizMapState.mapInstance.removeWaypoint(pathIdx, newArr.length - 1);
+      _vizMapToast('Pick a club first');
+      /* Recalibrate counts after undo */
+      vizMapState._lastWaypointCounts = [
+        vizMapState.mapInstance.getWaypoints(0).length,
+        vizMapState.mapInstance.getWaypoints(1).length,
+        vizMapState.mapInstance.getWaypoints(2).length
+      ];
+      return;
+    }
+    /* Commit: store waypoint in frame coords, append clubId. */
+    var hole = _vizCurHoleGeo();
+    var axis = _vizHoleAxis(hole);
+    if (!axis) {
+      vizMapState.mapInstance.removeWaypoint(pathIdx, newArr.length - 1);
+      vizMapState._lastWaypointCounts = [
+        vizMapState.mapInstance.getWaypoints(0).length,
+        vizMapState.mapInstance.getWaypoints(1).length,
+        vizMapState.mapInstance.getWaypoints(2).length
+      ];
+      return;
+    }
+    var lngLat = newArr[newArr.length - 1];
+    var frame  = _vizLngLatToFrame(axis, lngLat);
+    _vizEnsureHoleEdit();
+    vizHoleEdits[vizSelectedHole].waypoints[pathIdx].push(frame);
+    vizPaths[pathIdx].push(pending);
+    vizMapState.pendingClubs[pathIdx] = null;
+  }
+  /* Recalibrate counts */
+  vizMapState._lastWaypointCounts = [
+    vizMapState.mapInstance.getWaypoints(0).length,
+    vizMapState.mapInstance.getWaypoints(1).length,
+    vizMapState.mapInstance.getWaypoints(2).length
+  ];
+  _vizPlaceWaypointMarkers();
+  _vizMapRenderAskb();
+  _vizMapRenderChainPanel();
+  renderViz();
+}
+
+// ── VIZMAP-2: loader ──────────────────────────────────────────────────────────
+
+async function _vizMapLoad() {
+  if (!vizActiveCourse) return;
+  var c = vizActiveCourse;
+  if (vizMapState.fetchStatus === 'loading') return;  /* dedupe */
+
+  if (c.osmCourseId || c.osmCenter) {
+    vizMapState.fetchStatus = 'loading';
+    vizMapState.fetchError = null;
+    _vizMapRenderPanel();
+    try {
+      var geo;
+      if (c.osmCourseId) {
+        try {
+          geo = await geomLoadByCourse(c.osmCourseId, c.osmCenter || null);
+        } catch (e) {
+          if (e && e.message === 'NO_COURSE_BOUNDARY' && c.osmCenter) {
+            geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+          } else throw e;
+        }
+      } else {
+        geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+      }
+      if (!geo || !geo.holes || !Object.keys(geo.holes).length) {
+        throw new Error('No hole geometry found');
+      }
+      vizMapState.geo = geo;
+      vizMapState.fetchStatus = 'loaded';
+      _vizMapRenderPanel();
+    } catch (err) {
+      vizMapState.fetchStatus = 'failed';
+      vizMapState.fetchError = (err && err.message) || 'unknown';
+      _vizMapRenderPanel();
+    }
+  } else {
+    /* Unpinned — open locate modal. */
+    geomOpenLocateModal({
+      course: c,
+      onSelect: function(osmId, center) {
+        vizMapState.fetchStatus = 'loading';
+        vizMapState.fetchError = null;
+        _vizMapRenderPanel();
+        (async function(){
+          try {
+            var geo = await geomLoadByCourse(osmId, center || null);
+            if (!geo || !geo.holes || !Object.keys(geo.holes).length) {
+              if (center) geo = await geomLoadByCenter(center[0], center[1], 1500);
+            }
+            if (!geo || !geo.holes || !Object.keys(geo.holes).length) {
+              throw new Error('No hole geometry found');
+            }
+            vizMapState.geo = geo;
+            vizMapState.fetchStatus = 'loaded';
+            _vizMapRenderPanel();
+          } catch (err) {
+            vizMapState.fetchStatus = 'failed';
+            vizMapState.fetchError = (err && err.message) || 'unknown';
+            _vizMapRenderPanel();
+          }
+        })();
+      },
+      onSkip: function() {}
+    });
+  }
+}
+
 // ── Main render dispatch ──────────────────────────────────────────────────────
 export function renderViz(){
   if(vizMode==='dispersion') return;
-  if(!document.getElementById('vizSvg')) return; // tab not yet active
+  /* VIZMAP-2 -- in map mode the SVG element may not exist; check for card instead */
+  if(!document.getElementById('vizSvg') && !(vizMode==='hole' && vizHoleViewMode==='map' && document.getElementById('vizSvgCard'))) return; // tab not yet active
   const hcp=getHandicap()||25, handed=profile.handed||'Right-handed';
   const fwYds=+document.getElementById('vizFwWidth')?.value||35;
   const mode=vizDisplayMode;
@@ -275,6 +844,11 @@ export function renderViz(){
     vizDrawCanvas(disps,fwYds,mode,title,'',maxRange,interval);
   } else {
     // hole planning — update note strip
+    /* VIZMAP-2 -- map mode: render map panel instead of SVG planner */
+    if (vizHoleViewMode === 'map') {
+      _vizMapRenderPanel();
+      return;
+    }
     const entry=history.find(h=>h.id===document.getElementById('vizHoleSessionSelect')?.value);
     const noteEl=document.getElementById('vizHoleNote');
     if(entry&&noteEl){
@@ -357,6 +931,18 @@ export function onVizCourseChange(){
   vizActiveTee=vizActiveCourse?.tees?.find(t=>t.id===tsel.value)||vizActiveCourse?.tees?.[0]||null;
   buildVizHoleShelf(); vizSelectedHole=1;
   syncHoleClubsFromSession();
+  /* VIZMAP-2 -- course change: unmount map, clear geo, clear waypoints (frame coords are course-specific) */
+  if (vizMapState.mapInstance || vizMapState.geo) {
+    _vizMapUnmount();
+    vizMapState.geo = null;
+    vizMapState.fetchStatus = 'idle';
+    vizMapState.fetchError = null;
+  }
+  Object.keys(vizHoleEdits).forEach(function(h){
+    if (vizHoleEdits[h] && vizHoleEdits[h].waypoints) {
+      vizHoleEdits[h].waypoints = [[],[],[]];
+    }
+  });
   renderViz();
 }
 export function onVizTeeChange(){
@@ -414,7 +1000,13 @@ export function onVizHoleSessionChange(){
 }
 export function _saveCurrentHoleEdits(){
   if(!vizSelectedHole) return;
-  vizHoleEdits[vizSelectedHole]={paths:vizPaths.map(p=>[...p]),visible:[...vizPathVisible]};
+  /* VIZMAP-2 -- preserve existing waypoints field if present */
+  var existingWaypoints = vizHoleEdits[vizSelectedHole] && vizHoleEdits[vizSelectedHole].waypoints;
+  vizHoleEdits[vizSelectedHole]={
+    paths:vizPaths.map(p=>[...p]),
+    visible:[...vizPathVisible],
+    waypoints: existingWaypoints || [[],[],[]]
+  };
 }
 export function syncHoleClubsFromSession(){
   // Reset to empty first — no stale bleed across holes
@@ -531,6 +1123,13 @@ export function vizTogglePlanner(){
 export function vizTogglePath(pi){
   vizPathVisible[pi]=!vizPathVisible[pi];
   _rebuildPathPlanner();
+  /* VIZMAP-2 -- propagate to map if mounted */
+  if (vizHoleViewMode === 'map' && vizMapState.mapInstance) {
+    vizMapState.mapInstance.setPathVisible(pi, vizPathVisible[pi]);
+    _vizPlaceWaypointMarkers();
+    _vizMapRenderAskb();
+    _vizMapRenderChainPanel();
+  }
   renderViz();
 }
 export function vizUpdatePath(pi,si,id){
@@ -621,6 +1220,15 @@ export function vizSelectHole(n){
     b.style.color=hn===n?'var(--ac2)':'var(--tx2)';
   });
   syncHoleClubsFromSession();
+  /* VIZMAP-2 -- sync map to new hole if map mode active */
+  if (vizHoleViewMode === 'map' && vizMapState.mapInstance && vizMapState.geo) {
+    vizMapState.teeOverride = null; /* new hole = new tee */
+    vizMapState.mapInstance.showHole(n, { resetAim: false });
+    _vizSyncWaypointsToMap();
+    _vizPlaceWaypointMarkers();
+    _vizMapRenderAskb();
+    _vizMapRenderChainPanel();
+  }
   renderViz();
 }
 export function buildVizDistanceDropdown(){
@@ -1284,5 +1892,70 @@ Object.assign(window, {
   vizDispToggleAllSessions, vizDispToggleAllRounds,
   vizDispToggleAllClubs, /* UI-γ3 */
   askbSetToggle,         /* ASKB-4 */
-  askbSyncButtons        /* ASKB-4 */
+  askbSyncButtons,       /* ASKB-4 */
+  /* VIZMAP-2 -- map mode handlers */
+  _vizMapLoadClick: _vizMapLoad,
+  _vizMapSetStyle: function(m){
+    vizMapState.styleMode = m;
+    try { localStorage.setItem('vc:viz:mapStyle', m); } catch(e) {}
+    if (vizMapState.mapInstance) vizMapState.mapInstance.setStyleMode(m);
+    _vizMapRenderPanel();
+  },
+  _vizMapSetAskb: function(m){
+    vizMapState.askbMode = m;
+    try { localStorage.setItem('vc:viz:askbMode', m); } catch(e) {}
+    _vizMapRenderAskb();
+    _vizMapRenderPanel();
+  },
+  _vizMapSetActivePath: function(i){
+    vizMapState.activePath = i;
+    vizMapState.pendingClubs[i] = null; /* clear pending on path switch */
+    if (vizMapState.mapInstance) vizMapState.mapInstance.setActivePathIdx(i);
+    _vizMapRenderPanel();
+  },
+  _vizMapTogglePathVis: function(i){ vizTogglePath(i); },
+  _vizMapPickClubForActivePath: function(clubId){
+    if (!clubId) return;
+    vizMapState.pendingClubs[vizMapState.activePath] = clubId;
+    _vizMapToast('Tap the map to place target');
+    _vizMapRenderChainPanel();
+  },
+  _vizMapRemoveShot: function(pathIdx, shotIdx){
+    if (vizMapState.mapInstance) vizMapState.mapInstance.removeWaypoint(pathIdx, shotIdx);
+    vizPaths[pathIdx].splice(shotIdx, 1);
+    if (vizHoleEdits[vizSelectedHole] && vizHoleEdits[vizSelectedHole].waypoints) {
+      vizHoleEdits[vizSelectedHole].waypoints[pathIdx].splice(shotIdx, 1);
+    }
+    vizMapState._lastWaypointCounts = [
+      vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(0).length : 0,
+      vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(1).length : 0,
+      vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(2).length : 0
+    ];
+    _vizPlaceWaypointMarkers();
+    _vizMapRenderAskb();
+    _vizMapRenderChainPanel();
+  },
+  _vizMapClearActivePath: function(){
+    var p = vizMapState.activePath;
+    if (vizMapState.mapInstance) vizMapState.mapInstance.clearWaypoints(p);
+    vizPaths[p] = [];
+    if (vizHoleEdits[vizSelectedHole] && vizHoleEdits[vizSelectedHole].waypoints) {
+      vizHoleEdits[vizSelectedHole].waypoints[p] = [];
+    }
+    vizMapState._lastWaypointCounts = [
+      vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(0).length : 0,
+      vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(1).length : 0,
+      vizMapState.mapInstance ? vizMapState.mapInstance.getWaypoints(2).length : 0
+    ];
+    _vizPlaceWaypointMarkers();
+    _vizMapRenderAskb();
+    _vizMapRenderChainPanel();
+  },
+  _vizSetHoleViewMode: function(m){
+    if (m !== 'synthetic' && m !== 'map') return;
+    vizHoleViewMode = m;
+    try { localStorage.setItem('vc:viz:holeView', m); } catch(e) {}
+    if (m === 'synthetic') _vizMapUnmount();
+    renderViz();
+  }
 });
