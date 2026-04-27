@@ -1009,7 +1009,18 @@ export function geomOpenLocateModal(opts) {
   opts = opts || {};
   /* Defensive: close any prior instance before opening a new one */
   _geomLocateClose(true);
+  /* VIZMAP-3 -- callbacks shape gains onClear + _course stash. onClear: when set
+     AND course is pinned, modal renders a "Clear pin" button. _course: stashed
+     so _geomLocateClearPin can retrieve course.id after modal close.
+     Original (preserved per "comment, don't delete"):
   _geomLocateCallbacks = { onSelect: opts.onSelect || null, onSkip: opts.onSkip || null };
+  */
+  _geomLocateCallbacks = {
+    onSelect: opts.onSelect || null,
+    onSkip:   opts.onSkip   || null,
+    onClear:  opts.onClear  || null,
+    _course:  opts.course   || null
+  };
 
   const course = opts.course || null;
   const pinned = !!(course && course.osmCenter && course.osmCenter.length === 2
@@ -1046,8 +1057,20 @@ export function geomOpenLocateModal(opts) {
     +     '<div style="font-size:.82rem;color:var(--tx);font-weight:600">' + headerTitle + '</div>'
     +     '<div style="font-size:.58rem;color:var(--tx3);margin-top:2px">' + headerSubtitle + '</div>'
     +   '</div>'
+  /* VIZMAP-3 -- header right-side controls: optional Clear-pin (when pinned and
+     onClear callback set) + Skip. Wrapped in flex container.
+     Original (preserved per "comment, don't delete"):
     +   '<button class="btn sec" style="font-size:.65rem;padding:5px 12px" '
     +     'onclick="_geomLocateSkip()">Skip</button>'
+  */
+    +   '<div style="display:flex;gap:6px">'
+    +     ((pinned && opts.onClear) ?
+          '<button class="btn sec" style="font-size:.65rem;padding:5px 12px;'
+          + 'border-color:var(--danger,#b22);color:var(--danger,#b22)" '
+          + 'onclick="_geomLocateClearPin()">Clear pin</button>' : '')
+    +     '<button class="btn sec" style="font-size:.65rem;padding:5px 12px" '
+    +       'onclick="_geomLocateSkip()">Skip</button>'
+    +   '</div>'
     + '</div>'
     + cityBarHtml
     + '<div id="geomLocCanvas" style="flex:1;min-height:0;background:#111;position:relative">'
@@ -1216,10 +1239,15 @@ async function _geomLocateSearchAndPick(lon, lat) {
       _geomLocateSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
       return;
     }
+    /* VIZMAP-3 -- auto-select on single result removed. User must explicitly
+       pick a course from the list, even when only one match is found. The
+       multi-result picker UI below renders correctly for length=1.
+       Original (preserved per "comment, don't delete"):
     if (results.length === 1) {
       _geomLocateInvokeSelect(results[0].osmId, results[0].center);
       return;
     }
+    */
     _geomLocateResults = results;
     _geomLocateSetStatus('', false);
     const el = document.getElementById('geomLocStatus');
@@ -1259,6 +1287,19 @@ function _geomLocateInvokeSelect(osmId, center) {
   _geomLocateCallbacks = null;
 }
 
+/* VIZMAP-3 -- fires when user clicks "Clear pin" in the locate modal.
+   Captures course id + onClear callback BEFORE close (close path can null
+   _geomLocateCallbacks), then closes the modal and invokes onClear. */
+function _geomLocateClearPin() {
+  var cb = _geomLocateCallbacks && _geomLocateCallbacks.onClear;
+  var course = _geomLocateCallbacks && _geomLocateCallbacks._course;
+  _geomLocateClose(true);
+  if (cb && course) {
+    try { cb(course.id); } catch(e) { console.error('[geomap] onClear failed:', e); }
+  }
+  _geomLocateCallbacks = null;
+}
+
 if (typeof window !== 'undefined') {
   Object.assign(window, {
     geomCreateMap,
@@ -1281,6 +1322,7 @@ if (typeof window !== 'undefined') {
     geomGeocodeCity,  /* G4 */
     geomOpenLocateModal,  /* G5 */
     _geomLocateCitySearch, _geomLocatePanLoad, _geomLocateGpsLoad,
-    _geomLocateSkip, _geomLocatePickCourse  /* G5 -- inline onclick handlers */
+    _geomLocateSkip, _geomLocatePickCourse,  /* G5 -- inline onclick handlers */
+    _geomLocateClearPin  /* VIZMAP-3 -- inline onclick handler for Clear pin button */
   });
 }
