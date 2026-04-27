@@ -781,10 +781,14 @@ async function _vizMapLoad() {
           geo = await geomLoadByCourse(c.osmCourseId, c.osmCenter || null);
         } catch (e) {
           if (e && e.message === 'NO_COURSE_BOUNDARY' && c.osmCenter) {
+            console.warn('[viz] No course boundary; falling back to radial fetch.');
             geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
-          } else throw e;
+          } else {
+            throw e;
+          }
         }
-      } else {
+      } else if (c.osmCenter) {
+        /* osmCenter only — radial fetch directly, matching live-round legacy path */
         geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
       }
       if (!geo || !geo.holes || !Object.keys(geo.holes).length) {
