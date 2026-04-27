@@ -474,6 +474,20 @@ function crsGeotagApply(courseId, osmCenter, osmCourseId) {
   renderCourseList();
 }
 
+/* VIZMAP-3 -- clear a course's pin (osmCenter + osmCourseId). Modal already
+   closed by the time this fires; just persist + re-render. */
+function crsClearGeotag(courseId) {
+  const c = courses.find(x => x.id === courseId);
+  if (!c) return;
+  const updated = Object.assign({}, c);
+  delete updated.osmCenter;
+  delete updated.osmCourseId;
+  updated.updatedAt = today();
+  replaceCourse(updated);
+  save();
+  renderCourseList();
+}
+
 /* G5 -- _crsGeotagCloseModal kept as defensive no-op. The legacy crsGeotagApply
    (still exported) calls this; in the new flow geomOpenLocateModal closes its
    own overlay before invoking onSelect, so this becomes a no-op. Retained in
@@ -588,10 +602,17 @@ function crsOpenGeotagModal(courseId) {
   geomOpenLocateModal({
     course: c,
     onSelect: function(osmId, center) {
-      /* osmId is e.g. "way/12345" or "relation/678"; crsGeotagApply expects
-         the numeric portion as second arg, center as first. */
-      const numId = osmId ? (parseInt(String(osmId).split('/')[1], 10) || null) : null;
-      crsGeotagApply(courseId, center, numId);
+      /* VIZMAP-3 -- pass osmId straight through. Previous code stripped the
+         way/relation prefix, storing a bare numeric id that geomLoadByCourse
+         rejects. Original (preserved per "comment, don't delete"):
+         const numId = osmId ? (parseInt(String(osmId).split('/')[1], 10) || null) : null;
+         crsGeotagApply(courseId, center, numId);
+      */
+      crsGeotagApply(courseId, center, osmId);
+    },
+    /* VIZMAP-3 -- onClear: user explicitly cleared the pin from inside the modal. */
+    onClear: function(id) {
+      crsClearGeotag(id);
     }
   });
 }
@@ -766,7 +787,7 @@ export {
   renderHoleTable, updateHole, updateHoleTotals, saveCourse,
   _fetchCourseIndex, _fetchCourseFile, _stripGeometry,
   searchCourseRepo, addCourseFromRepo, onRepoSearch,
-  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsOpenGeotagModal /* G2 */
+  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsClearGeotag, crsOpenGeotagModal /* G2 + VIZMAP-3 */
 };
 
 Object.assign(window, {
@@ -775,7 +796,7 @@ Object.assign(window, {
   deleteTee, selectEditTee, updateHole, updateHoleTotals, saveCourse,
   addCourseFromRepo, onRepoSearch, _stripGeometry,
   /* G2 geotag */
-  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsOpenGeotagModal,
+  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsClearGeotag, crsOpenGeotagModal,
   _crsGeotagCloseModal
   /* G5 -- below superseded by geomOpenLocateModal in geomap.js:
      _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch, _crsGeotagToggleMap, _crsGeotagMapSearchHere */
