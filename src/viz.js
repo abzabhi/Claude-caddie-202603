@@ -598,20 +598,27 @@ function _vizMapActivePathRadioHtml() {
   return html;
 }
 
+function _vizMapEnsurePanel() {
+  /* Ensure #vizMapPanel exists as a sibling of #vizSvgCard. Create once. */
+  if (document.getElementById('vizMapPanel')) return;
+  var card = document.getElementById('vizSvgCard');
+  if (!card || !card.parentNode) return;
+  var div = document.createElement('div');
+  div.id = 'vizMapPanel';
+  div.style.display = 'none';
+  card.parentNode.insertBefore(div, card.nextSibling);
+}
+
 function _vizMapPanelHtml() {
   var st = vizMapState.fetchStatus;
-  var modeHdr = '<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
-    + '<button onclick="_vizSetHoleViewMode(\'synthetic\')" style="font-size:.6rem;padding:3px 8px;border-radius:4px;border:1px solid var(--br);cursor:pointer;background:var(--bg);color:var(--tx2)">Synthetic</button>'
-    + '<button style="font-size:.6rem;padding:3px 8px;border-radius:4px;border:1px solid var(--gr2);cursor:pointer;background:var(--gr3);color:var(--ac2)">Map</button>'
-    + '</div>';
   if (st === 'idle') {
-    return modeHdr + '<div style="padding:12px;text-align:center"><button class="btn" onclick="_vizMapLoadClick()">Load map for this course</button></div>';
+    return '<div style="padding:12px;text-align:center"><button class="btn" onclick="_vizMapLoadClick()">Load map for this course</button></div>';
   }
   if (st === 'loading') {
-    return modeHdr + '<div style="padding:12px;text-align:center;color:var(--tx3);font-size:.7rem">Loading map\u2026</div>';
+    return '<div style="padding:12px;text-align:center;color:var(--tx3);font-size:.7rem">Loading map\u2026</div>';
   }
   if (st === 'failed') {
-    return modeHdr + '<div style="padding:12px;text-align:center;color:var(--danger);font-size:.7rem">Map load failed: '
+    return '<div style="padding:12px;text-align:center;color:var(--danger);font-size:.7rem">Map load failed: '
       + escHtml(vizMapState.fetchError || 'unknown')
       + '<br><button class="btn sec" style="margin-top:6px" onclick="_vizMapLoadClick()">Retry</button></div>';
   }
@@ -620,8 +627,7 @@ function _vizMapPanelHtml() {
   var holeBanner = (!hole || !hole.tee || !hole.green)
     ? '<div style="padding:6px 8px;font-size:.62rem;color:var(--danger)">Map data missing for this hole.</div>'
     : '';
-  return modeHdr
-    + '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
+  return '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
     +   _vizMapStyleToggleHtml()
     +   _vizMapAskbToggleHtml()
     +   _vizMapActivePathRadioHtml()
@@ -632,24 +638,30 @@ function _vizMapPanelHtml() {
 }
 
 function _vizMapRenderPanel() {
-  var card = document.getElementById('vizSvgCard');
-  if (!card) return;
   if (vizHoleViewMode !== 'map' || vizMode !== 'hole') return;
-  /* Only replace innerHTML (which destroys #vizMapCanvas) when not yet loaded,
-     or when the canvas element is gone. If loaded and canvas exists, just
-     refresh the chain panel in place — do NOT tear down the map. */
+  _vizMapEnsurePanel();
+  var panel = document.getElementById('vizMapPanel');
+  if (!panel) return;
+
+  /* Show map panel, hide SVG card */
+  panel.style.display = 'block';
+  var card = document.getElementById('vizSvgCard');
+  if (card) card.style.display = 'none';
+
+  /* If loaded and canvas already in place, just refresh in-place controls. */
   var canvas = document.getElementById('vizMapCanvas');
   if (vizMapState.fetchStatus === 'loaded' && canvas) {
-    /* Map panel already in DOM — just refresh chain panel and controls. */
     _vizMapRenderChainPanel();
+    _vizMapRenderAskb();
     return;
   }
-  /* About to replace innerHTML — unmount first so MapView doesn't hold stale ref. */
+
+  /* Replace panel content (loading/failed/idle states, or first loaded render). */
   if (vizMapState.mapInstance) {
     _vizMapUnmount();
   }
-  card.innerHTML = _vizMapPanelHtml();
-  /* After DOM update, mount map if geo loaded */
+  panel.innerHTML = _vizMapPanelHtml();
+
   if (vizMapState.fetchStatus === 'loaded') {
     _vizMapMount();
     _vizMapRenderChainPanel();
@@ -837,8 +849,7 @@ async function _vizMapLoad() {
 // ── Main render dispatch ──────────────────────────────────────────────────────
 export function renderViz(){
   if(vizMode==='dispersion') return;
-  /* VIZMAP-2 -- in map mode the SVG element may not exist; check for card instead */
-  if(!document.getElementById('vizSvg') && !(vizMode==='hole' && vizHoleViewMode==='map' && document.getElementById('vizSvgCard'))) return; // tab not yet active
+  if(!document.getElementById('vizSvg')) return; // tab not yet active
   const hcp=getHandicap()||25, handed=profile.handed||'Right-handed';
   const fwYds=+document.getElementById('vizFwWidth')?.value||35;
   const mode=vizDisplayMode;
@@ -879,6 +890,8 @@ export function renderViz(){
     })();
     /* VIZMAP-2 -- map mode: render map panel instead of SVG planner */
     if (vizHoleViewMode === 'map') {
+      var _svgCard = document.getElementById('vizSvgCard');
+      if (_svgCard) _svgCard.style.display = 'none';
       _vizMapRenderPanel();
       return;
     }
@@ -1990,11 +2003,11 @@ Object.assign(window, {
     try { localStorage.setItem('vc:viz:holeView', m); } catch(e) {}
     if (m === 'synthetic') {
       _vizMapUnmount();
-      /* Restore #vizSvg inside vizSvgCard — map mode replaced it with map HTML */
+      /* Show SVG card, hide map panel */
       var card = document.getElementById('vizSvgCard');
-      if (card && !document.getElementById('vizSvg')) {
-        card.innerHTML = '<svg id="vizSvg" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"></svg>';
-      }
+      if (card) card.style.display = 'block';
+      var panel = document.getElementById('vizMapPanel');
+      if (panel) panel.style.display = 'none';
     }
     renderViz();
   }
