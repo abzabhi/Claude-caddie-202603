@@ -792,8 +792,20 @@ async function _vizMapLoad() {
         try {
           geo = await geomLoadByCourse(c.osmCourseId, c.osmCenter || null);
         } catch (e) {
-          if (e && e.message === 'NO_COURSE_BOUNDARY' && c.osmCenter) {
-            console.warn('[viz] No course boundary; falling back to radial fetch.');
+          /* VIZMAP-2 fix: any geomLoadByCourse failure (bad-format id,
+             no boundary, network/timeout, etc.) falls back to geomLoadByCenter
+             when osmCenter is present. The narrow NO_COURSE_BOUNDARY filter
+             was over-strict.
+             Original (commented out, do not delete):
+             if (e && e.message === 'NO_COURSE_BOUNDARY' && c.osmCenter) {
+               console.warn('[viz] No course boundary; falling back to radial fetch.');
+               geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
+             } else {
+               throw e;
+             }
+          */
+          if (c.osmCenter) {
+            console.warn('[viz] geomLoadByCourse failed (' + (e && e.message) + '); radial fallback.');
             geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
           } else {
             throw e;
