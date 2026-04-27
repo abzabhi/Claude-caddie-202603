@@ -35,7 +35,10 @@ var vizMapState = {
   mapInstance: null,             /* MapView */
   styleMode: (function(){ try { return localStorage.getItem('vc:viz:mapStyle')==='plain'?'plain':'satellite'; } catch(e) { return 'satellite'; } })(),
   activePath: 0,                 /* 0|1|2, drives append-target on click */
+  /* VIZMAP-3 -- askbMode dropped; superseded by askbShow.calc/radial/rounds/range.
+     Original (preserved per "comment, don't delete"):
   askbMode: (function(){ try { var v=localStorage.getItem('vc:viz:askbMode'); return v==='radial'||v==='ellipse'||v==='none'?v:'ellipse'; } catch(e) { return 'ellipse'; } })(),
+  */
   waypointMarkers: [[], [], []], /* maplibregl.Marker[] per path, parallel to vizHoleEdits[h].waypoints */
   askbSvg: null,                 /* SVG overlay element ref */
   pendingClubs: [null, null, null],  /* per-path: clubId selected but waypoint not yet placed */
@@ -53,6 +56,10 @@ export let vizDispSelectedRounds   = new Set(); // Set of history[] indices
 /* ASKB-4 -- three independent visibility toggles (calc, rounds, range).
    calc=expected ellipse; rounds/range=observed heatmap sources (OR'd).
    Persisted to vc:askb:show. */
+/* VIZMAP-3 -- adds radial key to gate the radial heatmap explicitly. Migration:
+   legacy localStorage lacks `radial` -> default to true so behavior matches the
+   synthetic legacy expectation that heatmap showed iff (rounds||range) was on.
+   Original (preserved per "comment, don't delete"):
 export let askbShow = (function(){
   try {
     var raw = localStorage.getItem('vc:askb:show');
@@ -62,6 +69,22 @@ export let askbShow = (function(){
     }
   } catch(e) {}
   return { calc: true, rounds: true, range: true };
+})();
+*/
+export let askbShow = (function(){
+  try {
+    var raw = localStorage.getItem('vc:askb:show');
+    if (raw) {
+      var p = JSON.parse(raw);
+      if (p && typeof p === 'object') {
+        var obj = { calc: p.calc !== false, rounds: p.rounds !== false, range: p.range !== false, radial: p.radial !== false };
+        /* VIZMAP-3 -- migrate: legacy localStorage lacks `radial`. Default to true. */
+        if (typeof p.radial === 'undefined') obj.radial = true;
+        return obj;
+      }
+    }
+  } catch(e) {}
+  return { calc: true, rounds: true, range: true, radial: true };
 })();
 
 export function setVizInitDone(v) { vizInitDone = v; }
@@ -431,6 +454,9 @@ function _vizMapEnsureAskbLayer() {
   }
 }
 
+/* VIZMAP-3 -- _vizMapRenderAskb rewritten with independent ellipse + radial gates.
+   ellipse iff askbShow.calc; radial iff askbShow.radial && (askbShow.rounds||askbShow.range).
+   Both can render simultaneously. Original (preserved per "comment, don't delete"):
 function _vizMapRenderAskb() {
   if (!vizMapState.askbSvg) return;
   if (vizMapState.askbMode === 'none') { vizMapState.askbSvg.innerHTML = ''; return; }
@@ -452,7 +478,6 @@ function _vizMapRenderAskb() {
       var disp = vizGetDisp(club, hcp, handed, profile.yardType||'Total', vizYardMode);
       if (!disp || !disp.carry) continue;
       var pt = map.project(wps[j]);
-      /* Yards-to-pixels scale: project a point 1 yard north of waypoint and measure. */
       var ll1 = window.turf.destination(window.turf.point(wps[j]), 1, 0, { units:'yards' }).geometry.coordinates;
       var pt1 = map.project(ll1);
       var pxPerYd = Math.hypot(pt1.x - pt.x, pt1.y - pt.y);
@@ -469,6 +494,57 @@ function _vizMapRenderAskb() {
         if (obs) {
           var refR = ((disp.latH + (disp.dl + disp.ds)/2) / 2) * pxPerYd * 0.85;
           html += '<g transform="translate(' + pt.x + ',' + pt.y + ')">'
+            + vizRenderObservedMarker(0, 0, refR, obs, color)
+            + '</g>';
+        }
+      }
+    }
+  }
+  vizMapState.askbSvg.innerHTML = html;
+}
+*/
+function _vizMapRenderAskb() {
+  if (!vizMapState.askbSvg) return;
+  if (!vizMapState.mapInstance) return;
+  /* VIZMAP-3 -- gates: ellipse iff calc; radial iff radial && (rounds||range). */
+  var showEllipse = !!askbShow.calc;
+  var showRadial  = !!(askbShow.radial && (askbShow.rounds || askbShow.range));
+  if (!showEllipse && !showRadial) { vizMapState.askbSvg.innerHTML = ''; return; }
+  var map = vizMapState.mapInstance.getMap();
+  if (!map) return;
+  var hcp = getHandicap() || 25;
+  var handed = profile.handed || 'Right-handed';
+  var html = '';
+  for (var p = 0; p < 3; p++) {
+    if (!vizPathVisible[p]) continue;
+    var wps = vizMapState.mapInstance.getWaypoints(p);
+    var clubs = vizPaths[p];
+    for (var j = 0; j < wps.length; j++) {
+      var clubId = clubs[j];
+      if (!clubId) continue;
+      var club = bag.find(function(c){ return c.id === clubId; });
+      if (!club) continue;
+      var disp = vizGetDisp(club, hcp, handed, profile.yardType||'Total', vizYardMode);
+      if (!disp || !disp.carry) continue;
+      var pt = map.project(wps[j]);
+      var ll1 = window.turf.destination(window.turf.point(wps[j]), 1, 0, { units:'yards' }).geometry.coordinates;
+      var pt1 = map.project(ll1);
+      var pxPerYd = Math.hypot(pt1.x - pt.x, pt1.y - pt.y);
+      if (!isFinite(pxPerYd) || pxPerYd <= 0) continue;
+      var color = ['#f1c40f','#e67e22','#3498db'][p];
+      var openG = '<g transform="translate(' + pt.x + ',' + pt.y + ')">';
+      if (showEllipse) {
+        html += openG
+          + vizRenderEllipse(p*10+j, 0, 0,
+              disp.rxR*pxPerYd, disp.rxL*pxPerYd, disp.dl*pxPerYd, disp.ds*pxPerYd,
+              disp.tilt, color, disp.pR, disp.pL, disp.pS, disp.pLn, vizDisplayMode)
+          + '</g>';
+      }
+      if (showRadial) {
+        var obs = askbGetObserved(club);
+        if (obs) {
+          var refR = ((disp.latH + (disp.dl + disp.ds)/2) / 2) * pxPerYd * 0.85;
+          html += openG
             + vizRenderObservedMarker(0, 0, refR, obs, color)
             + '</g>';
         }
@@ -574,12 +650,39 @@ function _vizMapStyleToggleHtml() {
     + '</div>';
 }
 
+/* VIZMAP-3 -- _vizMapAskbToggleHtml superseded by shared 4-button askb bar
+   (_vizAskbBarHtml below). Body commented out per "comment, don't delete";
+   declaration shell retained to avoid ReferenceError on any stale reference. */
 function _vizMapAskbToggleHtml() {
+  /* Original (preserved per "comment, don't delete"):
   var m = vizMapState.askbMode;
   return '<div style="display:flex;gap:3px">'
     + '<button onclick="_vizMapSetAskb(\'ellipse\')" style="font-size:.6rem;padding:3px 8px;border-radius:4px 0 0 4px;border:1px solid var(--br);cursor:pointer;background:' + (m==='ellipse'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='ellipse'?'var(--ac2)':'var(--tx2)') + '">Ellipse</button>'
     + '<button onclick="_vizMapSetAskb(\'radial\')" style="font-size:.6rem;padding:3px 8px;border-radius:0;border:1px solid var(--br);border-left:none;cursor:pointer;background:' + (m==='radial'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='radial'?'var(--ac2)':'var(--tx2)') + '">Radial</button>'
     + '<button onclick="_vizMapSetAskb(\'none\')" style="font-size:.6rem;padding:3px 8px;border-radius:0 4px 4px 0;border:1px solid var(--br);border-left:none;cursor:pointer;background:' + (m==='none'?'var(--gr3)':'var(--bg)') + ';color:' + (m==='none'?'var(--ac2)':'var(--tx2)') + '">None</button>'
+    + '</div>';
+  */
+  return '';
+}
+
+/* VIZMAP-3 -- shared 4-button Ask-B bar used by map mode (synthetic uses static
+   HTML buttons in index.html with the same askbSetToggle handler). Each button
+   toggles independently. Auto-enable Rounds when Radial clicked while both
+   Rounds+Range are off (handled in askbSetToggle). */
+function _vizAskbBarHtml() {
+  var btn = function(key, label) {
+    var on = !!askbShow[key];
+    return '<button onclick="askbSetToggle(\'' + key + '\')" '
+      + 'data-askb-key="' + key + '" '
+      + 'style="font-size:.6rem;padding:3px 8px;border:1px solid var(--br);cursor:pointer;'
+      + 'background:' + (on?'var(--gr3)':'var(--bg)') + ';'
+      + 'color:' + (on?'var(--ac2)':'var(--tx2)') + '">' + label + '</button>';
+  };
+  return '<div style="display:inline-flex;gap:0">'
+    + btn('calc',   'Ellipse')
+    + btn('radial', 'Radial')
+    + btn('rounds', 'Rounds')
+    + btn('range',  'Range')
     + '</div>';
 }
 
@@ -627,9 +730,23 @@ function _vizMapPanelHtml() {
   var holeBanner = (!hole || !hole.tee || !hole.green)
     ? '<div style="padding:6px 8px;font-size:.62rem;color:var(--danger)">Map data missing for this hole.</div>'
     : '';
+  /* VIZMAP-3 -- header split into two rows: row1 = style + askb bar (4 buttons
+     overflows the previous single-row layout); row2 = active path radio.
+     Original (preserved per "comment, don't delete"):
   return '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
     +   _vizMapStyleToggleHtml()
     +   _vizMapAskbToggleHtml()
+    +   _vizMapActivePathRadioHtml()
+    + '</div>'
+    + holeBanner
+    + '<div id="vizMapCanvas" style="position:relative;width:100%;height:60vh;background:#111"></div>'
+    + '<div id="vizMapChainPanel" style="padding:6px 8px"></div>';
+  */
+  return '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br);flex-wrap:wrap">'
+    +   _vizMapStyleToggleHtml()
+    +   _vizAskbBarHtml()
+    + '</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--br)">'
     +   _vizMapActivePathRadioHtml()
     + '</div>'
     + holeBanner
@@ -777,10 +894,14 @@ function _vizMapOnWaypointsChange(pathIdx, newArr) {
 
 // ── VIZMAP-2: loader ──────────────────────────────────────────────────────────
 
-async function _vizMapLoad() {
+/* VIZMAP-3 -- _vizMapLoad simplified to always open the locate modal, even when
+   course is pinned. Mirrors live-round modal-first flow so users can correct an
+   auto-pinned-wrong course. Original direct-fetch shortcut (preserved per
+   "comment, don't delete"):
+async function _vizMapLoad_ORIGINAL() {
   if (!vizActiveCourse) return;
   var c = vizActiveCourse;
-  if (vizMapState.fetchStatus === 'loading') return;  /* dedupe */
+  if (vizMapState.fetchStatus === 'loading') return;
 
   if (c.osmCourseId || c.osmCenter) {
     vizMapState.fetchStatus = 'loading';
@@ -792,18 +913,6 @@ async function _vizMapLoad() {
         try {
           geo = await geomLoadByCourse(c.osmCourseId, c.osmCenter || null);
         } catch (e) {
-          /* VIZMAP-2 fix: any geomLoadByCourse failure (bad-format id,
-             no boundary, network/timeout, etc.) falls back to geomLoadByCenter
-             when osmCenter is present. The narrow NO_COURSE_BOUNDARY filter
-             was over-strict.
-             Original (commented out, do not delete):
-             if (e && e.message === 'NO_COURSE_BOUNDARY' && c.osmCenter) {
-               console.warn('[viz] No course boundary; falling back to radial fetch.');
-               geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
-             } else {
-               throw e;
-             }
-          */
           if (c.osmCenter) {
             console.warn('[viz] geomLoadByCourse failed (' + (e && e.message) + '); radial fallback.');
             geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
@@ -812,7 +921,6 @@ async function _vizMapLoad() {
           }
         }
       } else if (c.osmCenter) {
-        /* osmCenter only — radial fetch directly, matching live-round legacy path */
         geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
       }
       if (!geo || !geo.holes || !Object.keys(geo.holes).length) {
@@ -827,7 +935,6 @@ async function _vizMapLoad() {
       _vizMapRenderPanel();
     }
   } else {
-    /* Unpinned — open locate modal. */
     geomOpenLocateModal({
       course: c,
       onSelect: function(osmId, center) {
@@ -856,6 +963,51 @@ async function _vizMapLoad() {
       onSkip: function() {}
     });
   }
+}
+*/
+async function _vizMapLoad() {
+  if (!vizActiveCourse) return;
+  if (vizMapState.fetchStatus === 'loading') return;  /* dedupe */
+  /* VIZMAP-3 -- always open locate modal, even when course is pinned. User must
+     explicitly confirm course choice each time. Mirrors live-round. */
+  geomOpenLocateModal({
+    course: vizActiveCourse,
+    onSelect: function(osmId, center) {
+      vizMapState.fetchStatus = 'loading';
+      vizMapState.fetchError = null;
+      _vizMapRenderPanel();
+      (async function(){
+        try {
+          var geo = null;
+          if (osmId) {
+            try {
+              geo = await geomLoadByCourse(osmId, center || null);
+            } catch (e) {
+              if (center) {
+                console.warn('[viz] geomLoadByCourse failed (' + (e && e.message) + '); radial fallback.');
+                geo = await geomLoadByCenter(center[0], center[1], 1500);
+              } else {
+                throw e;
+              }
+            }
+          } else if (center) {
+            geo = await geomLoadByCenter(center[0], center[1], 1500);
+          }
+          if (!geo || !geo.holes || !Object.keys(geo.holes).length) {
+            throw new Error('No hole geometry found');
+          }
+          vizMapState.geo = geo;
+          vizMapState.fetchStatus = 'loaded';
+          _vizMapRenderPanel();
+        } catch (err) {
+          vizMapState.fetchStatus = 'failed';
+          vizMapState.fetchError = (err && err.message) || 'unknown';
+          _vizMapRenderPanel();
+        }
+      })();
+    },
+    onSkip: function() {}
+  });
 }
 
 // ── Main render dispatch ──────────────────────────────────────────────────────
@@ -1669,7 +1821,11 @@ function _buildDispCardInner(key, selectedSessions, yardageFilter){
       if(d2){ expectedOverlay={ rxR:d2.rxR, rxL:d2.rxL, ryU:d2.dl, ryD:d2.ds, tilt:d2.tilt }; }
     }
   }
+  /* VIZMAP-3 -- heat radial gated by explicit `radial` flag AND a source.
+     Original (preserved per "comment, don't delete"):
   var showHeat = !!(askbShow.rounds || askbShow.range);
+  */
+  var showHeat = !!(askbShow.radial && (askbShow.rounds || askbShow.range));
   return _buildDispRadialSVG(counts,heatMax,agg.fpCounts,expectedOverlay,showHeat)+
     '<div style="font-size:.58rem;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.9">'+statStr+'</div>'+
     yardageChips;
@@ -1830,8 +1986,16 @@ export function vizDispToggleAllClubs(){
 }
 
 /* ASKB-4 -- per-toggle handler. key in {calc, rounds, range}. Re-renders active viz mode. */
+/* VIZMAP-3 -- key set extended to include 'radial'. Auto-enable Rounds when user
+   clicks Radial while both observed sources are off, so something actually shows. */
 export function askbSetToggle(key) {
-  if (key !== 'calc' && key !== 'rounds' && key !== 'range') return;
+  if (key !== 'calc' && key !== 'rounds' && key !== 'range' && key !== 'radial') return;
+  /* VIZMAP-3 -- when user clicks Radial while both observed sources are off,
+     auto-enable Rounds so the user actually sees something. Runs only when
+     transitioning Radial from off to on with no source selected. */
+  if (key === 'radial' && !askbShow.radial && !askbShow.rounds && !askbShow.range) {
+    askbShow.rounds = true;
+  }
   askbShow[key] = !askbShow[key];
   try { localStorage.setItem('vc:askb:show', JSON.stringify(askbShow)); } catch(e) {}
   askbSyncButtons();
@@ -1840,8 +2004,10 @@ export function askbSetToggle(key) {
 }
 
 /* ASKB-4 -- reflect state on all button mounts (dispersion panel + shared controls). */
+/* VIZMAP-3 -- keys array extended to include 'radial' so the new index.html
+   askbT-radial / askbT2-radial buttons get class-toggled on state change. */
 export function askbSyncButtons() {
-  ['calc','rounds','range'].forEach(function(k){
+  ['calc','rounds','range','radial'].forEach(function(k){
     var on = !!askbShow[k];
     ['askbT-'+k, 'askbT2-'+k].forEach(function(id){
       var el = document.getElementById(id);
@@ -1959,12 +2125,15 @@ Object.assign(window, {
     if (vizMapState.mapInstance) vizMapState.mapInstance.setStyleMode(m);
     _vizMapRenderPanel();
   },
+  /* VIZMAP-3 -- _vizMapSetAskb dropped; clicks now route through askbSetToggle.
+     Original (preserved per "comment, don't delete"):
   _vizMapSetAskb: function(m){
     vizMapState.askbMode = m;
     try { localStorage.setItem('vc:viz:askbMode', m); } catch(e) {}
     _vizMapRenderAskb();
     _vizMapRenderPanel();
   },
+  */
   _vizMapSetActivePath: function(i){
     vizMapState.activePath = i;
     vizMapState.pendingClubs[i] = null; /* clear pending on path switch */
