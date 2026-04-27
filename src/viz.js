@@ -844,6 +844,22 @@ export function renderViz(){
     vizDrawCanvas(disps,fwYds,mode,title,'',maxRange,interval);
   } else {
     // hole planning — update note strip
+    /* VIZMAP-2 -- inject Synthetic/Map toggle into hole controls */
+    (function(){
+      var toggleId = 'vizHoleViewToggle';
+      var ctrl = document.getElementById('vizHoleControls');
+      if (ctrl && !document.getElementById(toggleId)) {
+        var div = document.createElement('div');
+        div.id = toggleId;
+        div.style.cssText = 'display:flex;gap:3px;margin-bottom:6px';
+        ctrl.insertBefore(div, ctrl.firstChild);
+      }
+      var tog = document.getElementById(toggleId);
+      if (tog) {
+        tog.innerHTML = '<button onclick="_vizSetHoleViewMode(\'synthetic\')" style="font-size:.6rem;padding:3px 8px;border-radius:4px 0 0 4px;border:1px solid var(--br);cursor:pointer;background:' + (vizHoleViewMode==='synthetic'?'var(--gr3)':'var(--bg)') + ';color:' + (vizHoleViewMode==='synthetic'?'var(--ac2)':'var(--tx2)') + '">Synthetic</button>'
+          + '<button onclick="_vizSetHoleViewMode(\'map\')" style="font-size:.6rem;padding:3px 8px;border-radius:0 4px 4px 0;border:1px solid var(--br);border-left:none;cursor:pointer;background:' + (vizHoleViewMode==='map'?'var(--gr3)':'var(--bg)') + ';color:' + (vizHoleViewMode==='map'?'var(--ac2)':'var(--tx2)') + '">Map</button>';
+      }
+    })();
     /* VIZMAP-2 -- map mode: render map panel instead of SVG planner */
     if (vizHoleViewMode === 'map') {
       _vizMapRenderPanel();
