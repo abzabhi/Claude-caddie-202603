@@ -111,8 +111,34 @@ export class MapView {
           if (src && self._geo && self._geo.polygons) src.setData(self._geo.polygons);
         } catch(e) {}
       };
+      /* VIZMAP-3 -- hole-axis source/layer for static tee->green reference line.
+         Created only when _multiAim is true (viz consumer); never created for
+         live-round single-aim. Drawn as thin grey dashed line, non-interactive. */
+      var applyHoleAxis = function(){
+        if (!self._multiAim) return;
+        try {
+          if (!self._map.getSource('hole-axis')) {
+            self._map.addSource('hole-axis', {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] }
+            });
+            self._map.addLayer({
+              id: 'path-axis-line',
+              type: 'line',
+              source: 'hole-axis',
+              paint: {
+                'line-color': '#888',
+                'line-width': 1.5,
+                'line-dasharray': [3, 3],
+                'line-opacity': 0.6
+              }
+            });
+          }
+        } catch(e) {}
+      };
       this._map.on('load', function(){
         applyPolys();
+        applyHoleAxis();
         if (self._styleMode === 'plain') {
           try { self._map.setLayoutProperty('esri-imagery', 'visibility', 'none'); } catch(e) {}
         }
@@ -125,6 +151,7 @@ export class MapView {
       });
       if (this._map.isStyleLoaded && this._map.isStyleLoaded()) {
         applyPolys();
+        applyHoleAxis();
         if (this._styleMode === 'plain') {
           try { this._map.setLayoutProperty('esri-imagery', 'visibility', 'none'); } catch(e) {}
         }
@@ -161,6 +188,13 @@ export class MapView {
     this._waypoints = [[], [], []];
     this._pathVis   = [true, true, true];
     this._activePath = 0;
+    /* VIZMAP-3 -- clear hole-axis source if it exists (defensive; map.remove()
+       below destroys everything anyway, but belt+suspenders for re-mount). */
+    try {
+      if (this._map && this._map.getSource && this._map.getSource('hole-axis')) {
+        this._map.getSource('hole-axis').setData({ type: 'FeatureCollection', features: [] });
+      }
+    } catch(e) {}
     if (this._map)          { try { this._map.remove();          } catch(e) {} this._map          = null; }
     this._userLonLat = null;
   }
@@ -532,6 +566,20 @@ export class MapView {
          Hidden paths are skipped. */
       var teePt = this._teeOverride || hole.tee || (hole.line && hole.line[0]);
       if (!teePt) { try { geomRenderPath(this._map, []); } catch(e){} return; }
+      /* VIZMAP-3 -- populate hole-axis source with tee->green reference line.
+         Respects teeOverride (line follows draggable tee). */
+      try {
+        var axisSrc = this._map.getSource('hole-axis');
+        if (axisSrc) {
+          if (hole.green) {
+            axisSrc.setData(window.turf.featureCollection([
+              window.turf.lineString([teePt, hole.green])
+            ]));
+          } else {
+            axisSrc.setData({ type: 'FeatureCollection', features: [] });
+          }
+        }
+      } catch(e) {}
       var pathsArr = [];
       for (var i = 0; i < 3; i++) {
         if (!this._pathVis[i]) continue;
