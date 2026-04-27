@@ -635,6 +635,19 @@ function _vizMapRenderPanel() {
   var card = document.getElementById('vizSvgCard');
   if (!card) return;
   if (vizHoleViewMode !== 'map' || vizMode !== 'hole') return;
+  /* Only replace innerHTML (which destroys #vizMapCanvas) when not yet loaded,
+     or when the canvas element is gone. If loaded and canvas exists, just
+     refresh the chain panel in place — do NOT tear down the map. */
+  var canvas = document.getElementById('vizMapCanvas');
+  if (vizMapState.fetchStatus === 'loaded' && canvas) {
+    /* Map panel already in DOM — just refresh chain panel and controls. */
+    _vizMapRenderChainPanel();
+    return;
+  }
+  /* About to replace innerHTML — unmount first so MapView doesn't hold stale ref. */
+  if (vizMapState.mapInstance) {
+    _vizMapUnmount();
+  }
   card.innerHTML = _vizMapPanelHtml();
   /* After DOM update, mount map if geo loaded */
   if (vizMapState.fetchStatus === 'loaded') {
@@ -1971,7 +1984,14 @@ Object.assign(window, {
     if (m !== 'synthetic' && m !== 'map') return;
     vizHoleViewMode = m;
     try { localStorage.setItem('vc:viz:holeView', m); } catch(e) {}
-    if (m === 'synthetic') _vizMapUnmount();
+    if (m === 'synthetic') {
+      _vizMapUnmount();
+      /* Restore #vizSvg inside vizSvgCard — map mode replaced it with map HTML */
+      var card = document.getElementById('vizSvgCard');
+      if (card && !document.getElementById('vizSvg')) {
+        card.innerHTML = '<svg id="vizSvg" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block"></svg>';
+      }
+    }
     renderViz();
   }
 });
