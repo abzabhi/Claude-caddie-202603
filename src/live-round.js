@@ -2527,10 +2527,12 @@ async function _lrMapPickCourse(idx) {
 
 /* Inner loader shared by single-result auto-load and picker selection.
    Uses geomLoadByCourse (bounded fetch); falls back to geomLoadByCenter on NO_COURSE_BOUNDARY. */
+/* PATCH-LRMAPLOAD — A1: hint banner with stage labels + Retry button.
+   Pattern ported from dead _lrMapLoadForRound (below). Banner is injected
+   into lrHoleScreen with stable id 'lrMapLoadHint'; each call clears any
+   existing instance first to avoid duplicates from rapid Retry clicks.
+   Original (preserved per "comment, don't delete"):
 async function _lrMapLoadCourseById(osmId, center) {
-  /* G5 -- Note: locate-modal in geomap.js closes its own overlay BEFORE invoking
-     onSelect, so _lrMapSearchModalClose calls below are no-ops (kept defensive)
-     and status messages have no DOM target. Errors logged to console instead. */
   try {
     var geo = await geomLoadByCourse(osmId, center || null);
     if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
@@ -2543,7 +2545,6 @@ async function _lrMapLoadCourseById(osmId, center) {
     lrRenderHole();
   } catch (err) {
     if (err && err.message === 'NO_COURSE_BOUNDARY' && center) {
-      /* Boundary unavailable — fall back to radial fetch */
       try {
         var geoFb = await geomLoadByCenter(center[0], center[1], 1500);
         if (!geoFb || !geoFb.holes || Object.keys(geoFb.holes).length === 0) {
@@ -2561,6 +2562,97 @@ async function _lrMapLoadCourseById(osmId, center) {
       console.error('[live-round] Load failed:', err && err.message ? err.message : err);
     }
   }
+}
+*/
+function _lrMapLoadHintEnsure(text) {
+  /* PATCH-LRMAPLOAD — A1 helper: idempotent hint banner with stable id.
+     Caller passes plain text; helper resets to text-only (clears any retry UI). */
+  var hint = document.getElementById('lrMapLoadHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'lrMapLoadHint';
+    hint.style.cssText = 'position:absolute;top:10px;left:10px;right:10px;z-index:500;'
+      + 'background:var(--bg);border:1px solid var(--br);border-radius:8px;padding:10px;'
+      + 'font-family:\'DM Mono\',monospace;font-size:.65rem;color:var(--tx3);text-align:center';
+    var sc = document.getElementById('lrHoleScreen');
+    if (sc) sc.appendChild(hint);
+  }
+  hint.style.color = 'var(--tx3)';
+  hint.textContent = text;
+  return hint;
+}
+function _lrMapLoadHintRemove() {
+  var hint = document.getElementById('lrMapLoadHint');
+  if (hint && hint.parentNode) hint.parentNode.removeChild(hint);
+}
+async function _lrMapLoadCourseById(osmId, center) {
+  /* G5 -- Note: locate-modal in geomap.js closes its own overlay BEFORE invoking
+     onSelect, so _lrMapSearchModalClose calls below are no-ops (kept defensive)
+     and status messages have no DOM target. Errors logged to console instead. */
+  /* PATCH-LRMAPLOAD — A1: stage hint before each await; remove on success;
+     replace with error + Retry on failure. */
+  _lrMapLoadHintEnsure('Loading course data\u2026');
+  try {
+    var geo = await geomLoadByCourse(osmId, center || null);
+    if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
+      console.error('[live-round] No hole geometry found for course', osmId);
+      _lrMapLoadShowError('No hole geometry found', osmId, center);
+      return;
+    }
+    _lrMapGeo = geo;
+    try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
+    if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
+    _lrMapLoadHintRemove();
+    lrRenderHole();
+  } catch (err) {
+    if (err && err.message === 'NO_COURSE_BOUNDARY' && center) {
+      _lrMapLoadHintEnsure('Loading course features\u2026');
+      try {
+        var geoFb = await geomLoadByCenter(center[0], center[1], 1500);
+        if (!geoFb || !geoFb.holes || Object.keys(geoFb.holes).length === 0) {
+          console.error('[live-round] No hole geometry found at fallback center', center);
+          _lrMapLoadShowError('No hole geometry found at fallback center', osmId, center);
+          return;
+        }
+        _lrMapGeo = geoFb;
+        try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geoFb)); } catch(e) {}
+        if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
+        _lrMapLoadHintRemove();
+        lrRenderHole();
+      } catch (err2) {
+        console.error('[live-round] Load failed (fallback):', err2 && err2.message ? err2.message : err2);
+        _lrMapLoadShowError(err2 && err2.message ? err2.message : 'unknown', osmId, center);
+      }
+    } else {
+      console.error('[live-round] Load failed:', err && err.message ? err.message : err);
+      _lrMapLoadShowError(err && err.message ? err.message : 'unknown', osmId, center);
+    }
+  }
+}
+/* PATCH-LRMAPLOAD — A1: render error state with Retry button. Closure captures
+   osmId + center so Retry re-invokes _lrMapLoadCourseById with original args. */
+function _lrMapLoadShowError(msg, osmId, center) {
+  var hint = document.getElementById('lrMapLoadHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'lrMapLoadHint';
+    hint.style.cssText = 'position:absolute;top:10px;left:10px;right:10px;z-index:500;'
+      + 'background:var(--bg);border:1px solid var(--br);border-radius:8px;padding:10px;'
+      + 'font-family:\'DM Mono\',monospace;font-size:.65rem;text-align:center';
+    var sc = document.getElementById('lrHoleScreen');
+    if (sc) sc.appendChild(hint);
+  }
+  hint.style.color = 'var(--danger)';
+  hint.innerHTML = '';
+  var txt = document.createElement('span');
+  txt.textContent = 'Map load failed: ' + msg + '  ';
+  hint.appendChild(txt);
+  var btn = document.createElement('button');
+  btn.className = 'btn sec';
+  btn.style.cssText = 'font-size:.62rem;padding:3px 10px;margin-left:6px';
+  btn.textContent = 'Retry';
+  btn.onclick = function(){ _lrMapLoadCourseById(osmId, center); };
+  hint.appendChild(btn);
 }
 
 async function _lrMapLoadForRound() {
@@ -2782,6 +2874,10 @@ function _lrMapPanelHtml(h, pi, shared) {
     : '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapGpsToggle()">\uD83D\uDCE1</button>';
   var zoomGreenBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrZoomGreen()">\u26F3</button>';
   var minBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapMinimize()" title="Minimize">\u2014</button>';
+  /* PATCH-LRMAPLOAD — H4: manual "Re-pick course" affordance. Resets the
+     _mapSearchDone flag and re-opens the locate modal so users stuck in legacy
+     view (e.g., after a silent fetch failure) can recover without round restart. */
+  var rePickBtn = '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="_lrMapRePickCourse()" title="Re-pick course">\uD83D\uDD0D</button>';
 
   var sheetToggleLabel = sheetOpen ? '\u2B07 Close' : '\u2B06 Score';
 
@@ -2811,7 +2907,7 @@ function _lrMapPanelHtml(h, pi, shared) {
     /* Floating right-side controls */
     +   '<div style="position:absolute;top:8px;right:8px;z-index:30;'
     +     'display:flex;flex-direction:column;gap:6px;align-items:flex-end">'
-    +     minBtn + gpsBtn + zoomGreenBtn
+    +     minBtn + gpsBtn + zoomGreenBtn + rePickBtn
     +   '</div>'
     /* Floating distance bubbles (populated by _lrUpdateFloatingDists) */
     +   '<div id="lrAimDistBubble" style="position:absolute;z-index:25;'
@@ -3073,6 +3169,17 @@ function _lrMapResume() {
   lrRenderHole();
 }
 
+/* PATCH-LRMAPLOAD — H4: manual re-pick course affordance. Resets the
+   _mapSearchDone flag and re-opens the locate modal. Used when a prior fetch
+   silently failed and the user is stuck in legacy view, or simply wants to
+   change the course pin mid-round. */
+function _lrMapRePickCourse() {
+  if (!lrState) return;
+  lrState._mapSearchDone = false;
+  _lrPersist();
+  _lrMapSearchModalOpen();
+}
+
 /* G2.5 -- thin wrapper. Original body extracted to mapview.js MapView.unmount.
    Additionally clears lrState._mapInstance so a future _lrMapMount creates fresh. */
 function _lrMapUnmount() {
@@ -3118,4 +3225,6 @@ Object.assign(window, {
   _lrMapRemoveWaypoint, _lrMapClearPath, _lrZoomGreen, _lrMapToggleSheet,
   /* G2b-R -- minimize/resume handlers (map persists once loaded) */
   _lrMapMinimize, _lrMapResume,
+  /* PATCH-LRMAPLOAD — H4: manual re-pick course handler */
+  _lrMapRePickCourse,
 });
