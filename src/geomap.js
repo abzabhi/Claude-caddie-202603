@@ -34,6 +34,10 @@ const GC = {
 
 const NET_TIMEOUT_MS = 25000;
 
+// CDN-MIGRATION: static GitHub Raw CDN for course geometry + search index
+const CDN_BASE = 'https://raw.githubusercontent.com/abzabhi/golf-geo-cdn/main/courses_db';
+let _indexCache = null;
+
 // Track Map instances by container element so geomCreateMap is idempotent.
 const _mapRegistry = new WeakMap();
 
@@ -115,6 +119,15 @@ function _shapeSearchResult(e) {
     osmId: `${e.type}/${e.id}`,
     bounds: e.bounds || null
   };
+}
+
+// CDN-MIGRATION: lazy-load and cache the CDN search index.
+// Index shape: [{ id: "way_12345", name: "...", lat: 43.04, lon: -81.16 }, ...]
+async function _getIndex() {
+  if (_indexCache) return _indexCache;
+  const res = await _fetchWithTimeout(CDN_BASE + '/index.json');
+  _indexCache = await res.json();
+  return _indexCache;
 }
 
 // -----------------------------------------------------------------------------
@@ -279,96 +292,123 @@ export async function geomSearchByName(city, courseName) {
      query rejection. Better to search a simplified name than crash. */
   const safeName = courseName.replace(/[.^$*+?{}[\]|()\\"/]/g, ' ').trim();
 
-  /* ------------------------------------------------------------------ */
-  /* Stage 2: Build search bbox from Nominatim boundingbox.             */
-  /* ------------------------------------------------------------------ */
-  var overpassBbox;
-  if (place.boundingbox && place.boundingbox.length === 4) {
-    /* Nominatim: [s, n, w, e] — reorder to Overpass: s, w, n, e */
-    var s = parseFloat(place.boundingbox[0]);
-    var n = parseFloat(place.boundingbox[1]);
-    var w = parseFloat(place.boundingbox[2]);
-    var e = parseFloat(place.boundingbox[3]);
-    /* Sanity-expand tiny bbox (point results) by ~5km (~0.045 deg) */
-    if ((n - s) < 0.05) { s -= 0.045; n += 0.045; }
-    if ((e - w) < 0.05) { w -= 0.065; e += 0.065; }
-    overpassBbox = s + ',' + w + ',' + n + ',' + e;
-  } else {
-    overpassBbox = (cLat - 0.09) + ',' + (cLon - 0.13) + ',' + (cLat + 0.09) + ',' + (cLon + 0.13);
-  }
+  // CDN-MIGRATION: Overpass stages 2-3 commented out, replaced with index.json filter below.
+  // Stage 1 Nominatim geocode above is preserved — still used for distance-sort of results.
+  //
+  //   /* ------------------------------------------------------------------ */
+  //   /* Stage 2: Build search bbox from Nominatim boundingbox.             */
+  //   /* ------------------------------------------------------------------ */
+  //   var overpassBbox;
+  //   if (place.boundingbox && place.boundingbox.length === 4) {
+  //     /* Nominatim: [s, n, w, e] -- reorder to Overpass: s, w, n, e */
+  //     var s = parseFloat(place.boundingbox[0]);
+  //     var n = parseFloat(place.boundingbox[1]);
+  //     var w = parseFloat(place.boundingbox[2]);
+  //     var e = parseFloat(place.boundingbox[3]);
+  //     /* Sanity-expand tiny bbox (point results) by ~5km (~0.045 deg) */
+  //     if ((n - s) < 0.05) { s -= 0.045; n += 0.045; }
+  //     if ((e - w) < 0.05) { w -= 0.065; e += 0.065; }
+  //     overpassBbox = s + ',' + w + ',' + n + ',' + e;
+  //   } else {
+  //     overpassBbox = (cLat - 0.09) + ',' + (cLon - 0.13) + ',' + (cLat + 0.09) + ',' + (cLon + 0.13);
+  //   }
+  //
+  //   /* ------------------------------------------------------------------ */
+  //   /* Stage 3: Overpass -- three attempts, all bbox-based.                */
+  //   /* A: exact name. B: regex. C: all courses in city (name-free).       */
+  //   /* ------------------------------------------------------------------ */
+  //   var elements = null;
+  //
+  //   /* Attempt A: exact name match inside bbox */
+  //   if (safeName) {
+  //     try {
+  //       const qA =
+  //         '[out:json][timeout:20];\n' +
+  //         '(\n' +
+  //         '  nwr["leisure"="golf_course"]["name"="' + safeName + '"](' + overpassBbox + ');\n' +
+  //         ');\n' +
+  //         'out center;';
+  //       const resA = await _fetchWithTimeout(
+  //         'https://overpass-api.de/api/interpreter',
+  //         { method: 'POST', body: qA }
+  //       );
+  //       if (resA.ok) {
+  //         const dataA = await resA.json();
+  //         if (dataA.elements && dataA.elements.length) elements = dataA.elements;
+  //       }
+  //     } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+  //   }
+  //
+  //   /* Attempt B: case-insensitive regex inside bbox */
+  //   if (!elements && safeName) {
+  //     try {
+  //       const qB =
+  //         '[out:json][timeout:20];\n' +
+  //         '(\n' +
+  //         '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](' + overpassBbox + ');\n' +
+  //         ');\n' +
+  //         'out center;';
+  //       const resB = await _fetchWithTimeout(
+  //         'https://overpass-api.de/api/interpreter',
+  //         { method: 'POST', body: qB }
+  //       );
+  //       if (resB.ok) {
+  //         const dataB = await resB.json();
+  //         if (dataB.elements && dataB.elements.length) elements = dataB.elements;
+  //       }
+  //     } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+  //   }
+  //
+  //   /* Attempt C: all leisure=golf_course in bbox, no name filter.
+  //      User picks from the list -- better than returning nothing. */
+  //   if (!elements) {
+  //     try {
+  //       const qC =
+  //         '[out:json][timeout:20];\n' +
+  //         '(\n' +
+  //         '  nwr["leisure"="golf_course"](' + overpassBbox + ');\n' +
+  //         ');\n' +
+  //         'out center;';
+  //       const resC = await _fetchWithTimeout(
+  //         'https://overpass-api.de/api/interpreter',
+  //         { method: 'POST', body: qC }
+  //       );
+  //       if (resC.ok) {
+  //         const dataC = await resC.json();
+  //         if (dataC.elements && dataC.elements.length) elements = dataC.elements;
+  //       }
+  //     } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
+  //   }
+  //
+  //   if (!elements || !elements.length) return [];
+  //
+  //   /* Sort by distance to city center */
+  //   const cityPt = window.turf.point([cLon, cLat]);
+  //   const results = elements.map(_shapeSearchResult);
+  //   results.sort(function(a, b) {
+  //     const da = window.turf.distance(cityPt, window.turf.point(a.center), { units: 'meters' });
+  //     const db = window.turf.distance(cityPt, window.turf.point(b.center), { units: 'meters' });
+  //     return da - db;
+  //   });
+  //   return results;
 
-  /* ------------------------------------------------------------------ */
-  /* Stage 3: Overpass — three attempts, all bbox-based.                */
-  /* A: exact name. B: regex. C: all courses in city (name-free).       */
-  /* ------------------------------------------------------------------ */
-  var elements = null;
-
-  /* Attempt A: exact name match inside bbox */
-  if (safeName) {
-    try {
-      const qA =
-        '[out:json][timeout:20];\n' +
-        '(\n' +
-        '  nwr["leisure"="golf_course"]["name"="' + safeName + '"](' + overpassBbox + ');\n' +
-        ');\n' +
-        'out center;';
-      const resA = await _fetchWithTimeout(
-        'https://overpass-api.de/api/interpreter',
-        { method: 'POST', body: qA }
-      );
-      if (resA.ok) {
-        const dataA = await resA.json();
-        if (dataA.elements && dataA.elements.length) elements = dataA.elements;
-      }
-    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
-  }
-
-  /* Attempt B: case-insensitive regex inside bbox */
-  if (!elements && safeName) {
-    try {
-      const qB =
-        '[out:json][timeout:20];\n' +
-        '(\n' +
-        '  nwr["leisure"="golf_course"]["name"~"' + safeName + '",i](' + overpassBbox + ');\n' +
-        ');\n' +
-        'out center;';
-      const resB = await _fetchWithTimeout(
-        'https://overpass-api.de/api/interpreter',
-        { method: 'POST', body: qB }
-      );
-      if (resB.ok) {
-        const dataB = await resB.json();
-        if (dataB.elements && dataB.elements.length) elements = dataB.elements;
-      }
-    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
-  }
-
-  /* Attempt C: all leisure=golf_course in bbox, no name filter.
-     User picks from the list — better than returning nothing. */
-  if (!elements) {
-    try {
-      const qC =
-        '[out:json][timeout:20];\n' +
-        '(\n' +
-        '  nwr["leisure"="golf_course"](' + overpassBbox + ');\n' +
-        ');\n' +
-        'out center;';
-      const resC = await _fetchWithTimeout(
-        'https://overpass-api.de/api/interpreter',
-        { method: 'POST', body: qC }
-      );
-      if (resC.ok) {
-        const dataC = await resC.json();
-        if (dataC.elements && dataC.elements.length) elements = dataC.elements;
-      }
-    } catch(e) { if (e && e.message === 'TIMEOUT') throw e; }
-  }
-
-  if (!elements || !elements.length) return [];
-
-  /* Sort by distance to city center */
+  // CDN-MIGRATION: client-side filter over cached index.json.
+  const idx = await _getIndex();
+  const needle = safeName.toLowerCase();
+  if (!needle) return [];
+  const matches = idx.filter(function(it) {
+    return it && it.name && String(it.name).toLowerCase().indexOf(needle) !== -1;
+  });
+  if (!matches.length) return [];
   const cityPt = window.turf.point([cLon, cLat]);
-  const results = elements.map(_shapeSearchResult);
+  const results = matches.map(function(it) {
+    return {
+      name: it.name,
+      center: [it.lon, it.lat],
+      osmId: String(it.id).replace('_', '/'),
+      bounds: null
+    };
+  });
   results.sort(function(a, b) {
     const da = window.turf.distance(cityPt, window.turf.point(a.center), { units: 'meters' });
     const db = window.turf.distance(cityPt, window.turf.point(b.center), { units: 'meters' });
@@ -414,26 +454,51 @@ export async function geomSearchByBounds(bbox) {
 export async function geomSearchByLocation(lon, lat, radiusM) {
   const r = (radiusM != null) ? radiusM : 10000;
 
-  const q =
-    '[out:json][timeout:15];\n' +
-    `( nwr["leisure"="golf_course"](around:${r}, ${lat}, ${lon}); ); out center;`;
+  // CDN-MIGRATION: Overpass body commented out, replaced with index.json Turf-distance filter.
+  //
+  //   const q =
+  //     '[out:json][timeout:15];\n' +
+  //     `( nwr["leisure"="golf_course"](around:${r}, ${lat}, ${lon}); ); out center;`;
+  //
+  //   const res = await _fetchWithTimeout(
+  //     'https://overpass-api.de/api/interpreter',
+  //     { method: 'POST', body: q }
+  //   );
+  //   if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
+  //   const data = await res.json();
+  //   if (!data.elements || !data.elements.length) return [];
+  //
+  //   const origin = window.turf.point([lon, lat]);
+  //   const results = data.elements.map(_shapeSearchResult);
+  //   results.sort((a, b) => {
+  //     const da = window.turf.distance(origin, window.turf.point(a.center), { units: 'meters' });
+  //     const db = window.turf.distance(origin, window.turf.point(b.center), { units: 'meters' });
+  //     return da - db;
+  //   });
+  //   return results;
 
-  const res = await _fetchWithTimeout(
-    'https://overpass-api.de/api/interpreter',
-    { method: 'POST', body: q }
-  );
-  if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-  const data = await res.json();
-  if (!data.elements || !data.elements.length) return [];
-
+  const idx = await _getIndex();
   const origin = window.turf.point([lon, lat]);
-  const results = data.elements.map(_shapeSearchResult);
-  results.sort((a, b) => {
-    const da = window.turf.distance(origin, window.turf.point(a.center), { units: 'meters' });
-    const db = window.turf.distance(origin, window.turf.point(b.center), { units: 'meters' });
-    return da - db;
+  const scored = idx.map(function(it) {
+    return {
+      it: it,
+      d: window.turf.distance(origin, window.turf.point([it.lon, it.lat]), { units: 'meters' })
+    };
   });
-  return results;
+  let within = scored.filter(function(s) { return s.d <= r; });
+  // Auto-expand fallback: 2500m is small for golf courses; widen to 25km if empty.
+  if (!within.length && r < 25000) {
+    within = scored.filter(function(s) { return s.d <= 25000; });
+  }
+  within.sort(function(a, b) { return a.d - b.d; });
+  return within.slice(0, 20).map(function(s) {
+    return {
+      name: s.it.name,
+      center: [s.it.lon, s.it.lat],
+      osmId: String(s.it.id).replace('_', '/'),
+      bounds: null
+    };
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -826,6 +891,21 @@ export async function geomLoadByCourse(osmCourseId, fallbackCenter) {
   var osmType = parts[0]; /* "relation" | "way" */
   var osmId   = parts[1];
   if (!osmId) throw new Error('geomLoadByCourse: invalid osmCourseId format');
+
+  // CDN-MIGRATION: try static CDN first. Course files are pre-shaped to match
+  // the return contract { holes, polygons, center, bounds, boundary? }, so we
+  // can return parsed JSON directly. On HTTP 404, fall through to the existing
+  // Overpass Path B / Path A logic below (preserved unchanged) so newly-mapped
+  // or unindexed courses still resolve. Other errors (timeout, 5xx, network)
+  // rethrow — no point falling through if the CDN itself is misbehaving.
+  var cdnId = String(osmCourseId).replace('/', '_');
+  try {
+    var cdnRes = await _fetchWithTimeout(CDN_BASE + '/' + cdnId + '.json');
+    return await cdnRes.json();
+  } catch (cdnErr) {
+    if (!cdnErr || cdnErr.status !== 404) throw cdnErr;
+    // 404: course not in CDN — fall through to Path B / Path A
+  }
 
   /* ------------------------------------------------------------------ */
   /* Path B: relation members (fast path, only works for relations with  */
