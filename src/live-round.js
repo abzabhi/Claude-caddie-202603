@@ -2491,12 +2491,10 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       _lrSearchSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
       return;
     }
-    /* GORDY-SELECT-ALWAYS -- require explicit tap even on single result.
-    if (results.length === 1) {
-      await _lrMapLoadCourseById(results[0].osmId, results[0].center);
-      return;
-    }
-    */
+    /*GORDY-SELECT-ALWAYS*/ //if (results.length === 1) {
+    /*GORDY-SELECT-ALWAYS*/ //  await _lrMapLoadCourseById(results[0].osmId, results[0].center);
+    /*GORDY-SELECT-ALWAYS*/ //  return;
+    /*GORDY-SELECT-ALWAYS*/ //}
     _lrSearchResults = results;
     _lrSearchSetStatus('', false);
     var el = document.getElementById('lrSearchStatus');
