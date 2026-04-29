@@ -2250,7 +2250,8 @@ function _lrMapPromptAccept() {
   if (lrState) { lrState._mapPromptSeen = true; _lrPersist(); }
   _lrMapLoadForRound();
 }
-------------------------------------------------------------------------------- */
+------------------------------------------------------------------------------- 
+*/
 
 /* G2b -- Full-screen map-search modal. Shown once per round at round start
    (skippable). Offers two entry paths: pan map + "Load here", or GPS + "Use
@@ -2357,7 +2358,8 @@ function _lrMapSearchModalOpen_OLD() {
     }, 50);
   }
 }
-------------------------------------------------------------------------------- */
+------------------------------------------------------------------------------- 
+*/
 
 /* G5 -- All helpers below superseded by geomOpenLocateModal in geomap.js.
    Commented out per "comment, don't delete" rule. Safe to remove once verified.
@@ -2491,10 +2493,8 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       _lrSearchSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
       return;
     }
-    /*GORDY-SELECT-ALWAYS*/ //if (results.length === 1) {
-    /*GORDY-SELECT-ALWAYS*/ //  await _lrMapLoadCourseById(results[0].osmId, results[0].center);
-    /*GORDY-SELECT-ALWAYS*/ //  return;
-    /*GORDY-SELECT-ALWAYS*/ //}
+    
+
     _lrSearchResults = results;
     _lrSearchSetStatus('', false);
     var el = document.getElementById('lrSearchStatus');
