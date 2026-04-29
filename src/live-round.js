@@ -2594,8 +2594,24 @@ async function _lrMapLoadCourseById(osmId, center) {
   _lrMapLoadHintEnsure('Loading course data\u2026');
   try {
     var geo = await geomLoadByCourse(osmId, center || null);
-    if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
-      console.error('[live-round] No hole geometry found for course', osmId);
+    // CDN-MIGRATION / incomplete-course protocol: original strict rejection commented out below.
+    // Now: if holes is empty but boundary OR polygons exist, render in manual GPS mode.
+    //
+    //     if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
+    //       console.error('[live-round] No hole geometry found for course', osmId);
+    //       _lrMapLoadShowError('No hole geometry found', osmId, center);
+    //       return;
+    //     }
+    if (!geo) {
+      console.error('[live-round] No geometry payload for course', osmId);
+      _lrMapLoadShowError('No geometry payload', osmId, center);
+      return;
+    }
+    var _hasHoles = geo.holes && Object.keys(geo.holes).length > 0;
+    var _hasShape = !!geo.boundary
+      || (geo.polygons && geo.polygons.features && geo.polygons.features.length > 0);
+    if (!_hasHoles && !_hasShape) {
+      console.error('[live-round] No hole geometry or course shape found for course', osmId);
       _lrMapLoadShowError('No hole geometry found', osmId, center);
       return;
     }
@@ -2604,13 +2620,33 @@ async function _lrMapLoadCourseById(osmId, center) {
     if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
     _lrMapLoadHintRemove();
     lrRenderHole();
+    if (!_hasHoles) {
+      // Incomplete-course mode: show prompt and auto-start GPS so user can use manual reticle.
+      _lrMapLoadHintEnsure('Course outline loaded \u2014 use GPS marker and tap map to measure yardages.');
+      try { if (lrState && lrState._mapInstance) lrState._mapInstance.startGps(); } catch(e) {}
+    }
   } catch (err) {
     if (err && err.message === 'NO_COURSE_BOUNDARY' && center) {
       _lrMapLoadHintEnsure('Loading course features\u2026');
       try {
         var geoFb = await geomLoadByCenter(center[0], center[1], 1500);
-        if (!geoFb || !geoFb.holes || Object.keys(geoFb.holes).length === 0) {
-          console.error('[live-round] No hole geometry found at fallback center', center);
+        // CDN-MIGRATION / incomplete-course protocol: original strict rejection commented out below.
+        //
+        //     if (!geoFb || !geoFb.holes || Object.keys(geoFb.holes).length === 0) {
+        //       console.error('[live-round] No hole geometry found at fallback center', center);
+        //       _lrMapLoadShowError('No hole geometry found at fallback center', osmId, center);
+        //       return;
+        //     }
+        if (!geoFb) {
+          console.error('[live-round] No fallback geometry payload', center);
+          _lrMapLoadShowError('No fallback geometry payload', osmId, center);
+          return;
+        }
+        var _fbHasHoles = geoFb.holes && Object.keys(geoFb.holes).length > 0;
+        var _fbHasShape = !!geoFb.boundary
+          || (geoFb.polygons && geoFb.polygons.features && geoFb.polygons.features.length > 0);
+        if (!_fbHasHoles && !_fbHasShape) {
+          console.error('[live-round] No hole geometry or shape at fallback center', center);
           _lrMapLoadShowError('No hole geometry found at fallback center', osmId, center);
           return;
         }
@@ -2619,6 +2655,10 @@ async function _lrMapLoadCourseById(osmId, center) {
         if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
         _lrMapLoadHintRemove();
         lrRenderHole();
+        if (!_fbHasHoles) {
+          _lrMapLoadHintEnsure('Course outline loaded \u2014 use GPS marker and tap map to measure yardages.');
+          try { if (lrState && lrState._mapInstance) lrState._mapInstance.startGps(); } catch(e) {}
+        }
       } catch (err2) {
         console.error('[live-round] Load failed (fallback):', err2 && err2.message ? err2.message : err2);
         _lrMapLoadShowError(err2 && err2.message ? err2.message : 'unknown', osmId, center);
