@@ -2491,10 +2491,12 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       _lrSearchSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
       return;
     }
+    /* GORDY-SELECT-ALWAYS -- require explicit tap even on single result.
     if (results.length === 1) {
       await _lrMapLoadCourseById(results[0].osmId, results[0].center);
       return;
     }
+    */
     _lrSearchResults = results;
     _lrSearchSetStatus('', false);
     var el = document.getElementById('lrSearchStatus');
@@ -2502,7 +2504,7 @@ async function _lrMapLoadForRoundFromCenter(lon, lat) {
       el.style.display = 'block';
       el.style.background = 'rgba(0,0,0,.72)';
       el.innerHTML =
-        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found -- select one:</div>'
+        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Select a course:</div>'
         + results.map(function(r, i) {
           return '<button onclick="_lrMapPickCourse(' + i + ')" '
             + 'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.1);'
