@@ -1258,10 +1258,12 @@ async function _geomLocateSearchAndPick(lon, lat) {
       _geomLocateSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
       return;
     }
+    /* GORDY-SELECT-ALWAYS -- require explicit tap even on single result.
     if (results.length === 1) {
       _geomLocateInvokeSelect(results[0].osmId, results[0].center);
       return;
     }
+    */
     _geomLocateResults = results;
     _geomLocateSetStatus('', false);
     const el = document.getElementById('geomLocStatus');
@@ -1269,7 +1271,7 @@ async function _geomLocateSearchAndPick(lon, lat) {
       el.style.display = 'block';
       el.style.background = 'rgba(0,0,0,.72)';
       el.innerHTML =
-        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Multiple courses found \u2014 select one:</div>'
+        '<div style="font-size:.62rem;color:#fff;margin-bottom:6px">Select a course:</div>'
         + results.map(function(r, i) {
           return '<button onclick="_geomLocatePickCourse(' + i + ')" '
             + 'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.1);'
