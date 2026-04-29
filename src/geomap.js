@@ -1258,7 +1258,10 @@ async function _geomLocateSearchAndPick(lon, lat) {
       _geomLocateSetStatus('No golf courses found within 2500m. Pan closer or try GPS.', true);
       return;
     }
-
+    /*GORDY-SELECT-ALWAYS*/ //if (results.length === 1) {
+    /*GORDY-SELECT-ALWAYS*/ //  _geomLocateInvokeSelect(results[0].osmId, results[0].center);
+    /*GORDY-SELECT-ALWAYS*/ //  return;
+    /*GORDY-SELECT-ALWAYS*/ //}
     _geomLocateResults = results;
     _geomLocateSetStatus('', false);
     const el = document.getElementById('geomLocStatus');
