@@ -267,6 +267,14 @@ export class MapView {
       if (hole && hole.tee && hole.green) {
         var brg = geomBearingDeg(hole.tee, hole.green);
         this._map.flyTo({ center: hole.tee, zoom: 16, bearing: brg, pitch: 0 });
+      } else if (this._geo.bounds) {
+        // CDN-MIGRATION / incomplete-course protocol: no hole context but course
+        // boundary/polygons present. Fit camera to overall bounds so the user can
+        // see the course and use the GPS marker + manual reticle for yardages.
+        this._map.fitBounds(this._geo.bounds, { padding: 40, duration: 0, bearing: 0, pitch: 0 });
+      } else if (this._geo.center) {
+        // Last resort: just center on the course centroid.
+        this._map.flyTo({ center: this._geo.center, zoom: 15, bearing: 0, pitch: 0 });
       }
     } catch(e) {}
   }
