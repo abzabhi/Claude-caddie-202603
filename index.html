@@ -446,18 +446,31 @@ body{
 .checklist-step.done > span:nth-child(2){text-decoration:line-through;color:var(--tx3);}
 .checklist-icon{font-size:.9rem;color:var(--tx3);min-width:16px;}
 .ai-step-row{font-size:.68rem;color:var(--tx2);padding:3px 0;}
-/* ── LR-EXTRAS: banner chips (top of live round) + GPS view ── */
-.lrx-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--br);background:var(--sf);font-family:'DM Mono',monospace;}
-.lrx-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;min-height:32px;border-radius:14px;background:var(--bg);border:1px solid var(--br);font-size:.62rem;color:var(--tx);letter-spacing:.04em;}
-.lrx-chip[role="button"]{cursor:pointer;}
-.lrx-chip[role="button"]:active{background:var(--bg2);}
-.lrx-chip-drinks{padding:2px 4px;gap:2px;}
-.lrx-chip-btn{min-width:28px;min-height:28px;border:none;background:transparent;color:var(--tx);font-size:.85rem;font-weight:700;cursor:pointer;border-radius:8px;padding:0 6px;}
-.lrx-chip-btn:active{background:var(--bg2);}
+/* ── LR-EXTRAS: shared banner (used by both live and GPS screens). Single source of truth. ── */
+.lrx-banner-host{flex-shrink:0;}
+.lrx-banner{display:flex;flex-direction:column;background:var(--sf);border-bottom:1px solid var(--br);font-family:'DM Mono',monospace;}
+.lrx-row{display:flex;align-items:center;gap:6px;padding:6px 10px;flex-wrap:nowrap;overflow:hidden;}
+.lrx-row-actions{padding-top:0;border-top:1px solid var(--br);background:var(--bg);}
+.lrx-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;min-height:28px;border-radius:13px;background:var(--bg);border:1px solid var(--br);font-size:.6rem;color:var(--tx);letter-spacing:.03em;white-space:nowrap;}
+.lrx-pill.mono{font-family:'DM Mono',monospace;}
+.lrx-pill[role="button"]{cursor:pointer;}
+.lrx-pill[role="button"]:active{background:var(--bg2);}
+.lrx-pill-stepper{padding:1px 3px;gap:2px;}
+.lrx-pill-val{padding:0 4px;font-weight:600;}
+.lrx-step-btn{min-width:24px;min-height:24px;border:none;background:transparent;color:var(--tx);font-size:.85rem;font-weight:700;cursor:pointer;border-radius:7px;padding:0 4px;}
+.lrx-step-btn:active{background:var(--bg2);}
+.lrx-act{font-size:.6rem;padding:5px 10px;border:1px solid var(--br);border-radius:11px;background:var(--bg);color:var(--tx);cursor:pointer;}
+.lrx-act:active{background:var(--bg2);}
+.lrx-hint{font-size:.55rem;color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;}
+.lrx-collapsed{display:flex;flex-direction:row;align-items:center;gap:6px;padding:6px 10px;cursor:pointer;}
+.lrx-dot{display:inline-block;width:8px;height:8px;border-radius:50%;}
+/* Time-pressure colors on the hole timer pill. */
+.lrx-time-ok{color:var(--tx);}
+.lrx-time-warn{color:#d4a017;border-color:#d4a017;}
+.lrx-time-bad{color:#fff;background:#c0392b;border-color:#c0392b;}
 @media (max-width: 380px){
-  /* Drop AM/PM on narrow screens to save space */
-  #lrxClock{font-size:.58rem}
-  .lrx-chip{padding:4px 7px;font-size:.58rem;min-height:30px}
+  .lrx-pill{padding:3px 7px;font-size:.55rem;min-height:26px;}
+  .lrx-row{gap:4px;padding:5px 8px;}
 }
 </style>
 <!-- CLEAN10 -- DOMPurify for sanitising user-authored strings before innerHTML assignment -->
@@ -1870,6 +1883,9 @@ body{
         <div style="font-size:.5rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase" id="lrRunningLbl">vs par</div>
       </div>
     </div>
+    <!-- LR-EXTRAS: shared banner (clock / hole timer / total / weather / drinks).
+         Markup is built by lrxBannerHtml('live') and stamped by lrxRenderBanner(). -->
+    <div id="lrxBanner" class="lrx-banner-host"></div>
     <div class="lr-hole-strip" id="lrHoleStrip">
       <div class="lr-hole-blk" id="lrHoleBlk">
         <div class="lr-hole-n" id="lrHoleN">1</div>
@@ -1884,18 +1900,19 @@ body{
           <button class="btn sec" style="font-size:.56rem;padding:2px 7px" data-par="5" onclick="lrSetPar(5)">Par 5</button>
         </div>
       </div>
-      <!-- LR-EXTRAS: banner chips (clock / hole timer / total timer / weather / drinks) -->
+      <!-- LR-EXTRAS old chip block REPLACED by #lrxBanner above. Preserved here for reference, commented out.
       <div class="lrx-chips">
-        <span class="lrx-chip" id="lrxClock"></span>
-        <span class="lrx-chip" id="lrxHoleTimer" onclick="lrxTogglePause()" role="button" tabindex="0"></span>
-        <span class="lrx-chip" id="lrxTotalTimer"></span>
-        <span class="lrx-chip" id="lrxWeather" onclick="lrxToggleUnits()" role="button" tabindex="0" style="display:none"></span>
-        <span class="lrx-chip lrx-chip-drinks" id="lrxDrinks-wrap" style="margin-left:auto">
-          <button class="lrx-chip-btn" onclick="lrxDecDrink()" aria-label="decrement">−</button>
-          <span id="lrxDrinks">🍺 0</span>
+        <span class="lrx-chip" id="lrxClock-OLD"></span>
+        <span class="lrx-chip" id="lrxHoleTimer-OLD" onclick="lrxTogglePause()" role="button" tabindex="0"></span>
+        <span class="lrx-chip" id="lrxTotalTimer-OLD"></span>
+        <span class="lrx-chip" id="lrxWeather-OLD" onclick="lrxToggleUnits()" role="button" tabindex="0" style="display:none"></span>
+        <span class="lrx-chip lrx-chip-drinks" id="lrxDrinks-wrap-OLD" style="margin-left:auto">
+          <button class="lrx-chip-btn" onclick="lrxDecDrink()" aria-label="decrement">-</button>
+          <span id="lrxDrinks-OLD">.. 0</span>
           <button class="lrx-chip-btn" onclick="lrxIncDrink()" aria-label="increment">+</button>
         </span>
       </div>
+      -->
       <div class="lr-net-tog" id="lrNetTog" style="display:none">
         <button id="lrGrossBtn" class="on" onclick="lrSetView('gross')">Gross</button>
         <button id="lrNetBtn" onclick="lrSetView('net')">Net</button>
@@ -1920,7 +1937,7 @@ body{
   </div>
   <!-- LR-EXTRAS: GPS view screen (additive, opened from lr bottom-nav GPS chip) -->
   <div id="gpsViewScreen" style="display:none;flex-direction:column;height:100%;background:var(--bg);">
-    <div id="gpsTopBanner" data-collapsed="false"></div>
+    <div id="gpsBanner" class="lrx-banner-host" data-collapsed="false"></div>
     <div id="gpsMapWrap" style="flex:1;min-height:200px;background:var(--bg2);position:relative;overflow:hidden"></div>
     <div id="gpsYards"></div>
     <div id="gpsHazards" style="max-height:140px;overflow-y:auto"></div>
@@ -1929,11 +1946,14 @@ body{
     <div class="lr-bottom">
       <button class="lr-nav-btn" onclick="lrGoHole(-1)"><span class="lr-nav-icon">←</span><span>Prev</span></button>
       <div class="lr-nav-sep"></div>
-      <button class="lr-nav-btn" onclick="gpsViewClose()"><span class="lr-nav-icon">📋</span><span>Scoring</span></button>
-      <div class="lr-nav-sep"></div>
-      <button class="lr-nav-btn" onclick="lrShowTally()"><span class="lr-nav-icon">🗒</span><span>Tally</span></button>
+      <button class="lr-nav-btn" onclick="lrShowTally()"><span class="lr-nav-icon">📋</span><span>Tally</span></button>
       <div class="lr-nav-sep"></div>
       <button class="lr-nav-btn danger" onclick="lrEndRound()"><span class="lr-nav-icon">⏹</span><span>End</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn" onclick="lrMinimize()"><span class="lr-nav-icon">⏸</span><span>Minimise</span></button>
+      <div class="lr-nav-sep"></div>
+      <!-- LR-EXTRAS: Scoring chip occupies the same slot as the live screen's GPS chip. -->
+      <button class="lr-nav-btn" onclick="gpsViewClose()"><span class="lr-nav-icon">🗒</span><span>Scoring</span></button>
       <div class="lr-nav-sep"></div>
       <button class="lr-nav-btn primary" onclick="lrGoHole(1)"><span class="lr-nav-icon">→</span><span>Next</span></button>
     </div>
