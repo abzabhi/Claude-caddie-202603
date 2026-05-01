@@ -79,6 +79,9 @@ var _lastRenderLL  = null;     /* [lon,lat] at last full render — for movement
 var _lastHeading   = null;     /* compass deg, last applied */
 var _puttMode      = false;    /* on-green prompt accepted; show putt bar */
 var _onGreenPromptShown = false; /* once-per-hole guard */
+/* LR-EXTRAS: compass chevron + aim-callback wrap (restored from earlier round). */
+var _gvOriginalAimCb = null;   /* pristine MapView.onAimChange to restore on close */
+var _gvChevronInjected = false; /* did we attach our SVG to _userMarker.getElement() */
 var _holeNAtPrompt = -1;
 
 /* ─────────────────────────────────────────────────────────
@@ -117,6 +120,31 @@ function gpsViewOpen() {
   _puttMode = false;
   _onGreenPromptShown = false;
   _holeNAtPrompt = -1;
+  /* LR-EXTRAS: wrap MapView's onAimChange so taps in tracker mode arm/land shots.
+     The original callback (persists lrState._mapAim) is preserved and called first. */
+  if (lr._mapInstance && _gvOriginalAimCb === null) {
+    _gvOriginalAimCb = lr._mapInstance._onAimChange || null;
+    lr._mapInstance._onAimChange = function(lngLat) {
+      if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
+      /* Tracker behaviour: only if explicitly enabled. */
+      if (!lr._trackerOn) return;
+      var armed = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
+      if (!armed) {
+        /* No shot armed -> arm at this aim point. */
+        var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
+        if (typeof window.stArmShot === 'function') {
+          try { window.stArmShot(lngLat, '', current); } catch(e) {}
+        }
+      } else {
+        /* Shot already armed -> land here, write the record. */
+        if (typeof window.stCloseShot === 'function') {
+          try { window.stCloseShot(lngLat); } catch(e) {}
+        }
+      }
+      /* Refresh shot chip + putt bar etc. */
+      if (typeof gpsViewRender === 'function') gpsViewRender();
+    };
+  }
   /* Wire compass listener */
   window.addEventListener('deviceorientation', _gpsViewOnHeading, true);
   /* Start render loop */
@@ -139,6 +167,12 @@ function gpsViewClose() {
   }
   if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null; }
   window.removeEventListener('deviceorientation', _gpsViewOnHeading, true);
+  /* LR-EXTRAS: restore MapView's pristine onAimChange callback. */
+  if (lr && lr._mapInstance && _gvOriginalAimCb !== null) {
+    lr._mapInstance._onAimChange = _gvOriginalAimCb;
+    _gvOriginalAimCb = null;
+  }
+  _gvChevronInjected = false;
   /* Strip our GPS-screen #lrMapCanvas so the live screen's lrRenderHole() can recreate
      a fresh #lrMapCanvas in its own DOM subtree without id collision. The stashed
      live canvas (lrMapCanvas--stashed) is left in place; lrRenderHole() will overwrite
@@ -251,12 +285,57 @@ function gpsViewRender() {
   }
   _renderBanner();
   _renderMinimap();
+  _ensureCompassChevron();   /* LR-EXTRAS: attach rotating chevron to MapView's user marker */
   _renderYards();
   _renderHazards();
   _renderShotChip();
   _renderPuttBar();
   _maybePromptOnGreen();
   if (_gpsLast) _lastRenderLL = [_gpsLast[0], _gpsLast[1]];
+}
+
+/* Append a rotating SVG chevron to MapView's user-marker DOM. Runs each render
+   tick; cheap (early-out once attached). When the marker is recreated by MapView
+   (which happens once on first GPS fix and then never; subsequent ticks just
+   call setLngLat), we re-inject. */
+function _ensureCompassChevron() {
+  var lr = window.lrState;
+  if (!lr || !lr._mapInstance || !lr._mapInstance._userMarker) return;
+  var markerEl = null;
+  try { markerEl = lr._mapInstance._userMarker.getElement(); } catch(e) { return; }
+  if (!markerEl) return;
+  /* If our chevron is still a child, just re-apply heading and exit. */
+  var existing = markerEl.querySelector('#gpsPlayerChevron');
+  if (existing) {
+    if (_lastHeading != null) {
+      existing.setAttribute('transform', 'rotate(' + (_lastHeading).toFixed(1) + ')');
+    }
+    return;
+  }
+  /* Inject a small SVG overlay anchored at the marker centre. The chevron sits
+     above the default MapLibre dot; its <g id="gpsPlayerChevron"> is what the
+     existing _gpsViewOnHeading handler rotates. */
+  var ns = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', '28');
+  svg.setAttribute('height', '28');
+  svg.setAttribute('viewBox', '-14 -14 28 28');
+  svg.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;overflow:visible;';
+  var g = document.createElementNS(ns, 'g');
+  g.setAttribute('id', 'gpsPlayerChevron');
+  if (_lastHeading != null) {
+    g.setAttribute('transform', 'rotate(' + _lastHeading.toFixed(1) + ')');
+  }
+  var poly = document.createElementNS(ns, 'polygon');
+  poly.setAttribute('points', '0,-12 5,3 -5,3');
+  poly.setAttribute('fill', '#1e90ff');
+  poly.setAttribute('stroke', '#fff');
+  poly.setAttribute('stroke-width', '1.2');
+  g.appendChild(poly);
+  svg.appendChild(g);
+  markerEl.style.position = markerEl.style.position || 'relative';
+  markerEl.appendChild(svg);
+  _gvChevronInjected = true;
 }
 
 /* _renderBanner -- now a thin wrapper around the shared builder in live-round.js.
