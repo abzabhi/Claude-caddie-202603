@@ -26,6 +26,49 @@ var GPS_HAZARDS = {
   woods:                 { label: 'Woods',  icon: '\uD83C\uDF32', color: '#3b6d11' }
 };
 
+/* Geometry data-access helpers (shape: {holes:{key:{ref,tee,green,line,bounds}}, polygons:FC}). */
+function _gvGetGeo() {
+  var lr = window.lrState;
+  if (!lr || !lr._mapInstance) return null;
+  return (typeof lr._mapInstance.getGeometry === 'function')
+    ? lr._mapInstance.getGeometry()
+    : (lr._mapInstance._geo || null);
+}
+function _gvHoleEntry(geo) {
+  var lr = window.lrState;
+  if (!geo || !geo.holes || !lr) return null;
+  var want = String(lr.curHole + 1);
+  for (var key in geo.holes) {
+    if (String(geo.holes[key].ref) === want) return geo.holes[key];
+  }
+  return null;
+}
+function _gvPolyCentroid(f) {
+  if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
+  var ring = f.geometry.coordinates[0];
+  if (!ring || !ring.length) return null;
+  var sx = 0, sy = 0, n = 0;
+  for (var i = 0; i < ring.length; i++) { sx += ring[i][0]; sy += ring[i][1]; n++; }
+  return n ? [sx / n, sy / n] : null;
+}
+/* Find the green polygon closest to the hole's anchor green coord. */
+function _gvHoleGreenPoly(geo, holeEntry) {
+  if (!geo || !geo.polygons || !geo.polygons.features) return null;
+  var greens = geo.polygons.features.filter(function(f){ return f && f.properties && f.properties.golf === 'green'; });
+  if (!greens.length) return null;
+  var anchor = holeEntry && Array.isArray(holeEntry.green) ? holeEntry.green : null;
+  if (!anchor) return greens[0];
+  var best = null, bestD = Infinity;
+  for (var i = 0; i < greens.length; i++) {
+    var c = _gvPolyCentroid(greens[i]);
+    if (!c) continue;
+    var dx = c[0] - anchor[0], dy = c[1] - anchor[1];
+    var d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = greens[i]; }
+  }
+  return best || greens[0];
+}
+
 /* Module-local state (not persisted; rebuilt on open). */
 var _gpsWatchId    = null;
 var _gpsLast       = null;     /* [lon,lat,acc] from latest tick */
@@ -199,57 +242,31 @@ function gpsViewRender() {
   if (_gpsLast) _lastRenderLL = [_gpsLast[0], _gpsLast[1]];
 }
 
+/* _renderBanner -- now a thin wrapper around the shared builder in live-round.js.
+   The banner markup lives in window.lrxBannerHtml(mode); window.lrxRenderBanner()
+   stamps it into both #lrxBanner (live screen) and #gpsBanner (this screen). */
 function _renderBanner() {
-  var lr = window.lrState;
-  var hole = lr.holes[lr.curHole];
-  var collapsedEl = document.getElementById('gpsTopBanner');
-  if (!collapsedEl) return;
-  var collapsed = collapsedEl.dataset.collapsed === 'true';
-  var ydsToGreen = _calcYardsToGreen();
-  var trackerOn  = !!lr._trackerOn;
-  var styleMode  = (lr._mapInstance && typeof lr._mapInstance.getStyleMode === 'function')
-    ? lr._mapInstance.getStyleMode() : 'satellite';
-  var gpsLostBadge = _gpsLostFlag
-    ? '<span style="color:#c00;font-size:.55rem;margin-left:6px">GPS lost</span>' : '';
-  var gpsDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
-    + 'background:' + (_gpsLostFlag ? '#c00' : '#2ca02c') + ';margin-right:6px"></span>';
-  var trackerBtn = '<button class="btn sec" style="font-size:.6rem;padding:2px 8px"'
-    + ' onclick="gpsViewToggleTracker()">'
-    + (trackerOn ? '\u25CF Tracker On' : '\u25CB Tracker Off') + '</button>';
-  var html;
-  if (collapsed) {
-    html = '<div onclick="gpsViewToggleBanner()" style="cursor:pointer;padding:8px 12px;'
-      + 'display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--br);'
-      + 'background:var(--sf)">'
-      + '<div style="font-weight:700;color:var(--tx)">Hole ' + hole.n + '</div>'
-      + '<div style="color:var(--tx2);font-family:\'DM Mono\',monospace;font-size:.75rem">'
-      + (ydsToGreen != null ? ydsToGreen + ' yds' : '\u2014') + '</div>'
-      + gpsDot + gpsLostBadge
-      + '<div style="margin-left:auto">' + trackerBtn + '</div>'
-      + '</div>';
-  } else {
-    html = '<div style="padding:10px 12px;border-bottom:1px solid var(--br);background:var(--sf)">'
-      + '<div onclick="gpsViewToggleBanner()" style="cursor:pointer;display:flex;align-items:center;gap:10px;margin-bottom:6px">'
-      + '<div style="font-weight:700;color:var(--tx);font-size:1rem">Hole ' + hole.n + '</div>'
-      + '<div style="color:var(--tx2);font-size:.7rem">Par ' + hole.par
-      + (hole.yards ? ' \u00B7 ' + hole.yards + ' yds' : '') + '</div>'
-      + gpsDot + gpsLostBadge
-      + '<div style="margin-left:auto;color:var(--tx3);font-size:.6rem">tap to collapse</div>'
-      + '</div>'
-      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
-      + trackerBtn
-      + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px"'
-      + ' onclick="gpsViewToggleMapMode()">'
-      + (styleMode === 'plain' ? 'No Map' : 'Satellite') + '</button>'
-      + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px"'
-      + ' onclick="gpsViewClose()">\u2190 Scoring</button>'
-      + '</div></div>';
-  }
-  collapsedEl.innerHTML = html;
+  /* Track GPS-lost flag in a window-scoped slot so the shared builder can read it. */
+  window._gpsViewLostFlag = !!_gpsLostFlag;
+  if (typeof window.lrxRenderBanner === 'function') window.lrxRenderBanner();
 }
 
+/* OLD _renderBanner -- preserved per "comment, don't delete" rule. Replaced by the shared builder.
+// function _renderBanner_OLD() {
+//   var lr = window.lrState;
+//   var hole = lr.holes[lr.curHole];
+//   var collapsedEl = document.getElementById('gpsTopBanner');
+//   if (!collapsedEl) return;
+//   var collapsed = collapsedEl.dataset.collapsed === 'true';
+//   var ydsToGreen = _calcYardsToGreen();
+//   var trackerOn  = !!lr._trackerOn;
+//   var styleMode  = (lr._mapInstance && typeof lr._mapInstance.getStyleMode === 'function')
+//     ? lr._mapInstance.getStyleMode() : 'satellite';
+//   // ...rest of old inline-HTML banner (Hole N + Par + tracker btn etc.) elided; see git history.
+// } */
+
 function gpsViewToggleBanner() {
-  var el = document.getElementById('gpsTopBanner');
+  var el = document.getElementById('gpsBanner');
   if (!el) return;
   el.dataset.collapsed = (el.dataset.collapsed === 'true') ? 'false' : 'true';
   _renderBanner();
@@ -275,6 +292,11 @@ function gpsViewToggleTracker() {
   gpsViewRender();
 }
 
+/* Yards-to-green accessor for the shared banner builder (lrxBannerHtml('gps-collapsed')). */
+function lrxYardsToGreen() {
+  return _calcYardsToGreen();
+}
+
 /* ─────────────────────────────────────────────────────────
    Minimap (pure SVG)
    ───────────────────────────────────────────────────────── */
@@ -283,39 +305,60 @@ function _renderMinimap() {
   var lr = window.lrState;
   var wrap = document.getElementById('gpsMapWrap');
   if (!wrap) return;
-  var geo = lr._mapInstance && (typeof lr._mapInstance.getGeometry === 'function'
-    ? lr._mapInstance.getGeometry() : lr._mapInstance._geo);
-  if (!geo || !geo.features) {
+  var geo = _gvGetGeo();
+  if (!geo || !geo.holes) {
     wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx3)">No course geometry loaded.</div>';
     return;
   }
-  var holeN = lr.curHole + 1;
-  var holeFeats = geo.features.filter(function(f){
-    if (!f || !f.properties) return false;
-    var ref = f.properties.ref || f.properties.hole;
-    if (ref != null && +ref !== holeN) return false;
-    return true;
-  });
-  /* Bounding box. */
+  var holeEntry = _gvHoleEntry(geo);
+  if (!holeEntry) {
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx3)">No hole geometry for hole ' + (lr.curHole + 1) + '.</div>';
+    return;
+  }
+  var teeLL = Array.isArray(holeEntry.tee)   ? holeEntry.tee   : null;
+  var grnLL = Array.isArray(holeEntry.green) ? holeEntry.green : null;
+  /* Build coord list for bbox: tee + green + centreline + player + aim + a small expansion. */
   var coords = [];
-  var collect = function(g) {
-    if (!g) return;
-    if (g.type === 'Point') coords.push(g.coordinates);
-    else if (g.type === 'LineString') for (var i=0;i<g.coordinates.length;i++) coords.push(g.coordinates[i]);
-    else if (g.type === 'Polygon') for (var j=0;j<g.coordinates[0].length;j++) coords.push(g.coordinates[0][j]);
-  };
-  holeFeats.forEach(function(f){ collect(f.geometry); });
+  if (teeLL) coords.push(teeLL);
+  if (grnLL) coords.push(grnLL);
+  if (Array.isArray(holeEntry.line)) {
+    for (var li = 0; li < holeEntry.line.length; li++) coords.push(holeEntry.line[li]);
+  }
   if (_gpsLast) coords.push([_gpsLast[0], _gpsLast[1]]);
   if (lr._mapAim) coords.push(lr._mapAim);
   if (!coords.length) {
     wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx3)">No hole geometry.</div>';
     return;
   }
+  /* Per-hole polygon filter: keep polygons whose centroid falls inside the expanded
+     bbox (~50m pad), since geo.polygons is course-wide and not ref-tagged. */
+  var allPolys = (geo.polygons && geo.polygons.features) ? geo.polygons.features : [];
+  /* Compute initial bbox from coords above (pre-expansion). */
+  var bMinX = coords[0][0], bMaxX = coords[0][0], bMinY = coords[0][1], bMaxY = coords[0][1];
+  for (var bi = 1; bi < coords.length; bi++) {
+    if (coords[bi][0] < bMinX) bMinX = coords[bi][0];
+    if (coords[bi][0] > bMaxX) bMaxX = coords[bi][0];
+    if (coords[bi][1] < bMinY) bMinY = coords[bi][1];
+    if (coords[bi][1] > bMaxY) bMaxY = coords[bi][1];
+  }
+  /* ~50m pad in degrees (lat: ~0.00045/50m; lon: 0.00045/cos(lat)). */
+  var padDegLat = 0.00045;
+  var padDegLon = 0.00045 / Math.max(0.1, Math.cos(((bMinY + bMaxY) / 2) * Math.PI / 180));
+  var eMinX = bMinX - padDegLon, eMaxX = bMaxX + padDegLon;
+  var eMinY = bMinY - padDegLat, eMaxY = bMaxY + padDegLat;
+  var holePolys = allPolys.filter(function(f){
+    if (!f || !f.properties || !f.properties.golf) return false;
+    if (!f.geometry || f.geometry.type !== 'Polygon') return false;
+    var c = _gvPolyCentroid(f);
+    if (!c) return false;
+    return (c[0] >= eMinX && c[0] <= eMaxX && c[1] >= eMinY && c[1] <= eMaxY);
+  });
+  /* Add polygon ring vertices to coord list so the bbox encompasses any rendered polys. */
+  holePolys.forEach(function(f){
+    var ring = f.geometry.coordinates[0];
+    for (var i = 0; i < ring.length; i++) coords.push(ring[i]);
+  });
   /* Compute tee→green bearing for rotation. */
-  var teeFeat = holeFeats.find(function(f){ return f.properties && f.properties.golf === 'tee'; });
-  var greenFeat = holeFeats.find(function(f){ return f.properties && f.properties.golf === 'green'; });
-  var teeLL = teeFeat ? _featureCenter(teeFeat) : null;
-  var grnLL = greenFeat ? _featureCenter(greenFeat) : null;
   var rotDeg = 0;
   if (teeLL && grnLL) {
     try { rotDeg = geomBearingDeg(teeLL, grnLL); } catch(e) {}
@@ -385,7 +428,7 @@ function _renderMinimap() {
   };
   for (var po = 0; po < polyOrder.length; po++) {
     var typ = polyOrder[po];
-    var feats = holeFeats.filter(function(f){ return f.properties && f.properties.golf === typ && f.geometry && f.geometry.type === 'Polygon'; });
+    var feats = holePolys.filter(function(f){ return f.properties && f.properties.golf === typ; });
     feats.forEach(function(f){
       var ring = f.geometry.coordinates[0];
       var d = ring.map(function(c, i){ var xy = toSvg(c); return (i === 0 ? 'M' : 'L') + xy[0].toFixed(1) + ',' + xy[1].toFixed(1); }).join(' ') + ' Z';
@@ -478,20 +521,12 @@ function _featureCenter(f) {
    ───────────────────────────────────────────────────────── */
 
 function _calcYardsToGreen() {
-  var lr = window.lrState;
-  if (!lr || !lr._mapInstance || !_gpsLast) return null;
-  var geo = (typeof lr._mapInstance.getGeometry === 'function')
-    ? lr._mapInstance.getGeometry() : lr._mapInstance._geo;
-  if (!geo || !geo.features) return null;
-  var holeN = lr.curHole + 1;
-  var greenFeat = geo.features.find(function(f){
-    if (!f.properties || f.properties.golf !== 'green') return false;
-    var ref = f.properties.ref || f.properties.hole;
-    return ref == null || +ref === holeN;
-  });
-  var c = greenFeat ? _featureCenter(greenFeat) : null;
-  if (!c) return null;
-  try { return geomDistanceYds([_gpsLast[0], _gpsLast[1]], c); } catch(e) { return null; }
+  if (!_gpsLast) return null;
+  var geo = _gvGetGeo();
+  if (!geo) return null;
+  var holeEntry = _gvHoleEntry(geo);
+  if (!holeEntry || !Array.isArray(holeEntry.green)) return null;
+  try { return geomDistanceYds([_gpsLast[0], _gpsLast[1]], holeEntry.green); } catch(e) { return null; }
 }
 
 function _renderYards() {
@@ -517,10 +552,10 @@ function _renderHazards() {
     el.innerHTML = '';
     return;
   }
-  var geo = (typeof lr._mapInstance.getGeometry === 'function')
-    ? lr._mapInstance.getGeometry() : lr._mapInstance._geo;
-  if (!geo || !geo.features) { el.innerHTML = ''; return; }
-  var holeN = lr.curHole + 1;
+  var geo = _gvGetGeo();
+  if (!geo || !geo.polygons || !geo.polygons.features) { el.innerHTML = ''; return; }
+  var holeEntry = _gvHoleEntry(geo);
+  var allFeats = geo.polygons.features;
   var player = [_gpsLast[0], _gpsLast[1]];
   var aim    = lr._mapAim;
   /* Pre-compute corridor basis. */
@@ -533,22 +568,15 @@ function _renderHazards() {
   var ux = ax / aLen, uy = ay / aLen;
   var rx = uy, ry = -ux;  /* right-perpendicular */
   /* Green centre for the "within 50y of green" rule. */
-  var greenFeat = geo.features.find(function(f){
-    if (!f.properties || f.properties.golf !== 'green') return false;
-    var ref = f.properties.ref || f.properties.hole;
-    return ref == null || +ref === holeN;
-  });
-  var greenC = greenFeat ? _featureCenter(greenFeat) : null;
-  /* Iterate hazards. */
+  var greenC = holeEntry && Array.isArray(holeEntry.green) ? holeEntry.green : null;
+  /* Iterate hazard polygons (course-wide; corridor + near-green filters select per-hole relevance). */
   var rows = [];
-  for (var i = 0; i < geo.features.length; i++) {
-    var f = geo.features[i];
+  for (var i = 0; i < allFeats.length; i++) {
+    var f = allFeats[i];
     if (!f || !f.properties) continue;
     var typ = f.properties.golf;
     if (!GPS_HAZARDS[typ]) continue;
-    var ref2 = f.properties.ref || f.properties.hole;
-    if (ref2 != null && +ref2 !== holeN) continue;
-    var c = _featureCenter(f);
+    var c = _gvPolyCentroid(f);
     if (!c) continue;
     /* Player→hazard vector in metres. */
     var hx = (c[0] - player[0]) * Math.PI / 180 * Math.cos(lat0) * R;
@@ -645,18 +673,13 @@ function _maybePromptOnGreen() {
     _holeNAtPrompt = lr.curHole;
   }
   if (_onGreenPromptShown || _puttMode) return;
-  var geo = lr._mapInstance && (typeof lr._mapInstance.getGeometry === 'function'
-    ? lr._mapInstance.getGeometry() : lr._mapInstance._geo);
-  if (!geo || !geo.features) return;
-  var holeN = lr.curHole + 1;
-  var greenFeat = geo.features.find(function(f){
-    if (!f.properties || f.properties.golf !== 'green') return false;
-    var ref = f.properties.ref || f.properties.hole;
-    return ref == null || +ref === holeN;
-  });
-  if (!greenFeat) return;
+  var geo = _gvGetGeo();
+  if (!geo) return;
+  var holeEntry = _gvHoleEntry(geo);
+  var greenPoly = _gvHoleGreenPoly(geo, holeEntry);
+  if (!greenPoly) return;
   var inGreen = false;
-  try { inGreen = geomPointInPolygon([_gpsLast[0], _gpsLast[1]], greenFeat); } catch(e) {}
+  try { inGreen = geomPointInPolygon([_gpsLast[0], _gpsLast[1]], greenPoly); } catch(e) {}
   if (!inGreen) return;
   _onGreenPromptShown = true;
   gpsViewOnGreenPrompt();
@@ -719,5 +742,6 @@ function gpsViewOnMapDoubleTap(lngLat) {
 Object.assign(window, {
   gpsViewOpen, gpsViewClose, gpsViewToggle, gpsViewRender,
   gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker,
-  gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt
+  gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt,
+  lrxYardsToGreen
 });
