@@ -81,8 +81,72 @@ var _puttMode      = false;    /* on-green prompt accepted; show putt bar */
 var _onGreenPromptShown = false; /* once-per-hole guard */
 /* LR-EXTRAS: compass chevron + aim-callback wrap (restored from earlier round). */
 var _gvOriginalAimCb = null;   /* pristine MapView.onAimChange to restore on close */
+/* LR-EXTRAS: GPS-tick wrap. Without this, gps-view's _gpsLast goes stale because
+   MapView owns the GPS watch and gps-view never receives ticks unless it wraps. */
+var _gvOriginalGpsTickCb = null;
+/* LR-EXTRAS: map-click wrap. Used to detect LANDING taps when a shot is armed
+   (aim is locked, so onAimChange does not fire — the click surfaces here only). */
+var _gvOriginalMapClickCb = null;
+/* LR-EXTRAS: transient toast guard so the same tap that arms a shot does not
+   immediately also land it (onAimChange and onMapClick both fire on a single
+   unlocked tap; we record arm timestamp and reject landing within 250ms). */
+var _gvJustArmedTs = 0;
 var _gvChevronInjected = false; /* did we attach our SVG to _userMarker.getElement() */
 var _holeNAtPrompt = -1;
+
+/* ─────────────────────────────────────────────────────────
+   LR-EXTRAS: lightweight toast for shot-tracker feedback
+   ─────────────────────────────────────────────────────────
+   Stacks at top of #gpsViewScreen (just below the banner area).
+   Auto-dismiss in 3s; tap to dismiss early. New toasts append to the stack
+   so rapid arm->land sequences don't clobber each other visually.
+   No external CSS; inline styles only so this works without index.html edits. */
+function _gvEnsureToastHost() {
+  var host = document.getElementById('gpsToastHost');
+  if (host) return host;
+  var screen = document.getElementById('gpsViewScreen');
+  if (!screen) return null;
+  host = document.createElement('div');
+  host.id = 'gpsToastHost';
+  host.style.cssText = 'position:absolute;top:60px;left:0;right:0;z-index:200;'
+    + 'display:flex;flex-direction:column;align-items:center;gap:6px;'
+    + 'pointer-events:none;padding:0 12px';
+  screen.appendChild(host);
+  return host;
+}
+function _gvShowToast(msg, kind) {
+  var host = _gvEnsureToastHost();
+  if (!host) return;
+  var bg = '#111', fg = '#fff', border = '#333';
+  if (kind === 'success') { bg = '#0f3a1f'; fg = '#d4fce0'; border = '#22c55e'; }
+  else if (kind === 'error') { bg = '#3a0f0f'; fg = '#fcd4d4'; border = '#ef4444'; }
+  else if (kind === 'info')  { bg = '#0f1f3a'; fg = '#d4e4fc'; border = '#3b82f6'; }
+  var t = document.createElement('div');
+  t.style.cssText = 'pointer-events:auto;background:' + bg + ';color:' + fg + ';'
+    + 'border:1px solid ' + border + ';border-radius:8px;'
+    + 'padding:8px 14px;font-size:.75rem;font-weight:600;'
+    + 'box-shadow:0 4px 12px rgba(0,0,0,.5);'
+    + 'max-width:90%;text-align:center;'
+    + 'opacity:0;transform:translateY(-6px);'
+    + 'transition:opacity .18s ease, transform .18s ease;cursor:pointer';
+  t.textContent = msg;
+  var dismiss = function() {
+    if (!t.parentNode) return;
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(-6px)';
+    setTimeout(function() {
+      if (t.parentNode) t.parentNode.removeChild(t);
+    }, 200);
+  };
+  t.addEventListener('click', dismiss);
+  host.appendChild(t);
+  /* Force reflow then animate in. */
+  // eslint-disable-next-line no-unused-expressions
+  void t.offsetHeight;
+  t.style.opacity = '1';
+  t.style.transform = 'translateY(0)';
+  setTimeout(dismiss, 3000);
+}
 
 /* ─────────────────────────────────────────────────────────
    Open / close / toggle
@@ -120,28 +184,136 @@ function gpsViewOpen() {
   _puttMode = false;
   _onGreenPromptShown = false;
   _holeNAtPrompt = -1;
-  /* LR-EXTRAS: wrap MapView's onAimChange so taps in tracker mode arm/land shots.
-     The original callback (persists lrState._mapAim) is preserved and called first. */
+  /* LR-EXTRAS: wrap MapView's onAimChange so taps in tracker mode arm shots.
+     The original callback (persists lrState._mapAim) is preserved and called first.
+     IMPORTANT: this wrap handles ARMING ONLY. Landing is handled by the
+     onMapClick wrap below — when a shot is armed the aim is LOCKED, so a
+     second tap does not fire onAimChange (it surfaces via onMapClick instead). */
   if (lr._mapInstance && _gvOriginalAimCb === null) {
     _gvOriginalAimCb = lr._mapInstance._onAimChange || null;
     lr._mapInstance._onAimChange = function(lngLat) {
       if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
       /* Tracker behaviour: only if explicitly enabled. */
       if (!lr._trackerOn) return;
-      var armed = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
-      if (!armed) {
-        /* No shot armed -> arm at this aim point. */
-        var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
-        if (typeof window.stArmShot === 'function') {
-          try { window.stArmShot(lngLat, '', current); } catch(e) {}
+      /* If somehow already armed (shouldn't happen because aim is locked once
+         armed), do nothing — landing is the onMapClick wrap's job. */
+      var armedAlready = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
+      if (armedAlready) return;
+      /* Arm: clear any prior dispersion overlay first so the user sees a fresh state. */
+      if (lr._mapInstance && typeof lr._mapInstance.clearDispersionLines === 'function') {
+        try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+      }
+      var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
+      if (typeof window.stArmShot === 'function') {
+        try { window.stArmShot(lngLat, '', current); } catch(e) {}
+      }
+      /* Inspect armed state to determine success and produce feedback. */
+      var armedNow = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+      if (armedNow) {
+        _gvJustArmedTs = Date.now();
+        /* Lock the aim and pin the line start to the armed start so the visuals
+           freeze at the moment of arming (no GPS jitter on the line). */
+        if (lr._mapInstance) {
+          if (typeof lr._mapInstance.setAimLocked === 'function') {
+            try { lr._mapInstance.setAimLocked(true); } catch(e) {}
+          }
+          if (typeof lr._mapInstance.setLineStartOverride === 'function') {
+            try { lr._mapInstance.setLineStartOverride(armedNow.startLngLat); } catch(e) {}
+          }
         }
+        /* Compute shot number for the toast. */
+        var s = lr.players[lr.curPlayer].scores[lr.curHole];
+        var n = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
+        _gvShowToast('Shot ' + n + ' armed \u2192 tap landing', 'info');
       } else {
-        /* Shot already armed -> land here, write the record. */
-        if (typeof window.stCloseShot === 'function') {
-          try { window.stCloseShot(lngLat); } catch(e) {}
+        _gvShowToast("Can't arm shot \u2014 no GPS or tee position yet", 'error');
+      }
+      if (typeof gpsViewRender === 'function') gpsViewRender();
+    };
+  }
+
+  /* LR-EXTRAS: wrap MapView's onGpsTick so gps-view's _gpsLast stays fresh as
+     the user walks. Without this, _gpsLast is seeded once at gpsViewOpen and
+     never updated (MapView owns the watch; its tick goes only to its own
+     consumer callback). Symptom: hazards/yardages frozen until toggle-cycle. */
+  if (lr._mapInstance && _gvOriginalGpsTickCb === null) {
+    _gvOriginalGpsTickCb = lr._mapInstance._onGpsTick || null;
+    lr._mapInstance._onGpsTick = function(ll) {
+      if (_gvOriginalGpsTickCb) { try { _gvOriginalGpsTickCb(ll); } catch(e) {} }
+      if (Array.isArray(ll) && ll.length >= 2) {
+        var prevWasNull = !_gpsLast;
+        _gpsLast = [ll[0], ll[1], 0];
+        _gpsLastTickTs = Date.now();
+        /* If we just got our first fix, render immediately so hazards/yards
+           appear without waiting for the next throttled cycle. Otherwise let
+           the movement-aware schedule handle it. */
+        if (prevWasNull) {
+          if (typeof gpsViewRender === 'function') gpsViewRender();
+        } else {
+          _gpsViewScheduleRender(false);
         }
       }
-      /* Refresh shot chip + putt bar etc. */
+    };
+  }
+
+  /* LR-EXTRAS: wrap MapView's onMapClick to handle LANDING taps when aim is
+     locked (a shot is armed). The aim-locked branch in MapView._handleMapClick
+     fires only this callback — onAimChange is suppressed — so this is the sole
+     entry point for landing detection. */
+  if (lr._mapInstance && _gvOriginalMapClickCb === null) {
+    _gvOriginalMapClickCb = lr._mapInstance._onMapClick || null;
+    lr._mapInstance._onMapClick = function(e) {
+      if (_gvOriginalMapClickCb) { try { _gvOriginalMapClickCb(e); } catch(err) {} }
+      if (!lr._trackerOn) return;
+      var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+      if (!armed) return;
+      /* Reject the same physical tap that just armed the shot (onAimChange and
+         onMapClick both fire on a single unlocked click; we only want LANDING
+         to fire on the NEXT tap). 250ms guard window. */
+      if (Date.now() - _gvJustArmedTs < 250) return;
+      var lngLat = e && e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
+      if (!lngLat) return;
+      var rec = null;
+      if (typeof window.stCloseShot === 'function') {
+        try { rec = window.stCloseShot(lngLat); } catch(err) {}
+      }
+      /* Release the lock + line override regardless of whether stCloseShot
+         succeeded — leaving the aim locked with no shot armed would be wedged. */
+      if (lr._mapInstance) {
+        if (typeof lr._mapInstance.setAimLocked === 'function') {
+          try { lr._mapInstance.setAimLocked(false); } catch(err) {}
+        }
+        if (typeof lr._mapInstance.setLineStartOverride === 'function') {
+          try { lr._mapInstance.setLineStartOverride(null); } catch(err) {}
+        }
+      }
+      if (rec && rec.gps_flight) {
+        /* Draw dispersion: intended (start->aim) green, actual (start->end) red.
+           Stays visible until the next shot is armed (or hole change / cancel). */
+        if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
+          try {
+            lr._mapInstance.setDispersionLines({
+              startLL: rec.gps_flight.startLngLat,
+              aimLL:   rec.gps_flight.aimLngLat,
+              endLL:   rec.gps_flight.endLngLat
+            });
+          } catch(err) {}
+        }
+        /* Toast: distance + lie + dispersion direction. */
+        var s2 = lr.players[lr.curPlayer].scores[lr.curHole];
+        var n2 = (s2 && Array.isArray(s2.shots)) ? s2.shots.length : 1;
+        var dispLat = rec.gps_flight.dispersionLat || 0;
+        var dispDir = '';
+        if (Math.abs(dispLat) >= 1) {
+          dispDir = ' \u00B7 ' + Math.round(Math.abs(dispLat)) + 'y ' + (dispLat > 0 ? 'R' : 'L') + ' of aim';
+        }
+        _gvShowToast(
+          'Shot ' + n2 + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown') + dispDir,
+          'success'
+        );
+      } else {
+        _gvShowToast('Shot logged', 'info');
+      }
       if (typeof gpsViewRender === 'function') gpsViewRender();
     };
   }
@@ -172,6 +344,20 @@ function gpsViewClose() {
     lr._mapInstance._onAimChange = _gvOriginalAimCb;
     _gvOriginalAimCb = null;
   }
+  /* LR-EXTRAS: restore the GPS-tick + map-click wraps too. Reset to null
+     unconditionally so a subsequent gpsViewOpen re-installs cleanly. */
+  if (lr && lr._mapInstance && _gvOriginalGpsTickCb !== null) {
+    lr._mapInstance._onGpsTick = _gvOriginalGpsTickCb;
+  }
+  _gvOriginalGpsTickCb = null;
+  if (lr && lr._mapInstance && _gvOriginalMapClickCb !== null) {
+    lr._mapInstance._onMapClick = _gvOriginalMapClickCb;
+  }
+  _gvOriginalMapClickCb = null;
+  _gvJustArmedTs = 0;
+  /* Strip the toast host so it doesn't stack between sessions. */
+  var th = document.getElementById('gpsToastHost');
+  if (th && th.parentNode) { try { th.parentNode.removeChild(th); } catch(e) {} }
   _gvChevronInjected = false;
   /* Strip our GPS-screen #lrMapCanvas so the live screen's lrRenderHole() can recreate
      a fresh #lrMapCanvas in its own DOM subtree without id collision. The stashed
@@ -384,7 +570,42 @@ function gpsViewToggleTracker() {
   lr._trackerOn = !lr._trackerOn;
   /* Turning tracker off cancels any armed shot. */
   if (!lr._trackerOn && typeof window.stCancel === 'function') window.stCancel();
+  /* LR-EXTRAS: also release MapView's per-shot UI state if tracker goes off
+     mid-shot. Without this the marker would stay red and the line stay
+     pinned to the abandoned start position. */
+  if (!lr._trackerOn && lr._mapInstance) {
+    if (typeof lr._mapInstance.setAimLocked === 'function') {
+      try { lr._mapInstance.setAimLocked(false); } catch(e) {}
+    }
+    if (typeof lr._mapInstance.setLineStartOverride === 'function') {
+      try { lr._mapInstance.setLineStartOverride(null); } catch(e) {}
+    }
+    if (typeof lr._mapInstance.clearDispersionLines === 'function') {
+      try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+    }
+  }
   if (typeof window._lrPersist === 'function') window._lrPersist();
+  gpsViewRender();
+}
+
+/* LR-EXTRAS: unified cancel handler. The Cancel button on the armed-shot chip
+   calls this so the shot record is cleared AND MapView's overlay state
+   (locked aim, pinned line start, dispersion lines) is reset in lockstep. */
+function gpsViewCancelShot() {
+  var lr = window.lrState;
+  if (typeof window.stCancel === 'function') window.stCancel();
+  if (lr && lr._mapInstance) {
+    if (typeof lr._mapInstance.setAimLocked === 'function') {
+      try { lr._mapInstance.setAimLocked(false); } catch(e) {}
+    }
+    if (typeof lr._mapInstance.setLineStartOverride === 'function') {
+      try { lr._mapInstance.setLineStartOverride(null); } catch(e) {}
+    }
+    if (typeof lr._mapInstance.clearDispersionLines === 'function') {
+      try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+    }
+  }
+  _gvJustArmedTs = 0;
   gpsViewRender();
 }
 
@@ -481,12 +702,30 @@ function _gvResetCanvasState() {
    ───────────────────────────────────────────────────────── */
 
 function _calcYardsToGreen() {
-  if (!_gpsLast) return null;
+  /* LR-EXTRAS: fall back to tee position when no GPS fix has come in yet.
+     User sees "from tee" yardage immediately on cold-start instead of "—". */
   var geo = _gvGetGeo();
   if (!geo) return null;
   var holeEntry = _gvHoleEntry(geo);
   if (!holeEntry || !Array.isArray(holeEntry.green)) return null;
-  try { return geomDistanceYds([_gpsLast[0], _gpsLast[1]], holeEntry.green); } catch(e) { return null; }
+  var fromPt = null;
+  if (_gpsLast) {
+    fromPt = [_gpsLast[0], _gpsLast[1]];
+  } else if (Array.isArray(holeEntry.tee)) {
+    fromPt = holeEntry.tee;
+  } else if (Array.isArray(holeEntry.line) && holeEntry.line.length) {
+    fromPt = holeEntry.line[0];
+  }
+  if (!fromPt) return null;
+  try { return geomDistanceYds(fromPt, holeEntry.green); } catch(e) { return null; }
+  /* // BEFORE LR-EXTRAS:
+  // if (!_gpsLast) return null;
+  // var geo = _gvGetGeo();
+  // if (!geo) return null;
+  // var holeEntry = _gvHoleEntry(geo);
+  // if (!holeEntry || !Array.isArray(holeEntry.green)) return null;
+  // try { return geomDistanceYds([_gpsLast[0], _gpsLast[1]], holeEntry.green); } catch(e) { return null; }
+  */
 }
 
 function _renderYards() {
@@ -504,32 +743,59 @@ function _renderYards() {
    Hazards in play
    ───────────────────────────────────────────────────────── */
 
+/* LR-EXTRAS: corridor projection helper used by _renderHazards.
+   Returns { inCorridor, lr } where lr is 'L'|'R'|'' relative to the start->end
+   axis. Returns null for degenerate (zero-length) axes. */
+function _gvCorridorCheck(startLL, endLL, hazardCentroid) {
+  if (!startLL || !endLL || !hazardCentroid) return null;
+  var lat0 = startLL[1] * Math.PI / 180;
+  var R = 6371000, M_TO_YDS = 1.0936133;
+  var ax = (endLL[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+  var ay = (endLL[1] - startLL[1]) * Math.PI / 180 * R;
+  var aLen = Math.sqrt(ax * ax + ay * ay);
+  if (aLen < 1e-3) return null;
+  var ux = ax / aLen, uy = ay / aLen;
+  var rx = uy, ry = -ux;
+  var hx = (hazardCentroid[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+  var hy = (hazardCentroid[1] - startLL[1]) * Math.PI / 180 * R;
+  var t = (hx * ux + hy * uy) / aLen;
+  var perp = Math.abs(hx * rx + hy * ry);
+  var perpYds = perp * M_TO_YDS;
+  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 60);
+  var cross = ux * hy - uy * hx;
+  var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
+  return { inCorridor: inCorridor, lr: lr_label };
+}
+
 function _renderHazards() {
   var el = document.getElementById('gpsHazards');
   if (!el) return;
   var lr = window.lrState;
-  if (!lr || !lr._mapInstance || !_gpsLast || !lr._mapAim) {
-    el.innerHTML = '';
-    return;
-  }
+  if (!lr || !lr._mapInstance) { el.innerHTML = ''; return; }
   var geo = _gvGetGeo();
   if (!geo || !geo.polygons || !geo.polygons.features) { el.innerHTML = ''; return; }
   var holeEntry = _gvHoleEntry(geo);
+  /* LR-EXTRAS: derive a "player" position with tee fallback so hazards appear
+     before the first GPS fix arrives. Likewise derive an "aim" with green
+     fallback so corridor 1 is meaningful even without a manually-set aim
+     (per user spec: hazards always show through the corridor; auto-aim midpoint
+     also counts). */
+  var player = null;
+  if (_gpsLast) {
+    player = [_gpsLast[0], _gpsLast[1]];
+  } else if (holeEntry && Array.isArray(holeEntry.tee)) {
+    player = holeEntry.tee;
+  } else if (holeEntry && Array.isArray(holeEntry.line) && holeEntry.line.length) {
+    player = holeEntry.line[0];
+  }
+  var aim = (lr._mapAim && Array.isArray(lr._mapAim))
+    ? lr._mapAim
+    : (holeEntry && Array.isArray(holeEntry.green) ? holeEntry.green : null);
+  var greenC = (holeEntry && Array.isArray(holeEntry.green)) ? holeEntry.green : null;
+  if (!player || !aim) { el.innerHTML = ''; return; }
   var allFeats = geo.polygons.features;
-  var player = [_gpsLast[0], _gpsLast[1]];
-  var aim    = lr._mapAim;
-  /* Pre-compute corridor basis. */
-  var lat0 = player[1] * Math.PI / 180;
-  var R = 6371000, M_TO_YDS = 1.0936133;
-  var ax = (aim[0] - player[0]) * Math.PI / 180 * Math.cos(lat0) * R;
-  var ay = (aim[1] - player[1]) * Math.PI / 180 * R;
-  var aLen = Math.sqrt(ax * ax + ay * ay);
-  if (aLen < 1e-3) { el.innerHTML = ''; return; }
-  var ux = ax / aLen, uy = ay / aLen;
-  var rx = uy, ry = -ux;  /* right-perpendicular */
-  /* Green centre for the "within 50y of green" rule. */
-  var greenC = holeEntry && Array.isArray(holeEntry.green) ? holeEntry.green : null;
-  /* Iterate hazard polygons (course-wide; corridor + near-green filters select per-hole relevance). */
+  /* Two corridors: player->aim and aim->green. If aim === green (fallback case),
+     the second corridor is degenerate and is skipped by _gvCorridorCheck. */
   var rows = [];
   for (var i = 0; i < allFeats.length; i++) {
     var f = allFeats[i];
@@ -538,27 +804,28 @@ function _renderHazards() {
     if (!GPS_HAZARDS[typ]) continue;
     var c = _gvPolyCentroid(f);
     if (!c) continue;
-    /* Player→hazard vector in metres. */
-    var hx = (c[0] - player[0]) * Math.PI / 180 * Math.cos(lat0) * R;
-    var hy = (c[1] - player[1]) * Math.PI / 180 * R;
-    /* Project onto aim line. */
-    var t = (hx * ux + hy * uy) / aLen;        /* 0..1 along player→aim */
-    var perp = Math.abs(hx * rx + hy * ry);     /* perpendicular metres */
-    var perpYds = perp * M_TO_YDS;
-    var inCorridor = (t >= 0 && t <= 1 && perpYds <= 60);
+    /* Corridor 1: player -> aim */
+    var c1 = _gvCorridorCheck(player, aim, c);
+    /* Corridor 2: aim -> green */
+    var c2 = (greenC && aim !== greenC) ? _gvCorridorCheck(aim, greenC, c) : null;
+    var inAny = (c1 && c1.inCorridor) || (c2 && c2.inCorridor);
+    /* Near-green rule preserved: any hazard within 50y of green centre always
+       shows even if outside both corridors. */
     var nearGreen = false;
     if (greenC) {
       try { nearGreen = geomDistanceYds(c, greenC) <= 50; } catch(e) {}
     }
-    if (!inCorridor && !nearGreen) continue;
+    if (!inAny && !nearGreen) continue;
     var distYds = 0;
     try { distYds = geomDistanceYds(player, c); } catch(e) {}
-    /* L/R via cross product (player→aim) × (player→hazard). */
-    var cross = ux * hy - uy * hx;
-    var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
-    rows.push({ typ: typ, dist: distYds, lr: lr_label, nearGreen: nearGreen });
+    /* L/R label: prefer corridor 1 (the one the user is walking through now);
+       fall back to corridor 2's L/R, then blank. */
+    var lrLabel = '';
+    if (c1 && c1.inCorridor) lrLabel = c1.lr;
+    else if (c2 && c2.inCorridor) lrLabel = c2.lr;
+    else if (c1) lrLabel = c1.lr;
+    rows.push({ typ: typ, dist: distYds, lr: lrLabel, nearGreen: nearGreen });
   }
-  /* Sort ascending by distance; near-green entries always shown. */
   rows.sort(function(a,b){ return a.dist - b.dist; });
   var visible = [];
   var extras = 0;
@@ -596,7 +863,7 @@ function _renderShotChip() {
     + '<span style="color:var(--tx)">\u25CB Shot armed</span>'
     + (armed.club ? '<span style="color:var(--tx2)">\u00B7 ' + armed.club + '</span>' : '')
     + '<span style="margin-left:auto;color:var(--tx3);font-size:.6rem">tap landing to log</span>'
-    + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="(window.stCancel&&window.stCancel(),gpsViewRender())">Cancel</button>'
+    + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="gpsViewCancelShot()">Cancel</button>'
     + '</div>';
 }
 
@@ -703,5 +970,6 @@ Object.assign(window, {
   gpsViewOpen, gpsViewClose, gpsViewToggle, gpsViewRender,
   gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker,
   gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt,
+  gpsViewCancelShot,
   lrxYardsToGreen
 });
