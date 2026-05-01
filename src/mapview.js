@@ -73,6 +73,14 @@ export class MapView {
     this._aim           = null;     /* [lng,lat] aim reticle position */
     this._teeOverride   = null;     /* [lng,lat] user-dragged tee, or null */
     this._minimized     = false;
+    /* LR-EXTRAS: shot-tracker integration. _aimLocked freezes the aim reticle
+       in place while a shot is armed (so a second tap is interpreted as a
+       landing tap by the consumer, not as an aim move). _lineStartOverride
+       pins the aim-line's start point to the armed-shot's start coordinate
+       rather than live GPS, so the line stays put as the user walks toward
+       the ball during shot logging. */
+    this._aimLocked         = false;
+    this._lineStartOverride = null;
 
     /* Bind event handlers once so add/remove listener references match. */
     this._handleMapClick     = this._handleMapClick.bind(this);
@@ -238,6 +246,15 @@ export class MapView {
   */
   showHole(holeN, opts) {
     this._holeN = holeN;
+    /* LR-EXTRAS: any per-shot overlay state belongs to the prior hole. Clear it
+       unconditionally on hole change. The shot tracker itself is cancelled by
+       the live-round hook (lrGoHole -> stCancel); these calls clear the visual
+       overlay so a stale red marker / dispersion lines don't carry across. */
+    this._aimLocked         = false;
+    this._lineStartOverride = null;
+    if (typeof this.clearDispersionLines === 'function') {
+      try { this.clearDispersionLines(); } catch(e) {}
+    }
     if (opts && opts.resetAim) {
       this._aim = null;
       this._teeOverride = null;
@@ -546,7 +563,12 @@ export class MapView {
       + '<div style="position:absolute;top:50%;left:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>'
       + '<div style="position:absolute;top:50%;right:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>';
     var self = this;
-    this._aimMarker = new window.maplibregl.Marker({ element: el, draggable: true })
+    /* LR-EXTRAS: explicit anchor:'center' forces MapLibre to place the marker's
+       geometric centre at the geographic point. Some MapLibre versions silently
+       fall back to anchor:'bottom' for custom-element markers, which puts the
+       crosshair (visually at element centre) BELOW the geo point — exactly the
+       offset the user reported in GPS view. */
+    this._aimMarker = new window.maplibregl.Marker({ element: el, draggable: true, anchor: 'center' })
       .setLngLat(this._aim).addTo(this._map);
     this._aimMarker.on('drag', function(){
       var p = self._aimMarker.getLngLat();
@@ -560,6 +582,11 @@ export class MapView {
       self._aim = [p.lng, p.lat];
       if (self._onAimChange) { try { self._onAimChange(self._aim); } catch(e) {} }
     });
+    /* LR-EXTRAS: ensure marker style/draggability matches current lock state.
+       Important when MapView rebuilds on container change mid-shot — without
+       this the rebuilt marker would start in unlocked (white, draggable) state
+       even if a shot is still armed. */
+    this._updateAimMarkerStyle();
   }
 
   /* G2b-R -- render the aim line: start(GPS|userTee|geomTee) -> aim -> green. */
@@ -604,7 +631,16 @@ export class MapView {
     /* Single-aim (legacy) — behavior unchanged below. */
     if (!hole.green) { try { geomRenderPath(this._map, []); } catch(e){} return; }
     var gpsActive = !!(this._gpsOn && this._userLonLat);
-    var startPt = gpsActive ? this._userLonLat : (this._teeOverride || hole.tee);
+    /* LR-EXTRAS: when a shot is armed, _lineStartOverride pins the line start
+       to the armed-shot's start position, so the line doesn't wobble with GPS
+       jitter while the user walks toward the ball. Falls through to the
+       original GPS|tee logic when no override is set. */
+    var startPt = this._lineStartOverride
+      ? this._lineStartOverride
+      : (gpsActive ? this._userLonLat : (this._teeOverride || hole.tee));
+    /* // BEFORE LR-EXTRAS:
+    // var startPt = gpsActive ? this._userLonLat : (this._teeOverride || hole.tee);
+    */
     var aim = this._aim;
     if (!startPt || !aim) { try { geomRenderPath(this._map, []); } catch(e){} return; }
     try { geomRenderPath(this._map, [startPt, aim, hole.green]); } catch(e) {}
@@ -691,6 +727,14 @@ export class MapView {
     if (this._multiAim) {
       /* Multi-aim: append to active path's waypoints */
       this.addWaypoint(this._activePath, [e.lngLat.lng, e.lngLat.lat]);
+      if (this._onMapClick) { try { this._onMapClick(e); } catch(err) {} }
+      return;
+    }
+    /* LR-EXTRAS: when aim is locked (a shot is armed), the second tap is a
+       LANDING tap — do not mutate aim, do not fire onAimChange. Only surface
+       the click to the consumer via onMapClick so gps-view's wrap can call
+       stCloseShot. */
+    if (this._aimLocked) {
       if (this._onMapClick) { try { this._onMapClick(e); } catch(err) {} }
       return;
     }
@@ -830,5 +874,127 @@ export class MapView {
       } catch(e) {}
     }
     try { src.setData({ type: 'FeatureCollection', features: feats }); } catch(e) {}
+  }
+
+  /* ============================================================
+     LR-EXTRAS: shot-tracker integration methods
+     ============================================================ */
+
+  /* Lock/unlock the aim reticle. When locked: drag is disabled, marker turns red,
+     and _handleMapClick stops mutating _aim (taps go through onMapClick only).
+     Used by gps-view.js while a shot is armed so the aim point captured at arm
+     time is preserved as the user taps a separate landing location. */
+  setAimLocked(b) {
+    this._aimLocked = !!b;
+    this._updateAimMarkerStyle();
+  }
+
+  /* Pin the aim line's start point to a specific [lng,lat] (typically the
+     armed-shot start position) instead of live GPS. Pass null to release.
+     Triggers a redraw so the visual updates immediately. */
+  setLineStartOverride(lngLat) {
+    this._lineStartOverride = (Array.isArray(lngLat) && lngLat.length >= 2) ? lngLat : null;
+    if (this._map) {
+      this._renderAimLine();
+      this._updateFloatingDists();
+    }
+  }
+
+  /* Mutate the existing aim-marker DOM element in place to reflect lock state.
+     Red border + non-grab cursor when locked; white + grab when unlocked.
+     Toggles draggability via MapLibre Marker.setDraggable when available. */
+  _updateAimMarkerStyle() {
+    if (!this._aimMarker) return;
+    var locked = !!this._aimLocked;
+    if (typeof this._aimMarker.setDraggable === 'function') {
+      try { this._aimMarker.setDraggable(!locked); } catch(e) {}
+    }
+    var el = (typeof this._aimMarker.getElement === 'function')
+      ? this._aimMarker.getElement() : null;
+    if (el) {
+      el.style.borderColor = locked ? '#ef4444' : '#ffffff';
+      el.style.cursor      = locked ? 'default' : 'grab';
+      /* Optional: subtle red glow when locked so the state is unmistakable. */
+      el.style.boxShadow   = locked
+        ? '0 0 8px rgba(239,68,68,.7)'
+        : '0 0 6px rgba(0,0,0,.6)';
+    }
+  }
+
+  /* Lazy source/layer creation for shot-dispersion overlay. Mirrors the
+     mv-radials pattern. Two layers: intended (start->aim, green) and actual
+     (start->end, red). pathKind: 'intended' | 'actual' filter on properties.kind. */
+  _ensureDispersionLayer() {
+    if (!this._map) return;
+    try {
+      if (!this._map.getSource('mv-dispersion')) {
+        this._map.addSource('mv-dispersion', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] }
+        });
+      }
+      if (!this._map.getLayer('mv-dispersion-intended')) {
+        this._map.addLayer({
+          id: 'mv-dispersion-intended',
+          type: 'line',
+          source: 'mv-dispersion',
+          filter: ['==', ['get', 'kind'], 'intended'],
+          paint: {
+            'line-color': '#22c55e',
+            'line-width': 2,
+            'line-opacity': 0.85
+          }
+        });
+      }
+      if (!this._map.getLayer('mv-dispersion-actual')) {
+        this._map.addLayer({
+          id: 'mv-dispersion-actual',
+          type: 'line',
+          source: 'mv-dispersion',
+          filter: ['==', ['get', 'kind'], 'actual'],
+          paint: {
+            'line-color': '#ef4444',
+            'line-width': 2.5,
+            'line-opacity': 0.9
+          }
+        });
+      }
+    } catch(e) {}
+  }
+
+  /* Render the just-completed shot's intended vs actual lines until the next
+     shot is armed (or hole change / cancel). pts: { startLL, aimLL, endLL }. */
+  setDispersionLines(pts) {
+    if (!this._map || !pts) return;
+    this._ensureDispersionLayer();
+    var src;
+    try { src = this._map.getSource('mv-dispersion'); } catch(e) { return; }
+    if (!src) return;
+    var feats = [];
+    if (Array.isArray(pts.startLL) && Array.isArray(pts.aimLL)) {
+      feats.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [pts.startLL, pts.aimLL] },
+        properties: { kind: 'intended' }
+      });
+    }
+    if (Array.isArray(pts.startLL) && Array.isArray(pts.endLL)) {
+      feats.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [pts.startLL, pts.endLL] },
+        properties: { kind: 'actual' }
+      });
+    }
+    try { src.setData({ type: 'FeatureCollection', features: feats }); } catch(e) {}
+  }
+
+  /* Clear the dispersion overlay. Called from showHole, stCancel handler, and
+     on next shot arm. */
+  clearDispersionLines() {
+    if (!this._map) return;
+    var src;
+    try { src = this._map.getSource('mv-dispersion'); } catch(e) { return; }
+    if (!src) return;
+    try { src.setData({ type: 'FeatureCollection', features: [] }); } catch(e) {}
   }
 }
