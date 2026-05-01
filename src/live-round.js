@@ -3486,7 +3486,7 @@ function lrxBannerHtml(mode) {
   var holeGlyph  = lrState._holePaused ? '\u25B6' : '\u23F8';
   var holeText   = holeGlyph + ' Hole ' + lrxFmtHM(holeSecs);
   var totalText  = 'Total ' + lrxFmtHMS(totalSecs);
-  var clockText  = lrxFmtClock12(new Date());
+  /* clockText removed -- mobile OS already shows current time at top of screen. */
   var drinks     = lrState._drinks || 0;
 
   /* Weather text (or '' if no fix yet). */
@@ -3525,10 +3525,10 @@ function lrxBannerHtml(mode) {
       + '</div>';
   }
 
-  /* Build the chip row (used by both 'live' and 'gps-expanded'). */
+  /* Build the chip row (used by both 'live' and 'gps-expanded'). Clock pill removed
+     per spec -- mobile OS already shows current time. */
   var chipRow =
       '<div class="lrx-row">'
-    +   '<span class="lrx-pill mono">' + clockText + '</span>'
     +   '<span class="lrx-pill mono ' + holeCls + '" onclick="lrxTogglePause()" role="button" tabindex="0">'
     +     holeText + '</span>'
     +   '<span class="lrx-pill mono">' + totalText + '</span>'
