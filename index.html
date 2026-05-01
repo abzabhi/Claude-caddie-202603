@@ -446,6 +446,19 @@ body{
 .checklist-step.done > span:nth-child(2){text-decoration:line-through;color:var(--tx3);}
 .checklist-icon{font-size:.9rem;color:var(--tx3);min-width:16px;}
 .ai-step-row{font-size:.68rem;color:var(--tx2);padding:3px 0;}
+/* ── LR-EXTRAS: banner chips (top of live round) + GPS view ── */
+.lrx-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--br);background:var(--sf);font-family:'DM Mono',monospace;}
+.lrx-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;min-height:32px;border-radius:14px;background:var(--bg);border:1px solid var(--br);font-size:.62rem;color:var(--tx);letter-spacing:.04em;}
+.lrx-chip[role="button"]{cursor:pointer;}
+.lrx-chip[role="button"]:active{background:var(--bg2);}
+.lrx-chip-drinks{padding:2px 4px;gap:2px;}
+.lrx-chip-btn{min-width:28px;min-height:28px;border:none;background:transparent;color:var(--tx);font-size:.85rem;font-weight:700;cursor:pointer;border-radius:8px;padding:0 6px;}
+.lrx-chip-btn:active{background:var(--bg2);}
+@media (max-width: 380px){
+  /* Drop AM/PM on narrow screens to save space */
+  #lrxClock{font-size:.58rem}
+  .lrx-chip{padding:4px 7px;font-size:.58rem;min-height:30px}
+}
 </style>
 <!-- CLEAN10 -- DOMPurify for sanitising user-authored strings before innerHTML assignment -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" integrity="sha512-dn5ClFMnAoB/BdYMh7vDaBpxECaTqz3lXjdOPsQi8OHRD2h+mGKOHTHlJvXrLMOXmAPlNAGI0q9OnnGbCWalw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -1871,6 +1884,18 @@ body{
           <button class="btn sec" style="font-size:.56rem;padding:2px 7px" data-par="5" onclick="lrSetPar(5)">Par 5</button>
         </div>
       </div>
+      <!-- LR-EXTRAS: banner chips (clock / hole timer / total timer / weather / drinks) -->
+      <div class="lrx-chips">
+        <span class="lrx-chip" id="lrxClock"></span>
+        <span class="lrx-chip" id="lrxHoleTimer" onclick="lrxTogglePause()" role="button" tabindex="0"></span>
+        <span class="lrx-chip" id="lrxTotalTimer"></span>
+        <span class="lrx-chip" id="lrxWeather" onclick="lrxToggleUnits()" role="button" tabindex="0" style="display:none"></span>
+        <span class="lrx-chip lrx-chip-drinks" id="lrxDrinks-wrap" style="margin-left:auto">
+          <button class="lrx-chip-btn" onclick="lrxDecDrink()" aria-label="decrement">−</button>
+          <span id="lrxDrinks">🍺 0</span>
+          <button class="lrx-chip-btn" onclick="lrxIncDrink()" aria-label="increment">+</button>
+        </span>
+      </div>
       <div class="lr-net-tog" id="lrNetTog" style="display:none">
         <button id="lrGrossBtn" class="on" onclick="lrSetView('gross')">Gross</button>
         <button id="lrNetBtn" onclick="lrSetView('net')">Net</button>
@@ -1887,7 +1912,30 @@ body{
       <div class="lr-nav-sep"></div>
       <button class="lr-nav-btn" onclick="lrMinimize()"><span class="lr-nav-icon">⏸</span><span>Minimise</span></button>
       <div class="lr-nav-sep"></div>
+      <!-- LR-EXTRAS: GPS chip; show/hide controlled by lrxRenderBanner (visible iff lrState._gpsOn) -->
+      <button class="lr-nav-btn" id="lrxGpsBtn" style="display:none" onclick="gpsViewOpen()"><span class="lr-nav-icon">📍</span><span>GPS</span></button>
+      <div class="lr-nav-sep" id="lrxGpsBtnSep" style="display:none"></div>
       <button class="lr-nav-btn primary" id="lrNextBtn" onclick="lrGoHole(1)"><span class="lr-nav-icon" id="lrNextIcon">→</span><span id="lrNextLbl">Next</span></button>
+    </div>
+  </div>
+  <!-- LR-EXTRAS: GPS view screen (additive, opened from lr bottom-nav GPS chip) -->
+  <div id="gpsViewScreen" style="display:none;flex-direction:column;height:100%;background:var(--bg);">
+    <div id="gpsTopBanner" data-collapsed="false"></div>
+    <div id="gpsMapWrap" style="flex:1;min-height:200px;background:var(--bg2);position:relative;overflow:hidden"></div>
+    <div id="gpsYards"></div>
+    <div id="gpsHazards" style="max-height:140px;overflow-y:auto"></div>
+    <div id="gpsShotChip" style="display:none"></div>
+    <div id="gpsPuttBar" style="display:none"></div>
+    <div class="lr-bottom">
+      <button class="lr-nav-btn" onclick="lrGoHole(-1)"><span class="lr-nav-icon">←</span><span>Prev</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn" onclick="gpsViewClose()"><span class="lr-nav-icon">📋</span><span>Scoring</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn" onclick="lrShowTally()"><span class="lr-nav-icon">🗒</span><span>Tally</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn danger" onclick="lrEndRound()"><span class="lr-nav-icon">⏹</span><span>End</span></button>
+      <div class="lr-nav-sep"></div>
+      <button class="lr-nav-btn primary" onclick="lrGoHole(1)"><span class="lr-nav-icon">→</span><span>Next</span></button>
     </div>
   </div>
   <!-- Tally screen -->
@@ -1962,6 +2010,9 @@ body{
   import { renderClubs, addClub, toggleClubMode, toggleImplied, _clubRange,calcVizMaxRange } from './src/clubs.js';
   import { renderCourseList } from './src/courses.js';
   import './src/live-round.js';
+  /* LR-EXTRAS: shot tracker (pure logic) must load before gps-view.js (UI). */
+  import './src/shot-tracker.js';
+  import './src/gps-view.js';
   import './src/sync.js';
   import { renderHandicap } from './src/rounds.js';
   import './src/caddie.js';
