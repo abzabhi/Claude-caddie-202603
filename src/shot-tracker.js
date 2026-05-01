@@ -30,72 +30,84 @@ function _stMapLie(raw) {
   return 'rough';
 }
 
-/* Resolve the green polygon feature for the current hole (for shot_mode auto-detect). */
+/* Resolve the canonical hole entry for the current hole.
+   Geometry shape (from geomap.js): { holes: { "<track>_<ref>": {ref, tee, green, line, bounds} },
+                                      polygons: <FeatureCollection of {golf}-tagged polys>,
+                                      rawFeatures }. */
+function _stCurrentHoleEntry() {
+  var lr = window.lrState;
+  if (!lr || !lr._mapInstance) return null;
+  var geo = (typeof lr._mapInstance.getGeometry === 'function')
+    ? lr._mapInstance.getGeometry()
+    : (lr._mapInstance._geo || null);
+  if (!geo || !geo.holes) return null;
+  var want = String(lr.curHole + 1);
+  for (var key in geo.holes) {
+    if (String(geo.holes[key].ref) === want) return geo.holes[key];
+  }
+  return null;
+}
+
+/* Resolve the green polygon (a Turf polygon Feature) for the current hole.
+   Strategy: find the polygon in geo.polygons.features whose centroid is
+   closest to the hole entry's .green coordinate. */
 function _stCurrentGreenFeature() {
   var lr = window.lrState;
   if (!lr || !lr._mapInstance) return null;
   var geo = (typeof lr._mapInstance.getGeometry === 'function')
     ? lr._mapInstance.getGeometry()
     : (lr._mapInstance._geo || null);
-  if (!geo || !geo.features) return null;
-  var holeN = lr.curHole + 1;
-  for (var i = 0; i < geo.features.length; i++) {
-    var f = geo.features[i];
-    if (!f || !f.properties) continue;
-    if (f.properties.golf !== 'green') continue;
-    /* Match by ref/hole number if available; else first green is acceptable fallback. */
-    var ref = f.properties.ref || f.properties.hole;
-    if (ref != null && +ref === holeN) return f;
+  if (!geo || !geo.polygons || !geo.polygons.features) return null;
+  var hole = _stCurrentHoleEntry();
+  var anchor = hole && Array.isArray(hole.green) ? hole.green : null;
+  var greens = geo.polygons.features.filter(function(f){
+    return f && f.properties && f.properties.golf === 'green';
+  });
+  if (!greens.length) return null;
+  if (!anchor) return greens[0];
+  /* Closest-centroid match. */
+  var best = null, bestD = Infinity;
+  for (var i = 0; i < greens.length; i++) {
+    var c = _stPolyCentroid(greens[i]);
+    if (!c) continue;
+    var dx = c[0] - anchor[0], dy = c[1] - anchor[1];
+    var d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = greens[i]; }
   }
-  /* Fallback: first green if no ref-tagged match. */
-  for (var j = 0; j < geo.features.length; j++) {
-    if (geo.features[j].properties && geo.features[j].properties.golf === 'green') return geo.features[j];
-  }
-  return null;
+  return best || greens[0];
+}
+
+/* Polygon centroid (simple average of outer ring coords). */
+function _stPolyCentroid(f) {
+  if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
+  var ring = f.geometry.coordinates[0];
+  if (!ring || !ring.length) return null;
+  var sx = 0, sy = 0, n = 0;
+  for (var i = 0; i < ring.length; i++) { sx += ring[i][0]; sy += ring[i][1]; n++; }
+  return n ? [sx / n, sy / n] : null;
 }
 
 /* Resolve a tee position [lon,lat] for the current hole, for shot 1's startLngLat. */
 function _stCurrentTeeLngLat() {
   var lr = window.lrState;
   if (!lr) return null;
-  /* Prefer user-overridden tee, else the MapView's resolved tee marker location. */
+  /* Prefer user-overridden tee, else MapView's resolved tee, else hole entry's .tee. */
   if (Array.isArray(lr._mapTeeLonLat)) return lr._mapTeeLonLat;
   if (lr._mapInstance && lr._mapInstance._teeOverride) return lr._mapInstance._teeOverride;
-  /* Try geometry tee feature. */
-  if (lr._mapInstance) {
-    var geo = (typeof lr._mapInstance.getGeometry === 'function')
-      ? lr._mapInstance.getGeometry()
-      : (lr._mapInstance._geo || null);
-    if (geo && geo.features) {
-      var holeN = lr.curHole + 1;
-      for (var i = 0; i < geo.features.length; i++) {
-        var f = geo.features[i];
-        if (!f || !f.properties || f.properties.golf !== 'tee') continue;
-        var ref = f.properties.ref || f.properties.hole;
-        if (ref != null && +ref !== holeN) continue;
-        if (f.geometry && f.geometry.type === 'Point') return f.geometry.coordinates;
-        /* Polygon tee: return centroid-ish (first coord) as approximation. */
-        if (f.geometry && f.geometry.type === 'Polygon' && f.geometry.coordinates[0]) {
-          return f.geometry.coordinates[0][0];
-        }
-      }
-    }
-  }
+  var hole = _stCurrentHoleEntry();
+  if (hole && Array.isArray(hole.tee)) return hole.tee;
+  /* Fallback: first point on the hole centreline. */
+  if (hole && Array.isArray(hole.line) && hole.line.length) return hole.line[0];
   return null;
 }
 
 /* Compute green-centre [lon,lat] for distanceToHole. */
 function _stGreenCenter() {
-  var g = _stCurrentGreenFeature();
-  if (!g || !g.geometry) return null;
-  if (g.geometry.type === 'Point') return g.geometry.coordinates;
-  if (g.geometry.type === 'Polygon' && g.geometry.coordinates[0]) {
-    var ring = g.geometry.coordinates[0];
-    var sx = 0, sy = 0, n = 0;
-    for (var i = 0; i < ring.length; i++) { sx += ring[i][0]; sy += ring[i][1]; n++; }
-    if (n) return [sx / n, sy / n];
-  }
-  return null;
+  var hole = _stCurrentHoleEntry();
+  if (hole && Array.isArray(hole.green)) return hole.green;
+  /* Fallback: centroid of green polygon. */
+  var f = _stCurrentGreenFeature();
+  return f ? _stPolyCentroid(f) : null;
 }
 
 /* Get most-recent shot record for the current player + hole, or null. */
@@ -194,7 +206,7 @@ function stCloseShot(endLngLat) {
   try {
     var geo = lr._mapInstance && (typeof lr._mapInstance.getGeometry === 'function'
       ? lr._mapInstance.getGeometry() : lr._mapInstance._geo);
-    if (geo) rawLie = geomLieAtPoint(endLngLat, geo);
+    if (geo && geo.polygons) rawLie = geomLieAtPoint(endLngLat, geo.polygons);
   } catch (e) {}
   var lie = _stMapLie(rawLie);
 
