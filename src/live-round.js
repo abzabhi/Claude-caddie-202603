@@ -3454,6 +3454,104 @@ function _lrxHoleSeconds() {
   return committed + live;
 }
 
+/* ───── LR-EXTRAS: banner builder (single source of truth for both screens) ─────
+   Modes: 'live'           -> always-expanded chip row, no Hole/Par/yds prefix
+          'gps-expanded'   -> same chip row + GPS-only action sub-row (Tracker/Satellite)
+          'gps-collapsed'  -> compact summary line (Hole N · Par X · yds · timer · drinks · gps-dot) */
+function lrxBannerHtml(mode) {
+  if (!lrState) return '';
+  var hole       = lrState.holes ? lrState.holes[lrState.curHole] : null;
+  var holeSecs   = _lrxHoleSeconds();
+  var totalSecs  = _lrxTotalSeconds();
+  var holeCls    = _lrxTimeClass(holeSecs);
+  var holeGlyph  = lrState._holePaused ? '\u25B6' : '\u23F8';
+  var holeText   = holeGlyph + ' Hole ' + lrxFmtHM(holeSecs);
+  var totalText  = 'Total ' + lrxFmtHMS(totalSecs);
+  var clockText  = lrxFmtClock12(new Date());
+  var drinks     = lrState._drinks || 0;
+
+  /* Weather text (or '' if no fix yet). */
+  var wText = '';
+  var w = lrState._weather;
+  if (w) {
+    var units = localStorage.getItem('gordy:units') || 'metric';
+    var temp, wind, tu, wu;
+    if (units === 'imperial') {
+      temp = Math.round((w.tempC * 9 / 5) + 32);  tu = '\u00B0F';
+      wind = Math.round(w.windKmh * 0.621371);    wu = 'mph';
+    } else {
+      temp = Math.round(w.tempC);                 tu = '\u00B0C';
+      wind = Math.round(w.windKmh);               wu = 'k';
+    }
+    var dir = lrxWindCardinal(w.windDir);
+    wText = lrxWeatherIcon(w.code) + ' ' + temp + tu + ' \u00B7 ' + wind + wu + (dir ? ' ' + dir : '');
+  }
+
+  /* GPS-collapsed compact line (used only on GPS screen). */
+  if (mode === 'gps-collapsed') {
+    var holeN  = hole ? hole.n : (lrState.curHole + 1);
+    var par    = hole ? hole.par : '';
+    /* yards-to-green is a GPS-screen concept; resolved by gps-view via window.lrxYardsToGreen if available. */
+    var yds    = (typeof window.lrxYardsToGreen === 'function') ? window.lrxYardsToGreen() : null;
+    var gpsLost = !!window._gpsViewLostFlag;
+    var dotColor = gpsLost ? '#c0392b' : '#2ca02c';
+    return '<div class="lrx-banner lrx-collapsed" onclick="gpsViewToggleBanner()">'
+      + '<span class="lrx-pill"><b>Hole ' + holeN + '</b></span>'
+      + '<span class="lrx-pill">Par ' + par + '</span>'
+      + (yds != null ? '<span class="lrx-pill mono">' + yds + 'y</span>' : '')
+      + '<span class="lrx-pill mono ' + holeCls + '">' + holeText + '</span>'
+      + '<span class="lrx-pill">\uD83C\uDF7A ' + drinks + '</span>'
+      + '<span class="lrx-dot" style="background:' + dotColor + '"></span>'
+      + '<span class="lrx-hint">tap to expand</span>'
+      + '</div>';
+  }
+
+  /* Build the chip row (used by both 'live' and 'gps-expanded'). */
+  var chipRow =
+      '<div class="lrx-row">'
+    +   '<span class="lrx-pill mono">' + clockText + '</span>'
+    +   '<span class="lrx-pill mono ' + holeCls + '" onclick="lrxTogglePause()" role="button" tabindex="0">'
+    +     holeText + '</span>'
+    +   '<span class="lrx-pill mono">' + totalText + '</span>'
+    +   (wText
+        ? '<span class="lrx-pill mono" id="lrxWeather" onclick="lrxToggleUnits()" role="button" tabindex="0">' + wText + '</span>'
+        : '')
+    +   '<span class="lrx-pill lrx-pill-stepper" style="margin-left:auto">'
+    +     '<button class="lrx-step-btn" onclick="event.stopPropagation();lrxDecDrink()" aria-label="decrement">\u2212</button>'
+    +     '<span class="lrx-pill-val">\uD83C\uDF7A ' + drinks + '</span>'
+    +     '<button class="lrx-step-btn" onclick="event.stopPropagation();lrxIncDrink()" aria-label="increment">+</button>'
+    +   '</span>'
+    + '</div>';
+
+  if (mode === 'gps-expanded') {
+    var trackerOn = !!lrState._trackerOn;
+    var styleMode = (lrState._mapInstance && typeof lrState._mapInstance.getStyleMode === 'function')
+      ? lrState._mapInstance.getStyleMode() : 'satellite';
+    var actionRow =
+        '<div class="lrx-row lrx-row-actions">'
+      +   '<button class="lrx-act" onclick="gpsViewToggleTracker()">'
+      +     (trackerOn ? '\u25CF Tracker On' : '\u25CB Tracker Off') + '</button>'
+      +   '<button class="lrx-act" onclick="gpsViewToggleMapMode()">'
+      +     (styleMode === 'plain' ? 'No Map' : 'Satellite') + '</button>'
+      +   '<span class="lrx-hint" style="margin-left:auto" onclick="gpsViewToggleBanner()">tap to collapse</span>'
+      + '</div>';
+    return '<div class="lrx-banner lrx-expanded">' + chipRow + actionRow + '</div>';
+  }
+
+  /* mode === 'live' (default): chip row only, no collapse affordance. */
+  return '<div class="lrx-banner lrx-expanded">' + chipRow + '</div>';
+}
+
+/* Color class for time-pressure thresholds. Hole time only (per spec). */
+function _lrxTimeClass(seconds) {
+  if (seconds > 15 * 60) return 'lrx-time-bad';
+  if (seconds > 10 * 60) return 'lrx-time-warn';
+  return 'lrx-time-ok';
+}
+
+/* lrxRenderBanner -- now a thin dispatcher.
+   Stamps the live banner into #lrxBanner, and (if open) the GPS banner into #gpsBanner.
+   Also continues to manage the bottom-nav GPS chip visibility on the live screen. */
 function lrxRenderBanner() {
   if (!lrState) return;
   /* Bottom-nav GPS chip + its separator: visible only when _gpsOn is true. */
@@ -3462,44 +3560,51 @@ function lrxRenderBanner() {
   var visGps = !!lrState._gpsOn;
   if (gpsBtn) gpsBtn.style.display = visGps ? '' : 'none';
   if (gpsSep) gpsSep.style.display = visGps ? '' : 'none';
-  /* Clock */
-  var clockEl = document.getElementById('lrxClock');
-  if (clockEl) clockEl.textContent = lrxFmtClock12(new Date());
-  /* Hole timer */
-  var holeEl = document.getElementById('lrxHoleTimer');
-  if (holeEl) {
-    var glyph = lrState._holePaused ? '\u25B6' : '\u23F8';
-    holeEl.textContent = glyph + ' Hole ' + lrxFmtHM(_lrxHoleSeconds());
+  /* Live screen banner. */
+  var liveEl = document.getElementById('lrxBanner');
+  if (liveEl) liveEl.innerHTML = lrxBannerHtml('live');
+  /* GPS screen banner (if present and open). */
+  var gpsEl = document.getElementById('gpsBanner');
+  if (gpsEl) {
+    var collapsed = gpsEl.dataset.collapsed === 'true';
+    gpsEl.innerHTML = lrxBannerHtml(collapsed ? 'gps-collapsed' : 'gps-expanded');
   }
-  /* Total timer */
-  var totEl = document.getElementById('lrxTotalTimer');
-  if (totEl) totEl.textContent = 'Total ' + lrxFmtHMS(_lrxTotalSeconds());
-  /* Weather */
-  var wEl = document.getElementById('lrxWeather');
-  if (wEl) {
-    var w = lrState._weather;
-    if (!w) {
-      wEl.style.display = 'none';
-    } else {
-      wEl.style.display = '';
-      var units = localStorage.getItem('gordy:units') || 'metric';
-      var temp, wind, tu, wu;
-      if (units === 'imperial') {
-        temp = Math.round((w.tempC * 9 / 5) + 32);  tu = '\u00B0F';
-        wind = Math.round(w.windKmh * 0.621371);    wu = 'mph';
-      } else {
-        temp = Math.round(w.tempC);                 tu = '\u00B0C';
-        wind = Math.round(w.windKmh);               wu = 'k';
-      }
-      var icon = lrxWeatherIcon(w.code);
-      var dir  = lrxWindCardinal(w.windDir);
-      wEl.textContent = icon + ' ' + temp + tu + ' \u00B7 ' + wind + wu + (dir ? ' ' + dir : '');
-    }
-  }
-  /* Drinks */
-  var dEl = document.getElementById('lrxDrinks');
-  if (dEl) dEl.textContent = '\uD83C\uDF7A ' + (lrState._drinks || 0);
 }
+
+/* OLD lrxRenderBanner -- preserved per "comment, don't delete" rule.
+   Replaced by the shared lrxBannerHtml builder above. Nested-safe via line-prefixed comments.
+// function lrxRenderBanner_OLD() {
+//   if (!lrState) return;
+//   var gpsBtn = document.getElementById('lrxGpsBtn');
+//   var gpsSep = document.getElementById('lrxGpsBtnSep');
+//   var visGps = !!lrState._gpsOn;
+//   if (gpsBtn) gpsBtn.style.display = visGps ? '' : 'none';
+//   if (gpsSep) gpsSep.style.display = visGps ? '' : 'none';
+//   var clockEl = document.getElementById('lrxClock');
+//   if (clockEl) clockEl.textContent = lrxFmtClock12(new Date());
+//   var holeEl = document.getElementById('lrxHoleTimer');
+//   if (holeEl) {
+//     var glyph = lrState._holePaused ? '\u25B6' : '\u23F8';
+//     holeEl.textContent = glyph + ' Hole ' + lrxFmtHM(_lrxHoleSeconds());
+//   }
+//   var totEl = document.getElementById('lrxTotalTimer');
+//   if (totEl) totEl.textContent = 'Total ' + lrxFmtHMS(_lrxTotalSeconds());
+//   var wEl = document.getElementById('lrxWeather');
+//   if (wEl) {
+//     var w = lrState._weather;
+//     if (!w) { wEl.style.display = 'none'; }
+//     else {
+//       wEl.style.display = '';
+//       var units = localStorage.getItem('gordy:units') || 'metric';
+//       var temp, wind, tu, wu;
+//       if (units === 'imperial') { temp = Math.round((w.tempC * 9 / 5) + 32); tu = 'F'; wind = Math.round(w.windKmh * 0.621371); wu = 'mph'; }
+//       else { temp = Math.round(w.tempC); tu = 'C'; wind = Math.round(w.windKmh); wu = 'k'; }
+//       wEl.textContent = lrxWeatherIcon(w.code) + ' ' + temp + tu + ' . ' + wind + wu;
+//     }
+//   }
+//   var dEl = document.getElementById('lrxDrinks');
+//   if (dEl) dEl.textContent = ' ' + (lrState._drinks || 0);
+// } */
 
 function lrxTick() {
   if (!lrState) return;
@@ -3553,5 +3658,5 @@ Object.assign(window, {
   lrxInit, lrxHydrate,
   lrxStartHoleTimer, lrxStopHoleTimer, lrxTogglePause,
   lrxIncDrink, lrxDecDrink,
-  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxTick,
+  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxBannerHtml, lrxTick,
 });
