@@ -256,10 +256,22 @@ lrState = {
   /* _mapPath: [] -- G2b-R removed; superseded by single _mapAim. Waypoint-chain
      rendering + _lrMapRemoveWaypoint/_lrMapClearPath kept as commented stubs. */
   /* _mapSelectedPoint: null -- G2b removed; superseded by _mapAim */
+  /* LR-EXTRAS -- timer/drinks/weather + GPS view + shot tracker (additive, persisted) */
+  _holeTimers:        [],          /* array of seconds-elapsed per hole, indexed by hole number */
+  _holeStartTs:       null,        /* ms timestamp when current hole's running segment began */
+  _holePaused:        false,       /* is current hole timer paused */
+  _holePausedAccum:   0,           /* ms accumulated for current hole BEFORE current segment */
+  _drinks:            0,           /* round-wide drinks count */
+  _weather:           null,        /* { tempC, windKmh, windDir, code, ts } */
+  _trackerOn:         false,       /* GPS shot-tracker toggle */
+  _gpsViewOpen:       false,       /* is GPS view currently open (do NOT auto-reopen on reload) */
+  _shotArmed:         null,        /* { startLngLat, aimLngLat, club, armedTs, shotMode } or null */
 };
 
 lrShowScreen('lrHoleScreen');
 lrRenderHole();
+/* LR-EXTRAS -- hydrate timer/drinks/weather state, start hole 1 timer, kick off weather */
+if (typeof lrxInit === 'function') lrxInit();
 _lrPersist();
 /* G2b -- full-screen map-search modal replaces the old yes/no prompt.
    _lrMapPromptIfNeeded();  // G2 original, commented out per G2b handoff */
@@ -455,6 +467,8 @@ document.getElementById('lrNextIcon').textContent = last ? '\u2713' : '\u2192';
 document.getElementById('lrNextLbl').textContent  = last ? 'Finish' : 'Next';
 document.getElementById('lrNextBtn').className    =
   'lr-nav-btn primary'+(last?' sc-birdie':'');
+/* LR-EXTRAS -- repaint banner chips (clock/timer/drinks/weather) + GPS bottom-nav chip visibility */
+if (typeof lrxRenderBanner === 'function') lrxRenderBanner();
 }
 
 function lrScoreBlock(player, holeIdx, hole, pi, shared) {
@@ -581,7 +595,11 @@ if(next < 0 || next >= lrState.holes.length) {
   if(delta > 0) lrEndRound();
   return;
 }
+/* LR-EXTRAS -- accumulate current hole's timer segment before advancing curHole */
+if (typeof lrxStopHoleTimer === 'function') lrxStopHoleTimer();
 lrState.curHole = next;
+/* LR-EXTRAS -- start fresh timer segment for the new hole */
+if (typeof lrxStartHoleTimer === 'function') lrxStartHoleTimer();
 lrState.curPlayer = 0;
 lrState._noteOpen = false;
 /* Phase 4: clear advanced mode state on hole change */
@@ -590,6 +608,8 @@ _lrEditingIndex     = null;
 _lrObConfirmPending = false;
 _lrDeleteConfirmIdx = null;
 _lrGirPromptPending = false;
+/* LR-EXTRAS -- cancel any armed shot tracker on hole change (no shot written) */
+if (typeof stCancel === 'function') stCancel();
 /* G2b-R -- reset per-hole aim + tee override. Map instance persists across holes. */
 if (lrState) {
   lrState._mapAim = null;      /* midpoint recomputed on mount for new hole */
@@ -799,6 +819,10 @@ if(banner) banner.style.display='block';
 function lrConfirmEnd() {
 const banner = document.getElementById('lrEndBanner');
 if(banner) banner.style.display='none';
+/* LR-EXTRAS -- finalize hole timer (accumulate final segment) and stop the 1Hz tick */
+if (typeof lrxStopHoleTimer === 'function') lrxStopHoleTimer();
+if (window._lrxTickHandle) { clearInterval(window._lrxTickHandle); window._lrxTickHandle = null; }
+_lrPersist();
 lrShowScreen('lrSummaryScreen');
 lrRenderSummary();
 }
@@ -3229,7 +3253,265 @@ function _lrMapUnmount() {
   }
 }
 
-// -- Expose to window (required for HTML onclick handlers) --
+/* ─────────────────────────────────────────────────────────
+   LR-EXTRAS: Timer / Drinks / Weather (additive)
+   Hooks called from lrBeginRound, lrGoHole, lrConfirmEnd, lrRenderHole.
+   Safe to remove as a unit.
+   ───────────────────────────────────────────────────────── */
+
+/* Hydrate missing fields on lrState (idempotent; covers old saved rounds). */
+function lrxHydrate() {
+  if (!lrState) return;
+  if (!Array.isArray(lrState._holeTimers))      lrState._holeTimers      = [];
+  if (typeof lrState._holeStartTs    === 'undefined') lrState._holeStartTs    = null;
+  if (typeof lrState._holePaused     !== 'boolean')   lrState._holePaused     = false;
+  if (typeof lrState._holePausedAccum !== 'number')   lrState._holePausedAccum = 0;
+  if (typeof lrState._drinks         !== 'number')    lrState._drinks         = 0;
+  if (typeof lrState._weather        === 'undefined') lrState._weather        = null;
+  if (typeof lrState._trackerOn      !== 'boolean')   lrState._trackerOn      = false;
+  if (typeof lrState._gpsViewOpen    !== 'boolean')   lrState._gpsViewOpen    = false;
+  if (typeof lrState._shotArmed      === 'undefined') lrState._shotArmed      = null;
+}
+
+/* Initialise: called from lrBeginRound. Hydrates, starts current hole's timer
+   segment, kicks off weather, ensures the 1Hz tick is running. */
+function lrxInit() {
+  if (!lrState) return;
+  lrxHydrate();
+  /* On resume mid-round, _holeStartTs may already be set from prior session;
+     only start a fresh segment if not paused and not already running. */
+  if (!lrState._holePaused && !lrState._holeStartTs) {
+    lrxStartHoleTimer();
+  }
+  /* Kick off weather (best-effort; guarded inside). */
+  lrxFetchWeather();
+  /* Start (or restart) the 1Hz interval. */
+  if (window._lrxTickHandle) clearInterval(window._lrxTickHandle);
+  window._lrxTickHandle = setInterval(lrxTick, 1000);
+}
+
+function lrxStartHoleTimer() {
+  if (!lrState) return;
+  lrState._holeStartTs = Date.now();
+  lrState._holePaused  = false;
+  /* _holePausedAccum is hole-specific; only zeroed on hole change (handled in lrxStopHoleTimer). */
+  _lrPersist();
+}
+
+function lrxStopHoleTimer() {
+  if (!lrState) return;
+  /* Accumulate the current segment + any prior paused-accum into _holeTimers[curHole]. */
+  var segMs = 0;
+  if (lrState._holeStartTs) segMs = Date.now() - lrState._holeStartTs;
+  var totalMs = (lrState._holePausedAccum || 0) + segMs;
+  var idx = lrState.curHole;
+  var prev = lrState._holeTimers[idx] || 0;
+  lrState._holeTimers[idx] = prev + Math.round(totalMs / 1000);
+  lrState._holeStartTs    = null;
+  lrState._holePausedAccum = 0;  /* reset for next hole */
+  lrState._holePaused      = false;
+  _lrPersist();
+}
+
+function lrxTogglePause() {
+  if (!lrState) return;
+  if (lrState._holePaused) {
+    /* Resume */
+    lrState._holePaused  = false;
+    lrState._holeStartTs = Date.now();
+  } else {
+    /* Pause: fold current segment into _holePausedAccum, clear startTs */
+    if (lrState._holeStartTs) {
+      lrState._holePausedAccum = (lrState._holePausedAccum || 0) + (Date.now() - lrState._holeStartTs);
+    }
+    lrState._holeStartTs = null;
+    lrState._holePaused  = true;
+  }
+  _lrPersist();
+  lrxRenderBanner();
+}
+
+function lrxIncDrink() {
+  if (!lrState) return;
+  lrState._drinks = (lrState._drinks || 0) + 1;
+  _lrPersist();
+  lrxRenderBanner();
+}
+
+function lrxDecDrink() {
+  if (!lrState) return;
+  lrState._drinks = Math.max(0, (lrState._drinks || 0) - 1);
+  _lrPersist();
+  lrxRenderBanner();
+}
+
+/* Open-Meteo weather fetch. Free, no API key. */
+function lrxFetchWeather() {
+  if (!lrState) return;
+  /* Resolve coords: prefer course.osmCenter ([lon,lat]); fall back to geolocation. */
+  var coords = null;
+  if (lrState.courseId) {
+    var c = courses.find(function(x){ return x.id === lrState.courseId; });
+    if (c && Array.isArray(c.osmCenter) && c.osmCenter.length >= 2) {
+      coords = { lon: c.osmCenter[0], lat: c.osmCenter[1] };
+    }
+  }
+  var doFetch = function(lon, lat) {
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat
+      + '&longitude=' + lon
+      + '&current=temperature_2m,wind_speed_10m,wind_direction_10m,weather_code'
+      + '&wind_speed_unit=kmh&temperature_unit=celsius';
+    fetch(url).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+      if (!j || !j.current) return;
+      lrState._weather = {
+        tempC:   j.current.temperature_2m,
+        windKmh: j.current.wind_speed_10m,
+        windDir: j.current.wind_direction_10m,
+        code:    j.current.weather_code,
+        ts:      Date.now()
+      };
+      _lrPersist();
+      lrxRenderBanner();
+    }).catch(function(){ /* silent: hide chip via render */ });
+  };
+  if (coords) {
+    doFetch(coords.lon, coords.lat);
+    return;
+  }
+  /* Impromptu round: try one-shot geolocation. If denied, leave _weather null (chip hides). */
+  if (typeof geomGetCurrentPosition === 'function') {
+    geomGetCurrentPosition().then(function(t){
+      if (t && t.length >= 2) doFetch(t[0], t[1]);
+    }).catch(function(){ /* silent */ });
+  }
+}
+
+function lrxToggleUnits() {
+  var cur = localStorage.getItem('gordy:units') || 'metric';
+  localStorage.setItem('gordy:units', cur === 'metric' ? 'imperial' : 'metric');
+  /* Force re-fetch so units displayed reflect fresh data; also re-render immediately. */
+  lrxFetchWeather();
+  lrxRenderBanner();
+}
+
+/* ───── Formatters ───── */
+function lrxFmtHM(seconds) {
+  var m = Math.floor(seconds / 60);
+  var s = seconds % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function lrxFmtHMS(seconds) {
+  var h = Math.floor(seconds / 3600);
+  var m = Math.floor((seconds % 3600) / 60);
+  var s = seconds % 60;
+  if (h > 0) return h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function lrxFmtClock12(d) {
+  var h = d.getHours();
+  var m = d.getMinutes();
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+}
+/* Open-Meteo WMO code → emoji. */
+function lrxWeatherIcon(code) {
+  if (code === 0) return '\u2600';                      /* clear */
+  if (code === 1 || code === 2) return '\u26C5';        /* mainly clear / partly cloudy */
+  if (code === 3) return '\u2601';                      /* overcast */
+  if (code === 45 || code === 48) return '\uD83C\uDF2B'; /* fog */
+  if (code >= 51 && code <= 67) return '\uD83C\uDF27';   /* drizzle / rain */
+  if (code >= 71 && code <= 77) return '\u2744';         /* snow */
+  if (code >= 80 && code <= 82) return '\uD83C\uDF27';   /* rain showers */
+  if (code >= 85 && code <= 86) return '\u2744';         /* snow showers */
+  if (code >= 95 && code <= 99) return '\u26C8';         /* thunderstorm */
+  return '\u2601';
+}
+function lrxWindCardinal(deg) {
+  if (deg == null || isNaN(deg)) return '';
+  var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  var i = Math.round(((deg % 360) / 45)) % 8;
+  if (i < 0) i += 8;
+  return dirs[i];
+}
+
+/* Compute total elapsed seconds across all holes including current segment. */
+function _lrxTotalSeconds() {
+  if (!lrState) return 0;
+  var sum = 0;
+  for (var i = 0; i < lrState._holeTimers.length; i++) sum += (lrState._holeTimers[i] || 0);
+  /* Add running portion for current hole (paused-accum + active segment). */
+  sum += Math.round(((lrState._holePausedAccum || 0)
+                     + (lrState._holeStartTs ? (Date.now() - lrState._holeStartTs) : 0)) / 1000);
+  return sum;
+}
+/* Compute current hole's elapsed seconds (committed + paused-accum + active segment). */
+function _lrxHoleSeconds() {
+  if (!lrState) return 0;
+  var committed = lrState._holeTimers[lrState.curHole] || 0;
+  var live = Math.round(((lrState._holePausedAccum || 0)
+                         + (lrState._holeStartTs ? (Date.now() - lrState._holeStartTs) : 0)) / 1000);
+  return committed + live;
+}
+
+function lrxRenderBanner() {
+  if (!lrState) return;
+  /* Bottom-nav GPS chip + its separator: visible only when _gpsOn is true. */
+  var gpsBtn = document.getElementById('lrxGpsBtn');
+  var gpsSep = document.getElementById('lrxGpsBtnSep');
+  var visGps = !!lrState._gpsOn;
+  if (gpsBtn) gpsBtn.style.display = visGps ? '' : 'none';
+  if (gpsSep) gpsSep.style.display = visGps ? '' : 'none';
+  /* Clock */
+  var clockEl = document.getElementById('lrxClock');
+  if (clockEl) clockEl.textContent = lrxFmtClock12(new Date());
+  /* Hole timer */
+  var holeEl = document.getElementById('lrxHoleTimer');
+  if (holeEl) {
+    var glyph = lrState._holePaused ? '\u25B6' : '\u23F8';
+    holeEl.textContent = glyph + ' Hole ' + lrxFmtHM(_lrxHoleSeconds());
+  }
+  /* Total timer */
+  var totEl = document.getElementById('lrxTotalTimer');
+  if (totEl) totEl.textContent = 'Total ' + lrxFmtHMS(_lrxTotalSeconds());
+  /* Weather */
+  var wEl = document.getElementById('lrxWeather');
+  if (wEl) {
+    var w = lrState._weather;
+    if (!w) {
+      wEl.style.display = 'none';
+    } else {
+      wEl.style.display = '';
+      var units = localStorage.getItem('gordy:units') || 'metric';
+      var temp, wind, tu, wu;
+      if (units === 'imperial') {
+        temp = Math.round((w.tempC * 9 / 5) + 32);  tu = '\u00B0F';
+        wind = Math.round(w.windKmh * 0.621371);    wu = 'mph';
+      } else {
+        temp = Math.round(w.tempC);                 tu = '\u00B0C';
+        wind = Math.round(w.windKmh);               wu = 'k';
+      }
+      var icon = lrxWeatherIcon(w.code);
+      var dir  = lrxWindCardinal(w.windDir);
+      wEl.textContent = icon + ' ' + temp + tu + ' \u00B7 ' + wind + wu + (dir ? ' ' + dir : '');
+    }
+  }
+  /* Drinks */
+  var dEl = document.getElementById('lrxDrinks');
+  if (dEl) dEl.textContent = '\uD83C\uDF7A ' + (lrState._drinks || 0);
+}
+
+function lrxTick() {
+  if (!lrState) return;
+  if (document.hidden) return;  /* skip render while tab hidden; interval keeps running */
+  /* Refresh weather if older than 20 min. */
+  if (lrState._weather && lrState._weather.ts && (Date.now() - lrState._weather.ts) > 20 * 60 * 1000) {
+    lrxFetchWeather();
+  }
+  lrxRenderBanner();
+}
+
+
 Object.assign(window, {
   lrStartSetup, lrAddPlayer, lrRemovePlayer, lrToggleMe,
   lrOnCourseSelect, lrOnHoleCountChange, lrOnModeChange,
@@ -3267,4 +3549,9 @@ Object.assign(window, {
   _lrMapMinimize, _lrMapResume,
   /* PATCH-LRMAPLOAD — H4: manual re-pick course handler */
   _lrMapRePickCourse,
+  /* LR-EXTRAS -- timer/drinks/weather (additive) */
+  lrxInit, lrxHydrate,
+  lrxStartHoleTimer, lrxStopHoleTimer, lrxTogglePause,
+  lrxIncDrink, lrxDecDrink,
+  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxTick,
 });
