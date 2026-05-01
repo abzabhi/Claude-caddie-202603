@@ -624,6 +624,11 @@ if (lrState && lrState._mapInstance && _lrMapGeo) {
   lrState._mapAim = null; _lrPersist();
   _lrMapShowHole(lrState.curHole + 1, { resetAim: true });
 }
+/* LR-EXTRAS -- if GPS view is open, refresh it immediately so banner/yards/map
+   snap to the new hole without waiting for the next 3s/10s tick. */
+if (lrState && lrState._gpsViewOpen && typeof window.gpsViewRender === 'function') {
+  try { window.gpsViewRender(); } catch(e) {}
+}
 /* G2b original (multi-waypoint):
 if (lrState) { lrState._mapPath = []; lrState._mapTeeLonLat = null; }
 lrRenderHole();
@@ -3654,6 +3659,8 @@ Object.assign(window, {
   _lrMapMinimize, _lrMapResume,
   /* PATCH-LRMAPLOAD — H4: manual re-pick course handler */
   _lrMapRePickCourse,
+  /* LR-EXTRAS -- expose mount entry so GPS view can attach the live MapView to its own canvas. */
+  _lrMapMount,
   /* LR-EXTRAS -- timer/drinks/weather (additive) */
   lrxInit, lrxHydrate,
   lrxStartHoleTimer, lrxStopHoleTimer, lrxTogglePause,
