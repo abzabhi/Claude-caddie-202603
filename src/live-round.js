@@ -650,6 +650,12 @@ document.getElementById('lrOverlay').classList.add('active');
 lrShowScreen('lrHoleScreen');
 _lrMapRestoreFromStorage();  /* G2 -- rehydrate geometry if mapping was active */
 lrRenderHole();
+/* LR-EXTRAS -- rehydrate timer/drinks/weather state and restart 1Hz tick. */
+if (typeof lrxInit === 'function') lrxInit();
+/* LR-EXTRAS -- if user was in GPS view before refresh/minimise, reopen it. */
+if (lrState && lrState._gpsViewOpen && typeof window.gpsViewOpen === 'function') {
+  try { window.gpsViewOpen(); } catch(e) {}
+}
 if (window.updateSessionPill) window.updateSessionPill();
 }
 
@@ -3175,6 +3181,10 @@ function _lrMapGpsToggle() {
     /* Turn off */
     if (lrState._mapInstance) lrState._mapInstance.stopGps();
     lrState._gpsOn = false;
+    /* LR-EXTRAS -- if user was in the GPS view, close it (no GPS = no useful GPS view). */
+    if (lrState._gpsViewOpen && typeof window.gpsViewClose === 'function') {
+      try { window.gpsViewClose(); } catch(e) {}
+    }
     _lrPersist();
     lrRenderHole();
     return;
@@ -3185,6 +3195,10 @@ function _lrMapGpsToggle() {
   lrState._gpsOn = true;
   _lrPersist();
   lrRenderHole();
+  /* LR-EXTRAS -- auto-open GPS view when user enables GPS. */
+  if (typeof window.gpsViewOpen === 'function') {
+    try { window.gpsViewOpen(); } catch(e) {}
+  }
 }
 function _lrMapOnGpsTick(tick) {
   /* Retained for any legacy DOM hook that calls it directly; MapView already handles its own tick. */
