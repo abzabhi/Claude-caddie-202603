@@ -91,13 +91,10 @@ function gpsViewOpen() {
   /* Cancel any armed shot from a prior session is NOT desired — leave armed. */
   lr._gpsViewOpen = true;
   if (typeof window._lrPersist === 'function') window._lrPersist();
-  /* Stash any existing #lrMapCanvas (rendered by the live screen in map mode) so our
-     GPS-screen canvas can claim that id without collision. The live screen will rebuild
-     its own canvas on lrRenderHole() when GPS closes. */
-  var stale = document.getElementById('lrMapCanvas');
-  if (stale && !stale.closest('#gpsViewScreen')) {
-    stale.id = 'lrMapCanvas--stashed';
-  }
+  /* No id-stash needed: the GPS canvas has its own id ('gpsMapCanvas'); MapView's
+     _containerId is repointed in _renderMinimap before mount so the same MapView
+     instance attaches to our container. The live #lrMapCanvas (if any) is left
+     intact and will be reattached on gpsViewClose. */
   var live = document.getElementById('lrHoleScreen');
   if (live) live.style.display = 'none';
   var screen = document.getElementById('gpsViewScreen');
@@ -149,6 +146,11 @@ function gpsViewClose() {
   var wrap = document.getElementById('gpsMapWrap');
   if (wrap) wrap.innerHTML = '';
   _gvResetCanvasState();
+  /* Repoint MapView's containerId back to the live screen's canvas so the rebuilt
+     live #lrMapCanvas (created by lrRenderHole when in map mode) gets the map. */
+  if (lr && lr._mapInstance) {
+    lr._mapInstance._containerId = 'lrMapCanvas';
+  }
   /* Refresh live-round screen so GPS chip / banner are up to date and the live map
      (if user is in map mode) re-mounts via _lrMapMount on its rebuilt canvas. */
   if (typeof window.lrRenderHole === 'function') window.lrRenderHole();
@@ -332,8 +334,12 @@ function _renderMinimap() {
     wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx3)">Loading course map…</div>';
     return;
   }
-  /* First call after gpsViewOpen: stamp the canvas + floating UI ids. */
-  if (!_gvCanvasInjected || !document.getElementById('lrMapCanvas')) {
+  /* First call after gpsViewOpen: stamp the canvas + floating UI ids. We use a
+     unique id ('gpsMapCanvas') and repoint MapView's _containerId so the same
+     MapView instance attaches here without colliding with the live screen's
+     #lrMapCanvas, which may also exist in the DOM at the same time (lrRenderHole
+     rebuilds it on hole change even while GPS view is the visible screen). */
+  if (!_gvCanvasInjected || !document.getElementById('gpsMapCanvas')) {
     wrap.innerHTML =
         '<div id="lrAimDistBubble" style="position:absolute;z-index:30;'
       +   'background:#ff9d00;color:#111;border-radius:999px;padding:4px 10px;'
@@ -348,10 +354,15 @@ function _renderMinimap() {
       +   '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">&mdash;</span>'
       +   '<span style="font-size:.56rem;color:#444">to aim</span>'
       + '</div>'
-      + '<div id="lrMapCanvas" style="position:absolute;inset:0;background:#111"></div>';
+      + '<div id="gpsMapCanvas" style="position:absolute;inset:0;background:#111"></div>';
     _gvCanvasInjected = true;
     _gvLastShownHole  = -1;
-    /* Mount MapView into our new container. _lrMapMount handles construct-or-reattach. */
+    /* Repoint MapView at our container, then mount. MapView.mount() detects the
+       container change via its line-93 check and rebuilds the underlying MapLibre
+       map in our element. */
+    if (lr._mapInstance) {
+      lr._mapInstance._containerId = 'gpsMapCanvas';
+    }
     if (typeof window._lrMapMount === 'function') {
       try { window._lrMapMount(); } catch(e) { /* surfaced on next tick if it failed */ }
     }
