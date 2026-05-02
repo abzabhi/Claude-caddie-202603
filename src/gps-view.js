@@ -359,21 +359,20 @@ function gpsViewClose() {
   /* Strip the toast host so it doesn't stack between sessions. */
   var th = document.getElementById('gpsToastHost');
   if (th && th.parentNode) { try { th.parentNode.removeChild(th); } catch(e) {} }
-  _gvChevronInjected = false;
-  /* Strip our GPS-screen #lrMapCanvas so the live screen's lrRenderHole() can recreate
-     a fresh #lrMapCanvas in its own DOM subtree without id collision. The stashed
-     live canvas (lrMapCanvas--stashed) is left in place; lrRenderHole() will overwrite
-     #lrScroll innerHTML anyway, removing it. */
-  var wrap = document.getElementById('gpsMapWrap');
-  if (wrap) wrap.innerHTML = '';
-  _gvResetCanvasState();
-  /* Repoint MapView's containerId back to the live screen's canvas so the rebuilt
-     live #lrMapCanvas (created by lrRenderHole when in map mode) gets the map. */
-  if (lr && lr._mapInstance) {
-    lr._mapInstance._containerId = 'lrMapCanvas';
-  }
-  /* Refresh live-round screen so GPS chip / banner are up to date and the live map
-     (if user is in map mode) re-mounts via _lrMapMount on its rebuilt canvas. */
+  /* PHASE-A: do NOT strip the canvas, do NOT reset _gvCanvasInjected, do NOT
+     repoint _containerId. The MapLibre map stays mounted in #gpsMapCanvas across
+     screen toggles. The chevron is re-attached lazily by _ensureCompassChevron on
+     next render, so leaving _gvChevronInjected as-is is fine; we reset it only on
+     a hard rebuild (round end / course re-pick), not on screen toggle.
+     Original (deleted) cleanup preserved as comment:
+  // var wrap = document.getElementById('gpsMapWrap');
+  // if (wrap) wrap.innerHTML = '';
+  // _gvResetCanvasState();
+  // if (lr && lr._mapInstance) {
+  //   lr._mapInstance._containerId = 'lrMapCanvas';
+  // }
+  */
+  /* Refresh live-round screen so banner / classic scoring reflect current state. */
   if (typeof window.lrRenderHole === 'function') window.lrRenderHole();
 }
 
@@ -658,12 +657,9 @@ function _renderMinimap() {
       + '<div id="gpsMapCanvas" style="position:absolute;inset:0;background:#111"></div>';
     _gvCanvasInjected = true;
     _gvLastShownHole  = -1;
-    /* Repoint MapView at our container, then mount. MapView.mount() detects the
-       container change via its line-93 check and rebuilds the underlying MapLibre
-       map in our element. */
-    if (lr._mapInstance) {
-      lr._mapInstance._containerId = 'gpsMapCanvas';
-    }
+    /* PHASE-A: _containerId repoint removed. _lrMapMount now binds MapView to
+       'gpsMapCanvas' from the constructor; no repoint needed. MapView mounts once
+       per round and stays mounted across screen toggles. */
     if (typeof window._lrMapMount === 'function') {
       try { window._lrMapMount(); } catch(e) { /* surfaced on next tick if it failed */ }
     }
