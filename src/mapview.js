@@ -559,18 +559,18 @@ export class MapView {
        the visible circle and crosshair from the geographic point. With
        border-box, the border is included WITHIN the 44px dimensions and the
        visible reticle aligns with the anchor exactly. */
-    el.style.cssText = 'width:44px;height:44px;border-radius:50%;box-sizing:border-box;'
+    el.style.cssText = 'width:33px;height:33px;border-radius:50%;box-sizing:border-box;'
       + 'border:2px solid #fff;background:rgba(255,255,255,.08);'
       + 'box-shadow:0 0 6px rgba(0,0,0,.6);cursor:grab;position:relative';
     el.innerHTML = ''
-      + '<div style="position:absolute;left:50%;top:50%;width:6px;height:6px;'
+      + '<div style="position:absolute;left:50%;top:50%;width:4px;height:4px;'
       +   'background:#fff;border-radius:50%;transform:translate(-50%,-50%);'
       +   'box-shadow:0 0 3px rgba(0,0,0,.6)"></div>'
       /* 4 tick marks */
-      + '<div style="position:absolute;left:50%;top:0;width:2px;height:6px;background:#fff;transform:translateX(-50%)"></div>'
-      + '<div style="position:absolute;left:50%;bottom:0;width:2px;height:6px;background:#fff;transform:translateX(-50%)"></div>'
-      + '<div style="position:absolute;top:50%;left:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>'
-      + '<div style="position:absolute;top:50%;right:0;width:6px;height:2px;background:#fff;transform:translateY(-50%)"></div>';
+      + '<div style="position:absolute;left:50%;top:0;width:2px;height:4px;background:#fff;transform:translateX(-50%)"></div>'
+      + '<div style="position:absolute;left:50%;bottom:0;width:2px;height:4px;background:#fff;transform:translateX(-50%)"></div>'
+      + '<div style="position:absolute;top:50%;left:0;width:4px;height:2px;background:#fff;transform:translateY(-50%)"></div>'
+      + '<div style="position:absolute;top:50%;right:0;width:4px;height:2px;background:#fff;transform:translateY(-50%)"></div>';
     var self = this;
     /* LR-EXTRAS: explicit anchor:'center' forces MapLibre to place the marker's
        geometric centre at the geographic point. Some MapLibre versions silently
