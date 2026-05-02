@@ -23,6 +23,7 @@ var GPS_HAZARDS = {
   bunker:                { label: 'Bunker', icon: '\u26F1', color: '#d4a017' },
   water:                 { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
   lateral_water_hazard:  { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+  water_hazard:          { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },  /* LR-EXTRAS: CDN schema name */
   woods:                 { label: 'Woods',  icon: '\uD83C\uDF32', color: '#3b6d11' }
 };
 
