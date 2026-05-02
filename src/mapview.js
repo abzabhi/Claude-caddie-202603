@@ -509,7 +509,10 @@ export class MapView {
     var ll = this._teeOverride || teePt;
     if (this._teeMarker) { try { this._teeMarker.remove(); } catch(e) {} this._teeMarker = null; }
     var el = document.createElement('div');
-    el.style.cssText = 'width:14px;height:14px;background:#d0d8e0;'
+    /* LR-EXTRAS: box-sizing:border-box so the 2px border is inside the 14px
+       dimensions; otherwise visible element is 18x18 while anchored as 14x14,
+       producing the same ~2px offset the reticle had. */
+    el.style.cssText = 'width:14px;height:14px;background:#d0d8e0;box-sizing:border-box;'
       + 'border:2px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,.5);cursor:grab';
     var self = this;
     this._teeMarker = new window.maplibregl.Marker({ element: el, draggable: true })
@@ -550,7 +553,13 @@ export class MapView {
     if (this._aimMarker) { try { this._aimMarker.remove(); } catch(e) {} this._aimMarker = null; }
     /* Reticle: 44px crosshair circle, matches screenshot aesthetic. */
     var el = document.createElement('div');
-    el.style.cssText = 'width:44px;height:44px;border-radius:50%;'
+    /* LR-EXTRAS: box-sizing:border-box is REQUIRED. Without it, the 2px border
+       sits OUTSIDE the 44px content box, making the visible element 48x48 while
+       MapLibre still anchors as if it were 44x44 — producing a ~2px offset of
+       the visible circle and crosshair from the geographic point. With
+       border-box, the border is included WITHIN the 44px dimensions and the
+       visible reticle aligns with the anchor exactly. */
+    el.style.cssText = 'width:44px;height:44px;border-radius:50%;box-sizing:border-box;'
       + 'border:2px solid #fff;background:rgba(255,255,255,.08);'
       + 'box-shadow:0 0 6px rgba(0,0,0,.6);cursor:grab;position:relative';
     el.innerHTML = ''
