@@ -241,9 +241,9 @@ lrState = {
   linkedSessionId: (function() { var s = document.getElementById('lrLinkedSession'); return s && s.value ? s.value : null; })(),
   _sessionBagOpen: false,
   /* G2 -- map view state (all persisted in gordy:activeRound via _lrPersist) */
+  /* PHASE-A: _mapOpen, _mapMode, _mapSheetOpen removed. Hybrid map-in-lrScroll mode killed.
+     GPS view (gpsViewScreen) is now the single map screen; toggled via _gpsViewOpen. */
   _mapPromptSeen: false,
-  _mapOpen: false,
-  _mapMode: 'simple',          /* 'simple' | 'advanced' */
   _scoringCollapsed: false,
   _gpsOn: false,
   _gpsPrompted: false,
@@ -252,7 +252,7 @@ lrState = {
   _mapAim: null,               /* [lon, lat] aim marker; null => init at midpoint on mount */
   _mapTeeLonLat: null,         /* user-dragged tee override; null => geometry tee */
   _mapSearchDone: false,       /* entry modal already shown+answered this round */
-  _mapSheetOpen: false,        /* bottom sheet expanded */
+  /* PHASE-A: _mapSheetOpen removed (lived only inside dead _lrMapPanelHtml). */
   /* _mapPath: [] -- G2b-R removed; superseded by single _mapAim. Waypoint-chain
      rendering + _lrMapRemoveWaypoint/_lrMapClearPath kept as commented stubs. */
   /* _mapSelectedPoint: null -- G2b removed; superseded by _mapAim */
@@ -418,20 +418,20 @@ if(lrState.players.length > 1 && !shared) {
 // Score content
 const scroll = document.getElementById('lrScroll');
 
-/* G2 -- map mode branch. When map is active, replace the scroll with banner+map+collapsible scoring.
-   Classic path (else) is untouched. */
-if (lrState._mapOpen && _lrMapGeo) {
-  scroll.innerHTML = _lrMapPanelHtml(h, pi, shared);
-  setTimeout(function(){ _lrMapMount(); }, 0);
-  /* Bottom-nav buttons live outside lrScroll so they stay visible as a persistent banner.
-     G2b -- set full state (disabled + icon + label + class) matching classic path. */
-  document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
-  var _lrMapIsLast = lrState.curHole === lrState.holes.length-1;
-  document.getElementById('lrNextIcon').textContent = _lrMapIsLast ? '\u2713' : '\u2192';
-  document.getElementById('lrNextLbl').textContent  = _lrMapIsLast ? 'Finish' : 'Next';
-  document.getElementById('lrNextBtn').className    = 'lr-nav-btn primary' + (_lrMapIsLast ? ' sc-birdie' : '');
-  return;
-}
+/* PHASE-A: Hybrid map-inside-lrScroll branch deleted. Map lives only in gpsViewScreen.
+   The original branch (and resume-pill block below) preserved here as comment per
+   "comment, don't delete" rule, until A.5 cleanup pass.
+// if (lrState._mapOpen && _lrMapGeo) {
+//   scroll.innerHTML = _lrMapPanelHtml(h, pi, shared);
+//   setTimeout(function(){ _lrMapMount(); }, 0);
+//   document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
+//   var _lrMapIsLast = lrState.curHole === lrState.holes.length-1;
+//   document.getElementById('lrNextIcon').textContent = _lrMapIsLast ? '\u2713' : '\u2192';
+//   document.getElementById('lrNextLbl').textContent  = _lrMapIsLast ? 'Finish' : 'Next';
+//   document.getElementById('lrNextBtn').className    = 'lr-nav-btn primary' + (_lrMapIsLast ? ' sc-birdie' : '');
+//   return;
+// }
+*/
 
 if(shared) {
   // Scramble / foursomes: one score for the team (use player 0)
@@ -441,15 +441,16 @@ if(shared) {
   scroll.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
 }
 
-/* G2b-R -- Resume-map pill. Shown in classic view only when geometry is loaded
-   for this round and the user has minimized the map. Tap restores map view. */
-if (_lrMapGeo && lrState && !lrState._mapOpen) {
-  scroll.innerHTML =
-      '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
-    +   '<button class="btn" style="font-size:.6rem;padding:4px 12px;border-radius:16px" '
-    +     'onclick="_lrMapResume()">\uD83D\uDDFA Resume map</button>'
-    + '</div>' + scroll.innerHTML;
-}
+/* PHASE-A: Resume-map pill block deleted. Map entry now via the always-visible
+   bottom-nav Map button on lrHoleScreen. Original block preserved as comment:
+// if (_lrMapGeo && lrState && !lrState._mapOpen) {
+//   scroll.innerHTML =
+//       '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
+//     +   '<button class="btn" style="font-size:.6rem;padding:4px 12px;border-radius:16px" '
+//     +     'onclick="_lrMapResume()">\uD83D\uDDFA Resume map</button>'
+//     + '</div>' + scroll.innerHTML;
+// }
+*/
 
 /* Phase 4: advanced mode collapsible */
 scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
@@ -2652,9 +2653,10 @@ async function _lrMapLoadCourseById(osmId, center) {
     }
     _lrMapGeo = geo;
     try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
-    if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
+    /* PHASE-A: was lrState._mapOpen=true + lrRenderHole(); now opens GPS view directly. */
+    if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
     _lrMapLoadHintRemove();
-    lrRenderHole();
+    if (typeof gpsViewOpen === 'function') gpsViewOpen();
     if (!_hasHoles) {
       // Incomplete-course mode: show prompt and auto-start GPS so user can use manual reticle.
       _lrMapLoadHintEnsure('Course outline loaded \u2014 use GPS marker and tap map to measure yardages.');
@@ -2687,9 +2689,10 @@ async function _lrMapLoadCourseById(osmId, center) {
         }
         _lrMapGeo = geoFb;
         try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geoFb)); } catch(e) {}
-        if (lrState) { lrState._mapOpen = true; lrState._mapSearchDone = true; _lrPersist(); }
+        /* PHASE-A: was lrState._mapOpen=true + lrRenderHole(); now opens GPS view directly. */
+        if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
         _lrMapLoadHintRemove();
-        lrRenderHole();
+        if (typeof gpsViewOpen === 'function') gpsViewOpen();
         if (!_fbHasHoles) {
           _lrMapLoadHintEnsure('Course outline loaded \u2014 use GPS marker and tap map to measure yardages.');
           try { if (lrState && lrState._mapInstance) lrState._mapInstance.startGps(); } catch(e) {}
@@ -2770,10 +2773,10 @@ async function _lrMapLoadForRound() {
     }
     _lrMapGeo = geo;
     try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
-    lrState._mapOpen = true;
+    /* PHASE-A: was lrState._mapOpen=true + lrRenderHole(); now opens GPS view directly. */
     _lrPersist();
     hint.remove();
-    lrRenderHole();
+    if (typeof gpsViewOpen === 'function') gpsViewOpen();
   } catch (err) {
     hint.style.color = 'var(--danger)';
     hint.textContent = 'Map load failed: ' + (err && err.message ? err.message : 'unknown');
@@ -2782,13 +2785,15 @@ async function _lrMapLoadForRound() {
 }
 
 function _lrMapRestoreFromStorage() {
-  if (!lrState || !lrState._mapOpen) return;
+  /* PHASE-A: gate flipped from _mapOpen to _gpsViewOpen. Geometry only rehydrates
+     if the user was in the GPS view at last persist. */
+  if (!lrState || !lrState._gpsViewOpen) return;
   if (_lrMapGeo) return;  /* already hydrated */
   try {
     var raw = localStorage.getItem('gordy:activeRoundGeo');
     if (raw) _lrMapGeo = JSON.parse(raw);
   } catch(e) { _lrMapGeo = null; }
-  if (!_lrMapGeo) lrState._mapOpen = false;  /* storage gone -- downgrade to classic view */
+  if (!_lrMapGeo) lrState._gpsViewOpen = false;  /* storage gone -- stay on classic view */
 }
 
 function _lrMapClearStorage() {
@@ -3027,7 +3032,10 @@ function _lrMapMount() {
   if (!_lrMapGeo || !lrState) return;
   if (!lrState._mapInstance) {
     lrState._mapInstance = new MapView({
-      containerId: 'lrMapCanvas',
+      /* PHASE-A: containerId changed from 'lrMapCanvas' (dead, lived in hybrid panel)
+         to 'gpsMapCanvas' (the only map canvas, in gpsViewScreen). MapView mounts
+         once per round and stays mounted; gpsViewClose just hides the parent screen. */
+      containerId: 'gpsMapCanvas',
       geo:         _lrMapGeo,
       holeN:       lrState.curHole + 1,
       idPrefix:    'lr',                /* preserve existing #lrAimDistBubble / #lrPlayerDistPill DOM ids */
@@ -3235,21 +3243,30 @@ function _lrMapExit() {
   lrRenderHole();
 }
 */
-function _lrMapMinimize() {
-  if (!lrState) return;
-  lrState._mapOpen = false;
-  _lrPersist();
-  lrRenderHole();
-}
-/* _lrMapExit kept as alias so any legacy caller still works as a minimize. */
-function _lrMapExit() { _lrMapMinimize(); }
+/* PHASE-A: _lrMapMinimize / _lrMapExit / _lrMapResume collapse to GPS view aliases.
+   The hybrid map mode is gone, so "minimize" = close GPS view, "resume" = open GPS view.
+   Functions retained (and still exported) for backward compatibility with any HTML
+   onclick that calls them. Original bodies preserved as comments below.
 
-/* G2b-R -- re-expand the map from classic view. Called from the floating "Map" pill. */
+// function _lrMapMinimize() {
+//   if (!lrState) return;
+//   lrState._mapOpen = false;
+//   _lrPersist();
+//   lrRenderHole();
+// }
+// function _lrMapResume() {
+//   if (!lrState || !_lrMapGeo) return;
+//   lrState._mapOpen = true;
+//   _lrPersist();
+//   lrRenderHole();
+// }
+*/
+function _lrMapMinimize() {
+  if (typeof gpsViewClose === 'function') gpsViewClose();
+}
+function _lrMapExit() { _lrMapMinimize(); }
 function _lrMapResume() {
-  if (!lrState || !_lrMapGeo) return;
-  lrState._mapOpen = true;
-  _lrPersist();
-  lrRenderHole();
+  if (typeof gpsViewOpen === 'function') gpsViewOpen();
 }
 
 /* PATCH-LRMAPLOAD — H4: manual re-pick course affordance. Resets the
@@ -3577,8 +3594,9 @@ function lrxRenderBanner() {
   var gpsBtn = document.getElementById('lrxGpsBtn');
   var gpsSep = document.getElementById('lrxGpsBtnSep');
   var visGps = !!lrState._gpsOn;
-  if (gpsBtn) gpsBtn.style.display = visGps ? '' : 'none';
-  if (gpsSep) gpsSep.style.display = visGps ? '' : 'none';
+ /* PHASE-A: Map button always visible; was gated by _gpsOn. */
+if (gpsBtn) gpsBtn.style.display = '';
+if (gpsSep) gpsSep.style.display = '';
   /* Live screen banner. */
   var liveEl = document.getElementById('lrxBanner');
   if (liveEl) liveEl.innerHTML = lrxBannerHtml('live');
