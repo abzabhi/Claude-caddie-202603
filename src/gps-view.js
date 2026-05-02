@@ -324,12 +324,54 @@ function gpsViewOpen() {
         _gvShowToast('Shot logged', 'info');
       }
       if (typeof gpsViewRender === 'function') gpsViewRender();
+      /* PHASE-B2: Refresh line baseline so next shot's strategic line starts
+         from this shot's endLngLat. */
+      _gvRefreshLineStart();
     };
   }
   /* Wire compass listener */
   window.addEventListener('deviceorientation', _gpsViewOnHeading, true);
+  /* PHASE-B2: Refresh aim + line baseline immediately so aim renders without
+     requiring a scoring-toggle round-trip. Sets lineStartOverride from last
+     shot's endLngLat (off-tee for shot 1) so the strategic distance shows
+     "ball position to aim", not "phone to aim". */
+  _gvRefreshLineStart();
+  if (lr._mapInstance && Array.isArray(lr._mapAim)) {
+    try {
+      if (typeof lr._mapInstance._placeAimMarker === 'function') {
+        lr._mapInstance._placeAimMarker(lr._mapAim);
+      }
+      if (typeof lr._mapInstance._renderAimLine === 'function') {
+        lr._mapInstance._renderAimLine();
+      }
+    } catch(e) {}
+  }
   /* Start render loop */
   _gpsViewScheduleRender(true);
+}
+
+/* PHASE-B2: Resolve the strategic line baseline. Per spec: distance/line should
+   start from where the BALL is (last shot's endLngLat), not from the phone's GPS
+   position. For shot 1, tee is the baseline. MapView already falls back to tee
+   for shot 1 via its existing _teeOverride logic; we only need to override when
+   shot 2+ exists. */
+function _gvRefreshLineStart() {
+  var lr = window.lrState;
+  if (!lr || !lr._mapInstance) return;
+  if (typeof lr._mapInstance.setLineStartOverride !== 'function') return;
+  var s = lr.players[lr.curPlayer].scores[lr.curHole];
+  var shots = (s && Array.isArray(s.shots)) ? s.shots : [];
+  /* Last shot's endLngLat = baseline for next shot's strategic line.
+     If no shots yet, clear override -> MapView falls back to tee. */
+  var baseline = null;
+  for (var i = shots.length - 1; i >= 0; i--) {
+    var sh = shots[i];
+    if (sh && sh.gps_flight && Array.isArray(sh.gps_flight.endLngLat)) {
+      baseline = sh.gps_flight.endLngLat;
+      break;
+    }
+  }
+  try { lr._mapInstance.setLineStartOverride(baseline); } catch(e) {}
 }
 
 function gpsViewClose() {
@@ -573,6 +615,45 @@ function gpsViewToggleMapMode() {
   _renderBanner();
 }
 
+/* PHASE-B2: Explicit GPS toggle. Independent of tracker.
+   - ON: prompt + start GPS via MapView.
+   - OFF: stop GPS, also disable tracker (tracker requires GPS) and cancel any armed shot.
+   Differs from gpsViewTrackingToggle: this controls only _gpsOn; tracker controls
+   _trackerOn + auto-enables _gpsOn on the way ON. */
+function gpsViewGpsToggle() {
+  var lr = window.lrState;
+  if (!lr) return;
+  var goingOn = !lr._gpsOn;
+  if (goingOn) {
+    if (typeof window._lrMapGpsPromptIfNeeded === 'function'
+        && !window._lrMapGpsPromptIfNeeded()) return;
+    if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
+      try { lr._mapInstance.startGps(); } catch(e) {}
+    }
+    lr._gpsOn = true;
+  } else {
+    /* Turning GPS off: tracker can't function without GPS, so cascade off. */
+    if (lr._trackerOn) {
+      lr._trackerOn = false;
+      if (typeof window.stCancel === 'function') window.stCancel();
+      if (lr._mapInstance) {
+        if (typeof lr._mapInstance.setAimLocked === 'function') {
+          try { lr._mapInstance.setAimLocked(false); } catch(e) {}
+        }
+        if (typeof lr._mapInstance.clearDispersionLines === 'function') {
+          try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+        }
+      }
+    }
+    if (lr._mapInstance && typeof lr._mapInstance.stopGps === 'function') {
+      try { lr._mapInstance.stopGps(); } catch(e) {}
+    }
+    lr._gpsOn = false;
+  }
+  if (typeof window._lrPersist === 'function') window._lrPersist();
+  gpsViewRender();
+}
+
 /* PHASE-B1: Unified user-facing tracking toggle. Replaces the two-toggle confusion
    (_gpsOn dish button + _trackerOn banner button). One button, one mental model.
    - ON: ensure GPS is running (auto-prompt if first time), then enable shot tracker.
@@ -724,6 +805,8 @@ function _renderMinimap() {
   if (holeN !== _gvLastShownHole && lr._mapInstance && typeof lr._mapInstance.showHole === 'function') {
     try { lr._mapInstance.showHole(holeN); } catch(e) {}
     _gvLastShownHole = holeN;
+    /* PHASE-B2: New hole = new line baseline (no shots yet -> tee). */
+    _gvRefreshLineStart();
   }
 }
 
@@ -1067,7 +1150,7 @@ function gpsViewOnMapDoubleTap(lngLat) {
 /* Expose to window. Keep names matching live-round.js convention. */
 Object.assign(window, {
   gpsViewOpen, gpsViewClose, gpsViewToggle, gpsViewRender,
-  gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker, gpsViewTrackingToggle,
+  gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker, gpsViewTrackingToggle, gpsViewGpsToggle,
   gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt,
   gpsViewCancelShot,
   lrxYardsToGreen
