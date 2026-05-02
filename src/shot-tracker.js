@@ -25,6 +25,7 @@ function _stMapLie(raw) {
   if (raw === 'rough')                return 'rough';
   if (raw === 'bunker')               return 'sand';
   if (raw === 'lateral_water_hazard') return 'recovery';
+  if (raw === 'water_hazard')         return 'recovery';  /* LR-EXTRAS: CDN schema name */
   if (raw === 'water')                return 'recovery';  /* defensive */
   /* null or anything unexpected -> default rough (matches handoff). */
   return 'rough';
