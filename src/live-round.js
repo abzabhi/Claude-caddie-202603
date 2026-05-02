@@ -3506,6 +3506,22 @@ function lrxBannerHtml(mode) {
   /* clockText removed -- mobile OS already shows current time at top of screen. */
   var drinks     = lrState._drinks || 0;
 
+  /* PHASE-B1: Hoist Hole/Par/shots/yards/gpsDot vars used by all three modes
+     (was duplicated inside gps-collapsed only). Single source of truth.
+     shotsN reads the same shots[] array that classic scoring writes -- guaranteed sync. */
+  var holeN  = hole ? hole.n : (lrState.curHole + 1);
+  var par    = hole ? hole.par : '';
+  var s      = (lrState.players && lrState.players[lrState.curPlayer])
+               ? lrState.players[lrState.curPlayer].scores[lrState.curHole]
+               : null;
+  var shotsN = (s && Array.isArray(s.shots)) ? s.shots.length : 0;
+  /* yards-to-green is a GPS-screen concept; resolved by gps-view via window.lrxYardsToGreen if available.
+     Returns null on the live screen (function defined only after gps-view loads), which is fine -- the
+     yards pill is omitted on live mode anyway. */
+  var yds       = (typeof window.lrxYardsToGreen === 'function') ? window.lrxYardsToGreen() : null;
+  var gpsLost   = !!window._gpsViewLostFlag;
+  var dotColor  = gpsLost ? '#c0392b' : '#2ca02c';
+
   /* Weather text (or '' if no fix yet). */
   var wText = '';
   var w = lrState._weather;
@@ -3523,17 +3539,26 @@ function lrxBannerHtml(mode) {
     wText = lrxWeatherIcon(w.code) + ' ' + temp + tu + ' \u00B7 ' + wind + wu + (dir ? ' ' + dir : '');
   }
 
-  /* GPS-collapsed compact line (used only on GPS screen). */
+  /* PHASE-B1: Shared info row -- Hole / Par / shots / (yards on GPS) / gps-dot.
+     Used as row 1 of every mode. Yards pill omitted in 'live' mode.
+     Dot omitted in 'live' mode (no GPS-loss concept on classic screen). */
+  var includeYds = (mode === 'gps-collapsed' || mode === 'gps-expanded');
+  var includeDot = includeYds;
+  var infoRow =
+      '<div class="lrx-row">'
+    +   '<span class="lrx-pill"><b>Hole ' + holeN + '</b></span>'
+    +   '<span class="lrx-pill">Par ' + par + '</span>'
+    +   '<span class="lrx-pill mono">' + shotsN + ' sh</span>'
+    +   ((includeYds && yds != null) ? '<span class="lrx-pill mono">' + yds + 'y</span>' : '')
+    +   (includeDot ? '<span class="lrx-dot" style="background:' + dotColor + ';margin-left:auto"></span>' : '')
+    + '</div>';
+
+  /* GPS-collapsed compact line (used only on GPS screen). One row only: info + timer + drinks summary. */
   if (mode === 'gps-collapsed') {
-    var holeN  = hole ? hole.n : (lrState.curHole + 1);
-    var par    = hole ? hole.par : '';
-    /* yards-to-green is a GPS-screen concept; resolved by gps-view via window.lrxYardsToGreen if available. */
-    var yds    = (typeof window.lrxYardsToGreen === 'function') ? window.lrxYardsToGreen() : null;
-    var gpsLost = !!window._gpsViewLostFlag;
-    var dotColor = gpsLost ? '#c0392b' : '#2ca02c';
     return '<div class="lrx-banner lrx-collapsed" onclick="gpsViewToggleBanner()">'
       + '<span class="lrx-pill"><b>Hole ' + holeN + '</b></span>'
       + '<span class="lrx-pill">Par ' + par + '</span>'
+      + '<span class="lrx-pill mono">' + shotsN + ' sh</span>'
       + (yds != null ? '<span class="lrx-pill mono">' + yds + 'y</span>' : '')
       + '<span class="lrx-pill mono ' + holeCls + '">' + holeText + '</span>'
       + '<span class="lrx-pill">\uD83C\uDF7A ' + drinks + '</span>'
@@ -3542,8 +3567,7 @@ function lrxBannerHtml(mode) {
       + '</div>';
   }
 
-  /* Build the chip row (used by both 'live' and 'gps-expanded'). Clock pill removed
-     per spec -- mobile OS already shows current time. */
+  /* Chip row (timer/total/weather/drinks). Used by 'live' and 'gps-expanded' as row 2. */
   var chipRow =
       '<div class="lrx-row">'
     +   '<span class="lrx-pill mono ' + holeCls + '" onclick="lrxTogglePause()" role="button" tabindex="0">'
@@ -3563,19 +3587,22 @@ function lrxBannerHtml(mode) {
     var trackerOn = !!lrState._trackerOn;
     var styleMode = (lrState._mapInstance && typeof lrState._mapInstance.getStyleMode === 'function')
       ? lrState._mapInstance.getStyleMode() : 'satellite';
+    /* PHASE-B1: Tracker button now calls unified gpsViewTrackingToggle which auto-enables GPS
+       on first arm. Old gpsViewToggleTracker still exported as alias for backward compat. */
     var actionRow =
         '<div class="lrx-row lrx-row-actions">'
-      +   '<button class="lrx-act" onclick="gpsViewToggleTracker()">'
-      +     (trackerOn ? '\u25CF Tracker On' : '\u25CB Tracker Off') + '</button>'
+      +   '<button class="lrx-act" onclick="gpsViewTrackingToggle()">'
+      +     (trackerOn ? '\uD83C\uDFAF Track Shots ON' : '\uD83C\uDFAF Track Shots OFF') + '</button>'
       +   '<button class="lrx-act" onclick="gpsViewToggleMapMode()">'
       +     (styleMode === 'plain' ? 'No Map' : 'Satellite') + '</button>'
       +   '<span class="lrx-hint" style="margin-left:auto" onclick="gpsViewToggleBanner()">tap to collapse</span>'
       + '</div>';
-    return '<div class="lrx-banner lrx-expanded">' + chipRow + actionRow + '</div>';
+    return '<div class="lrx-banner lrx-expanded">' + infoRow + chipRow + actionRow + '</div>';
   }
 
-  /* mode === 'live' (default): chip row only, no collapse affordance. */
-  return '<div class="lrx-banner lrx-expanded">' + chipRow + '</div>';
+  /* mode === 'live' (default): info row (Hole/Par/shots) + chip row, no collapse affordance.
+     Yards omitted (GPS concept), dot omitted (no GPS-loss on classic screen). */
+  return '<div class="lrx-banner lrx-expanded">' + infoRow + chipRow + '</div>';
 }
 
 /* Color class for time-pressure thresholds. Hole time only (per spec). */
@@ -3590,13 +3617,19 @@ function _lrxTimeClass(seconds) {
    Also continues to manage the bottom-nav GPS chip visibility on the live screen. */
 function lrxRenderBanner() {
   if (!lrState) return;
-  /* Bottom-nav GPS chip + its separator: visible only when _gpsOn is true. */
+  /* PHASE-B1: Map button is now always visible (was gated by _gpsOn).
+     Map entry is the headline feature; users need to be able to reach it
+     whether GPS is on or not. The button on lrHoleScreen calls gpsViewOpen()
+     directly and gpsViewOpen handles GPS startup if tracker is on.
+     Original (Phase-A leftover):
+  // var visGps = !!lrState._gpsOn;
+  // if (gpsBtn) gpsBtn.style.display = visGps ? '' : 'none';
+  // if (gpsSep) gpsSep.style.display = visGps ? '' : 'none';
+  */
   var gpsBtn = document.getElementById('lrxGpsBtn');
   var gpsSep = document.getElementById('lrxGpsBtnSep');
-  var visGps = !!lrState._gpsOn;
- /* PHASE-A: Map button always visible; was gated by _gpsOn. */
-if (gpsBtn) gpsBtn.style.display = '';
-if (gpsSep) gpsSep.style.display = '';
+  if (gpsBtn) gpsBtn.style.display = '';
+  if (gpsSep) gpsSep.style.display = '';
   /* Live screen banner. */
   var liveEl = document.getElementById('lrxBanner');
   if (liveEl) liveEl.innerHTML = lrxBannerHtml('live');
