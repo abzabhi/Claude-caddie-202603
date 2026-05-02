@@ -29,6 +29,7 @@ const GC = {
   tee:          '#d0d8e0',
   bunker:       '#c9a84c',
   lateral_water_hazard: '#5b9bd5',
+  water_hazard:         '#5b9bd5',  /* LR-EXTRAS: CDN schema uses "water_hazard"; renders identically. */
   rough:        '#4a7a28'
 };
 
@@ -799,7 +800,9 @@ export function geomPointInPolygon(lngLat, polygon) {
 export function geomLieAtPoint(lngLat, polygons) {
   if (!polygons || !polygons.features || !polygons.features.length) return null;
   const pt = window.turf.point(lngLat);
-  const priority = ['green', 'tee', 'fairway', 'rough', 'bunker', 'lateral_water_hazard'];
+  /* LR-EXTRAS: water_hazard added alongside lateral_water_hazard so the CDN's
+     normalized type name resolves correctly during lie detection. */
+  const priority = ['green', 'tee', 'fairway', 'rough', 'bunker', 'lateral_water_hazard', 'water_hazard'];
   const hits = new Set();
   for (const f of polygons.features) {
     if (!f || !f.properties || !f.properties.golf) continue;
