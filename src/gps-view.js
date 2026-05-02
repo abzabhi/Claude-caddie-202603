@@ -169,6 +169,14 @@ function gpsViewOpen() {
   if (screen) screen.style.display = 'flex';
   /* iOS compass permission (one-shot, cached). */
   _gpsViewMaybeRequestCompass();
+  /* PHASE-B1: If tracker was on at last persist (e.g. user refreshed page mid-round
+     while shot logging was active), restart GPS via MapView so chevron + aim line
+     come back. Without this the user would tap "Map" and see a tracker-on banner
+     but no user marker — confusing. _trackerOn implies _gpsOn must be true. */
+  if (lr._trackerOn && !lr._gpsOn && lr._mapInstance
+      && typeof lr._mapInstance.startGps === 'function') {
+    try { lr._mapInstance.startGps(); lr._gpsOn = true; } catch(e) {}
+  }
   /* Ensure GPS watch is running for live position. Reuse MapView's GPS if already on,
      else start our own. */
   if (!lr._gpsOn || !lr._mapInstance) {
@@ -470,6 +478,7 @@ function gpsViewRender() {
     _gpsLostFlag = true;
   }
   _renderBanner();
+  _renderModeBanner();        /* PHASE-B1: persistent armed/idle prompt above map */
   _renderMinimap();
   _ensureCompassChevron();   /* LR-EXTRAS: attach rotating chevron to MapView's user marker */
   _renderYards();
@@ -562,6 +571,52 @@ function gpsViewToggleMapMode() {
   lr._mapInstance.setStyleMode(cur === 'satellite' ? 'plain' : 'satellite');
   if (typeof window._lrPersist === 'function') window._lrPersist();
   _renderBanner();
+}
+
+/* PHASE-B1: Unified user-facing tracking toggle. Replaces the two-toggle confusion
+   (_gpsOn dish button + _trackerOn banner button). One button, one mental model.
+   - ON: ensure GPS is running (auto-prompt if first time), then enable shot tracker.
+   - OFF: disable shot tracker only. GPS stays on so chevron + aim line remain.
+   Cancels any armed shot when going OFF (matches old gpsViewToggleTracker behaviour). */
+function gpsViewTrackingToggle() {
+  var lr = window.lrState;
+  if (!lr) return;
+  var goingOn = !lr._trackerOn;
+  if (goingOn) {
+    /* Ensure GPS is running. _lrMapGpsToggle already wraps the prompt + start path
+       and handles the case where _gpsOn is already true (no-op). We invoke its core
+       behaviour inline to avoid the extra lrRenderHole + auto-open recursion. */
+    if (!lr._gpsOn) {
+      if (typeof window._lrMapGpsPromptIfNeeded === 'function'
+          && !window._lrMapGpsPromptIfNeeded()) {
+        /* User declined the prompt; do not enable tracker either. */
+        return;
+      }
+      if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
+        try { lr._mapInstance.startGps(); } catch(e) {}
+      }
+      lr._gpsOn = true;
+    }
+    lr._trackerOn = true;
+  } else {
+    lr._trackerOn = false;
+    /* Cancel any armed shot. Mirrors old gpsViewToggleTracker exactly. */
+    if (typeof window.stCancel === 'function') window.stCancel();
+    if (lr._mapInstance) {
+      if (typeof lr._mapInstance.setAimLocked === 'function') {
+        try { lr._mapInstance.setAimLocked(false); } catch(e) {}
+      }
+      if (typeof lr._mapInstance.setLineStartOverride === 'function') {
+        try { lr._mapInstance.setLineStartOverride(null); } catch(e) {}
+      }
+      if (typeof lr._mapInstance.clearDispersionLines === 'function') {
+        try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+      }
+    }
+    /* GPS stays on per spec -- user keeps chevron + live distances. */
+  }
+  if (typeof window._lrPersist === 'function') window._lrPersist();
+  gpsViewRender();
 }
 
 function gpsViewToggleTracker() {
@@ -850,17 +905,64 @@ function _renderHazards() {
    Active shot chip + putt bar + on-green prompt
    ───────────────────────────────────────────────────────── */
 
+/* PHASE-B1: Persistent mode banner. Three states:
+   - tracker off: hidden entirely (no DOM impact)
+   - tracker on, no shot armed: "Tap target to arm shot N"
+   - tracker on, shot armed: "Tap landing for shot N"
+   Replaces the easy-to-miss toast as the primary affordance for shot logging.
+   Toasts still fire for confirmation events; this strip stays put across them. */
+function _renderModeBanner() {
+  var el = document.getElementById('gpsModeBanner');
+  if (!el) return;
+  var lr = window.lrState;
+  if (!lr || !lr._trackerOn || _puttMode) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+  var s     = lr.players[lr.curPlayer].scores[lr.curHole];
+  var n     = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
+  /* Note: when armed, shotsN already incremented in stArmShot? No -- stCloseShot pushes.
+     During armed state s.shots.length is still the pre-shot count, so n is correct
+     (the "next" shot number) for both idle and armed states. */
+  var msg, bg;
+  if (armed) {
+    msg = '\uD83C\uDFAF Tap landing for Shot ' + n;
+    bg  = 'linear-gradient(90deg, var(--ac2), var(--ac3))';  /* armed: emphasised */
+  } else {
+    msg = '\uD83C\uDFAF Tap target to arm Shot ' + n;
+    bg  = 'var(--sf)';                                        /* idle: low-key */
+  }
+  el.style.display = '';
+  el.innerHTML = '<div style="padding:6px 12px;background:' + bg + ';'
+    + 'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
+    + 'color:var(--tx);text-align:center;letter-spacing:.02em">'
+    + msg + '</div>';
+}
+
 function _renderShotChip() {
   var el = document.getElementById('gpsShotChip');
   if (!el) return;
   var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
   if (!armed || _puttMode) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  /* PHASE-B1: Slimmed to Cancel-only. The "shot armed" message now lives in
+     the mode banner above the map (gpsModeBanner) so it's seen at a glance.
+     This chip retains only the cancel affordance, kept small and right-aligned.
+     Original (preserved as comment):
+  // el.innerHTML = '<div style="padding:8px 12px;background:var(--ac3);border-top:1px solid var(--br);font-size:.7rem;display:flex;align-items:center;gap:8px">'
+  //   + '<span style="color:var(--tx)">\u25CB Shot armed</span>'
+  //   + (armed.club ? '<span style="color:var(--tx2)">\u00B7 ' + armed.club + '</span>' : '')
+  //   + '<span style="margin-left:auto;color:var(--tx3);font-size:.6rem">tap landing to log</span>'
+  //   + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="gpsViewCancelShot()">Cancel</button>'
+  //   + '</div>';
+  */
   el.style.display = '';
-  el.innerHTML = '<div style="padding:8px 12px;background:var(--ac3);border-top:1px solid var(--br);font-size:.7rem;display:flex;align-items:center;gap:8px">'
-    + '<span style="color:var(--tx)">\u25CB Shot armed</span>'
-    + (armed.club ? '<span style="color:var(--tx2)">\u00B7 ' + armed.club + '</span>' : '')
-    + '<span style="margin-left:auto;color:var(--tx3);font-size:.6rem">tap landing to log</span>'
-    + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="gpsViewCancelShot()">Cancel</button>'
+  el.innerHTML = '<div style="padding:6px 12px;border-top:1px solid var(--br);'
+    + 'font-size:.7rem;display:flex;align-items:center;gap:8px;background:var(--bg)">'
+    + (armed.club ? '<span style="color:var(--tx2)">' + armed.club + '</span>' : '')
+    + '<button class="btn sec" style="font-size:.62rem;padding:3px 12px;margin-left:auto" '
+    +   'onclick="gpsViewCancelShot()">Cancel shot</button>'
     + '</div>';
 }
 
@@ -965,7 +1067,7 @@ function gpsViewOnMapDoubleTap(lngLat) {
 /* Expose to window. Keep names matching live-round.js convention. */
 Object.assign(window, {
   gpsViewOpen, gpsViewClose, gpsViewToggle, gpsViewRender,
-  gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker,
+  gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker, gpsViewTrackingToggle,
   gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt,
   gpsViewCancelShot,
   lrxYardsToGreen
