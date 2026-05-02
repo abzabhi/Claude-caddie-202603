@@ -1650,6 +1650,16 @@ function _lrShotLogHtml(shots) {
     var parts = ['Shot ' + (i + 1), clubDisplay, sh.shot_mode, sh.lie || '\u2014'];
     if (zone) parts.push(zone);
     if (sh.flight_path) parts.push(sh.flight_path);
+    /* PHASE-B2: Surface GPS-tracked fields when present. gps_flight records have
+       distance, distance-to-pin, and dispersion that the radial fields don't. */
+    if (sh.gps_flight) {
+      var gf = sh.gps_flight;
+      if (gf.distanceYds) parts.push(Math.round(gf.distanceYds) + 'y');
+      if (sh.distanceToHole != null) parts.push(Math.round(sh.distanceToHole) + 'y to pin');
+      if (gf.dispersionLat && Math.abs(gf.dispersionLat) >= 1) {
+        parts.push(Math.round(Math.abs(gf.dispersionLat)) + 'y ' + (gf.dispersionLat > 0 ? 'R' : 'L'));
+      }
+    }
     return '<div style="font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)">'
       + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'
       + '<span>' + parts.join(' \u00B7 ') + obTag + sgTag + '</span>' + editBtn + delBtn
@@ -3585,14 +3595,17 @@ function lrxBannerHtml(mode) {
 
   if (mode === 'gps-expanded') {
     var trackerOn = !!lrState._trackerOn;
+    var gpsOn     = !!lrState._gpsOn;
     var styleMode = (lrState._mapInstance && typeof lrState._mapInstance.getStyleMode === 'function')
       ? lrState._mapInstance.getStyleMode() : 'satellite';
-    /* PHASE-B1: Tracker button now calls unified gpsViewTrackingToggle which auto-enables GPS
-       on first arm. Old gpsViewToggleTracker still exported as alias for backward compat. */
+    /* PHASE-B2: Two independent buttons. GPS controls _gpsOn directly. Tracker
+       requires GPS (auto-enables on the way ON; cascades OFF when GPS goes OFF). */
     var actionRow =
         '<div class="lrx-row lrx-row-actions">'
+      +   '<button class="lrx-act" onclick="gpsViewGpsToggle()">'
+      +     (gpsOn ? '\uD83D\uDCE1 GPS ON' : '\uD83D\uDCE1 GPS OFF') + '</button>'
       +   '<button class="lrx-act" onclick="gpsViewTrackingToggle()">'
-      +     (trackerOn ? '\uD83C\uDFAF Track Shots ON' : '\uD83C\uDFAF Track Shots OFF') + '</button>'
+      +     (trackerOn ? '\uD83C\uDFAF Track ON' : '\uD83C\uDFAF Track OFF') + '</button>'
       +   '<button class="lrx-act" onclick="gpsViewToggleMapMode()">'
       +     (styleMode === 'plain' ? 'No Map' : 'Satellite') + '</button>'
       +   '<span class="lrx-hint" style="margin-left:auto" onclick="gpsViewToggleBanner()">tap to collapse</span>'
