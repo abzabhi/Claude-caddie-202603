@@ -177,13 +177,14 @@ function gpsViewOpen() {
       && typeof lr._mapInstance.startGps === 'function') {
     try { lr._mapInstance.startGps(); lr._gpsOn = true; } catch(e) {}
   }
-  /* Ensure GPS watch is running for live position. Reuse MapView's GPS if already on,
-     else start our own. */
-  if (!lr._gpsOn || !lr._mapInstance) {
+  /* PHASE-B5: Bug fix — only start the gps-view fallback watch when GPS is ON
+     and MapView can't take it. Was: !lr._gpsOn || !lr._mapInstance which started
+     the watch when GPS was OFF, making GPS impossible to actually disable. */
+  if (lr._gpsOn && !lr._mapInstance) {
     if (_gpsWatchId == null) {
       _gpsWatchId = geomStartGpsWatch(_gpsViewOnTick, _gpsViewOnGpsError);
     }
-  } else {
+  } else if (lr._gpsOn) {
     /* MapView is already watching. Read its last fix if present. */
     if (lr._mapInstance && Array.isArray(lr._mapInstance._userLonLat)) {
       _gpsLast = [lr._mapInstance._userLonLat[0], lr._mapInstance._userLonLat[1], 0];
@@ -645,30 +646,35 @@ function gpsViewGpsToggle() {
   if (!lr) return;
   var goingOn = !lr._gpsOn;
   if (goingOn) {
-    /* PHASE-B4: Always prompt on explicit user toggle. Bypass the round-level
-       _gpsPrompted gate (which is for auto-restarts only). Browser native prompt
-       fires for the user; permission cached at browser level after first accept. */
     if (!('geolocation' in navigator)) {
       _gvShowToast('GPS not available on this device', 'warn');
       return;
     }
-    /* Trigger native permission prompt explicitly via getCurrentPosition. If user
-       denies, do not enable. If granted, proceed to start watch. */
+    /* PHASE-B5: Flip state + render IMMEDIATELY so the user sees feedback on
+       first tap. Then request permission. If denied, revert. Avoids the
+       "have to tap twice" UX where async resolved before render. */
+    lr._gpsOn = true;
+    if (typeof window._lrPersist === 'function') window._lrPersist();
+    gpsViewRender();
     navigator.geolocation.getCurrentPosition(
       function(/*pos*/) {
         if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
           try { lr._mapInstance.startGps(); } catch(e) {}
+        } else if (_gpsWatchId == null) {
+          _gpsWatchId = geomStartGpsWatch(_gpsViewOnTick, _gpsViewOnGpsError);
         }
-        lr._gpsOn = true;
-        if (typeof window._lrPersist === 'function') window._lrPersist();
         gpsViewRender();
       },
       function(/*err*/) {
+        /* Permission denied — revert. */
+        lr._gpsOn = false;
+        if (typeof window._lrPersist === 'function') window._lrPersist();
         _gvShowToast('GPS permission denied', 'warn');
+        gpsViewRender();
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-    return;  /* state flipped only on success callback */
+    return;
   }
   /* Turning OFF: stop BOTH watches (MapView's AND gps-view's own). */
   if (lr._trackerOn) {
@@ -686,9 +692,6 @@ function gpsViewGpsToggle() {
   if (lr._mapInstance && typeof lr._mapInstance.stopGps === 'function') {
     try { lr._mapInstance.stopGps(); } catch(e) {}
   }
-  /* PHASE-B4: stop gps-view's own watch too (started in gpsViewOpen as fallback
-     when MapView wasn't running its own). Not stopping this is why GPS appeared
-     to stay on even after toggle off. */
   if (_gpsWatchId != null) {
     try { geomStopGpsWatch(_gpsWatchId); } catch(e) {}
     _gpsWatchId = null;
@@ -709,22 +712,31 @@ function gpsViewTrackingToggle() {
   var goingOn = !lr._trackerOn;
   if (goingOn) {
     if (!lr._gpsOn) {
-      /* PHASE-B4: Direct browser-native prompt; honor user agreement. */
       if (!('geolocation' in navigator)) {
         _gvShowToast('GPS not available on this device', 'warn');
         return;
       }
+      /* PHASE-B5: Synchronous flip first, then async permission. */
+      lr._gpsOn = true;
+      lr._trackerOn = true;
+      if (typeof window._lrPersist === 'function') window._lrPersist();
+      gpsViewRender();
       navigator.geolocation.getCurrentPosition(
         function(/*pos*/) {
           if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
             try { lr._mapInstance.startGps(); } catch(e) {}
+          } else if (_gpsWatchId == null) {
+            _gpsWatchId = geomStartGpsWatch(_gpsViewOnTick, _gpsViewOnGpsError);
           }
-          lr._gpsOn = true;
-          lr._trackerOn = true;
-          if (typeof window._lrPersist === 'function') window._lrPersist();
           gpsViewRender();
         },
-        function(/*err*/) { _gvShowToast('GPS permission denied; tracker needs GPS', 'warn'); },
+        function(/*err*/) {
+          lr._gpsOn = false;
+          lr._trackerOn = false;
+          if (typeof window._lrPersist === 'function') window._lrPersist();
+          _gvShowToast('GPS permission denied; tracker needs GPS', 'warn');
+          gpsViewRender();
+        },
         { enableHighAccuracy: true, timeout: 10000 }
       );
       return;
@@ -888,30 +900,37 @@ function _gvResetCanvasState() {
    ───────────────────────────────────────────────────────── */
 
 function _calcYardsToGreen() {
-  /* LR-EXTRAS: fall back to tee position when no GPS fix has come in yet.
-     User sees "from tee" yardage immediately on cold-start instead of "—". */
+  /* PHASE-B5: Strategic distance starts from BALL position (where the last
+     shot ended, or tee for shot 1), NOT from phone GPS. Phone is for the
+     chevron and live walking distance, not strategy. GPS is a fallback only
+     when no ball position can be derived. */
   var geo = _gvGetGeo();
   if (!geo) return null;
   var holeEntry = _gvHoleEntry(geo);
   if (!holeEntry || !Array.isArray(holeEntry.green)) return null;
   var fromPt = null;
-  if (_gpsLast) {
-    fromPt = [_gpsLast[0], _gpsLast[1]];
-  } else if (Array.isArray(holeEntry.tee)) {
-    fromPt = holeEntry.tee;
-  } else if (Array.isArray(holeEntry.line) && holeEntry.line.length) {
-    fromPt = holeEntry.line[0];
+  /* Priority 1: last shot's endLngLat. */
+  var lr = window.lrState;
+  if (lr && lr.players && lr.players[lr.curPlayer]) {
+    var s = lr.players[lr.curPlayer].scores[lr.curHole];
+    if (s && Array.isArray(s.shots) && s.shots.length) {
+      for (var i = s.shots.length - 1; i >= 0; i--) {
+        var sh = s.shots[i];
+        if (sh && sh.gps_flight && Array.isArray(sh.gps_flight.endLngLat)) {
+          fromPt = sh.gps_flight.endLngLat;
+          break;
+        }
+      }
+    }
   }
+  /* Priority 2: tee. */
+  if (!fromPt && Array.isArray(holeEntry.tee)) fromPt = holeEntry.tee;
+  /* Priority 3: hole line start. */
+  if (!fromPt && Array.isArray(holeEntry.line) && holeEntry.line.length) fromPt = holeEntry.line[0];
+  /* Priority 4: phone GPS (last-resort fallback only). */
+  if (!fromPt && _gpsLast) fromPt = [_gpsLast[0], _gpsLast[1]];
   if (!fromPt) return null;
   try { return geomDistanceYds(fromPt, holeEntry.green); } catch(e) { return null; }
-  /* // BEFORE LR-EXTRAS:
-  // if (!_gpsLast) return null;
-  // var geo = _gvGetGeo();
-  // if (!geo) return null;
-  // var holeEntry = _gvHoleEntry(geo);
-  // if (!holeEntry || !Array.isArray(holeEntry.green)) return null;
-  // try { return geomDistanceYds([_gpsLast[0], _gpsLast[1]], holeEntry.green); } catch(e) { return null; }
-  */
 }
 
 function _renderYards() {
@@ -961,28 +980,36 @@ function _renderHazards() {
   var geo = _gvGetGeo();
   if (!geo || !geo.polygons || !geo.polygons.features) { el.innerHTML = ''; return; }
   var holeEntry = _gvHoleEntry(geo);
-  /* LR-EXTRAS: derive a "player" position with tee fallback so hazards appear
-     before the first GPS fix arrives. Likewise derive an "aim" with green
-     fallback so corridor 1 is meaningful even without a manually-set aim
-     (per user spec: hazards always show through the corridor; auto-aim midpoint
-     also counts). */
-  var player = null;
-  if (_gpsLast) {
-    player = [_gpsLast[0], _gpsLast[1]];
-  } else if (holeEntry && Array.isArray(holeEntry.tee)) {
-    player = holeEntry.tee;
-  } else if (holeEntry && Array.isArray(holeEntry.line) && holeEntry.line.length) {
-    player = holeEntry.line[0];
+  /* PHASE-B5: Corridor 1 baseline = ball position (last shot end / tee), NOT
+     phone GPS. Mirrors _calcYardsToGreen and _gvRefreshLineStart so the strategic
+     line is consistent across UI. */
+  var ballPt = null;
+  if (lr.players && lr.players[lr.curPlayer]) {
+    var sc = lr.players[lr.curPlayer].scores[lr.curHole];
+    if (sc && Array.isArray(sc.shots) && sc.shots.length) {
+      for (var bi = sc.shots.length - 1; bi >= 0; bi--) {
+        var bsh = sc.shots[bi];
+        if (bsh && bsh.gps_flight && Array.isArray(bsh.gps_flight.endLngLat)) {
+          ballPt = bsh.gps_flight.endLngLat;
+          break;
+        }
+      }
+    }
   }
+  if (!ballPt && holeEntry && Array.isArray(holeEntry.tee)) ballPt = holeEntry.tee;
+  if (!ballPt && holeEntry && Array.isArray(holeEntry.line) && holeEntry.line.length) ballPt = holeEntry.line[0];
+  if (!ballPt && _gpsLast) ballPt = [_gpsLast[0], _gpsLast[1]];
   var aim = (lr._mapAim && Array.isArray(lr._mapAim))
     ? lr._mapAim
     : (holeEntry && Array.isArray(holeEntry.green) ? holeEntry.green : null);
   var greenC = (holeEntry && Array.isArray(holeEntry.green)) ? holeEntry.green : null;
-  if (!player || !aim) { el.innerHTML = ''; return; }
+  if (!ballPt || !aim) { el.innerHTML = ''; return; }
   var allFeats = geo.polygons.features;
-  /* Two corridors: player->aim and aim->green. If aim === green (fallback case),
-     the second corridor is degenerate and is skipped by _gvCorridorCheck. */
-  var rows = [];
+  /* PHASE-B5: build TWO row lists, one per corridor. Same hazard can appear in
+     both if its centroid is in both corridors — informative, not duplication.
+     Both corridors are ALWAYS evaluated; both columns ALWAYS render. */
+  var rowsToAim = [];
+  var rowsAimToGreen = [];
   for (var i = 0; i < allFeats.length; i++) {
     var f = allFeats[i];
     if (!f || !f.properties) continue;
@@ -990,48 +1017,56 @@ function _renderHazards() {
     if (!GPS_HAZARDS[typ]) continue;
     var c = _gvPolyCentroid(f);
     if (!c) continue;
-    /* Corridor 1: player -> aim */
-    var c1 = _gvCorridorCheck(player, aim, c);
-    /* Corridor 2: aim -> green */
-    var c2 = (greenC && aim !== greenC) ? _gvCorridorCheck(aim, greenC, c) : null;
-    var inAny = (c1 && c1.inCorridor) || (c2 && c2.inCorridor);
-    /* Near-green rule preserved: any hazard within 50y of green centre always
-       shows even if outside both corridors. */
-    var nearGreen = false;
-    if (greenC) {
-      try { nearGreen = geomDistanceYds(c, greenC) <= 50; } catch(e) {}
+    /* Corridor 1: ball -> aim */
+    var c1 = _gvCorridorCheck(ballPt, aim, c);
+    if (c1 && c1.inCorridor) {
+      var d1 = 0;
+      try { d1 = geomDistanceYds(ballPt, c); } catch(e) {}
+      rowsToAim.push({ typ: typ, dist: Math.round(d1), lr: c1.lr || '' });
     }
-    if (!inAny && !nearGreen) continue;
-    var distYds = 0;
-    try { distYds = geomDistanceYds(player, c); } catch(e) {}
-    /* L/R label: prefer corridor 1 (the one the user is walking through now);
-       fall back to corridor 2's L/R, then blank. */
-    var lrLabel = '';
-    if (c1 && c1.inCorridor) lrLabel = c1.lr;
-    else if (c2 && c2.inCorridor) lrLabel = c2.lr;
-    else if (c1) lrLabel = c1.lr;
-    rows.push({ typ: typ, dist: distYds, lr: lrLabel, nearGreen: nearGreen });
+    /* Corridor 2: aim -> green */
+    if (greenC) {
+      var c2 = _gvCorridorCheck(aim, greenC, c);
+      if (c2 && c2.inCorridor) {
+        var d2 = 0;
+        try { d2 = geomDistanceYds(aim, c); } catch(e) {}
+        rowsAimToGreen.push({ typ: typ, dist: Math.round(d2), lr: c2.lr || '' });
+      }
+    }
   }
-  rows.sort(function(a,b){ return a.dist - b.dist; });
-  var visible = [];
-  var extras = 0;
-  for (var r = 0; r < rows.length; r++) {
-    if (visible.length < 5 || rows[r].nearGreen) visible.push(rows[r]);
-    else extras++;
-  }
-  if (!visible.length) { el.innerHTML = ''; return; }
-  var html = '<div style="padding:6px 12px"><div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Hazards in play</div>';
-  visible.forEach(function(rw){
-    var meta = GPS_HAZARDS[rw.typ];
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--br);font-size:.7rem">'
-      + '<span style="color:' + meta.color + '">' + meta.icon + '</span>'
-      + '<span style="color:var(--tx)">' + meta.label + '</span>'
-      + '<span style="margin-left:auto;font-family:\'DM Mono\',monospace;color:var(--tx2)">'
-      + rw.dist + ' yds' + (rw.lr ? ' ' + rw.lr : '') + '</span>'
-      + '</div>';
-  });
-  if (extras > 0) html += '<div style="font-size:.6rem;color:var(--tx3);padding:4px 0">+ ' + extras + ' more</div>';
-  html += '</div>';
+  rowsToAim.sort(function(a,b){ return a.dist - b.dist; });
+  rowsAimToGreen.sort(function(a,b){ return a.dist - b.dist; });
+  /* Cap each column at 4 rows. */
+  var capped1 = rowsToAim.slice(0, 4);
+  var capped2 = rowsAimToGreen.slice(0, 4);
+  var renderRows = function(rows) {
+    if (!rows.length) {
+      return '<div style="font-size:.62rem;color:var(--tx3);padding:6px 0">None</div>';
+    }
+    return rows.map(function(rw) {
+      var meta = GPS_HAZARDS[rw.typ];
+      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--br);font-size:.65rem">'
+        +   '<span style="color:' + meta.color + '">' + meta.icon + '</span>'
+        +   '<span style="color:var(--tx);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + meta.label + '</span>'
+        +   '<span style="font-family:\'DM Mono\',monospace;color:var(--tx2);flex:0 0 auto">'
+        +     rw.dist + 'y' + (rw.lr ? ' ' + rw.lr : '')
+        +   '</span>'
+        + '</div>';
+    }).join('');
+  };
+  /* PHASE-B5: Always render both columns. Empty column shows "None" rather
+     than collapsing -- the structure must stay constant so the user always
+     knows where to look. */
+  var html = '<div style="padding:6px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div>'
+    +   '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">To Aim</div>'
+    +   renderRows(capped1)
+    + '</div>'
+    + '<div>'
+    +   '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Aim → Green</div>'
+    +   renderRows(capped2)
+    + '</div>'
+    + '</div>';
   el.innerHTML = html;
 }
 
