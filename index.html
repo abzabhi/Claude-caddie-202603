@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gordy the Virtual Caddy</title>
+<title>GOrdy the Virtual Caddy</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#3d6b35">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2580,7 +2580,7 @@ async function gateRekeyBlob(newPassphrase) {
   if (!id) return false;
   var oldPass = sessionStorage.getItem('vc:kvPass') || '';
   // Re-push blob with new passphrase
-  var plaintext = window.serialise ? window.serialise() : '';
+  var plaintext = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '';
   // Re-encrypt recovery blob with new passphrase first (required in every push)
   var recov = await dbGetRecovery(id);
   var newBlobRecov = null;
@@ -2752,13 +2752,15 @@ async function savePassphraseChange() {
   }
 }
 
-load();
-applyRefDataCache(); // use cached ref data if available -- before renderAll
-/*renderAll();*/ // replaced by gateInit() -- app stays hidden until auth
-gateInit();
-// 2.4 -- show upload prompt if no data present (deferred to gateUnlocked path)
-// 2.5 -- check for app update
-checkAppUpdate();
+(async function() {
+  await load();
+  applyRefDataCache(); // use cached ref data if available -- before renderAll
+  /*renderAll();*/ // replaced by gateInit() -- app stays hidden until auth
+  gateInit();
+  // 2.4 -- show upload prompt if no data present (deferred to gateUnlocked path)
+  // 2.5 -- check for app update
+  checkAppUpdate();
+})();
 Object.assign(window, {
   showTab, showTabFromProfile, setHcpMode, onManualHcpChange,
   getHandicap, escHtml,
