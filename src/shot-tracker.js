@@ -386,7 +386,7 @@ function stRecordLocation(endLngLat) {
   lr._shotArmed = null;
   if (typeof window._lrPersist === 'function') window._lrPersist();
   return rec;
-}
+
 
 
 
