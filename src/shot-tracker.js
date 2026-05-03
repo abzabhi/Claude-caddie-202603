@@ -186,6 +186,7 @@ function stArmShot(aimLngLat, club, currentLngLat) {
     startLngLat: startLngLat,
     aimLngLat:   aimLngLat,
     club:        club || '',
+    flight_path: '',           /* PHASE-B4: set via gpsViewSetArmedFlight; written to rec on close */
     armedTs:     Date.now(),
     shotMode:    shotMode
   };
@@ -231,7 +232,7 @@ function stCloseShot(endLngLat) {
     lie:             lie,
     radial_ring:     null,
     radial_segment:  null,
-    flight_path:     null,                 /* existing string-enum field; user may set via UI */
+    flight_path:     armed.flight_path || null,  /* PHASE-B4: from armed shot */
     gps_flight: {                          /* LR-EXTRAS NEW: GPS-derived geometry */
       startLngLat:     armed.startLngLat,
       endLngLat:       endLngLat,
