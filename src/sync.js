@@ -1,4 +1,4 @@
-import { serialise, save, bag, courses, rounds, history, wipeEnvironment } from './store.js';
+import { save, bag, courses, rounds, history, wipeEnvironment } from './store.js';
 
 const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
 const APP_LATEST_FILE = 'golf-caddie-latest.html';
@@ -49,61 +49,57 @@ function _genSyncId() {
 }
 
 // Push encrypted data to Worker KV
-async function kvPush(statusElId) {
+function _syncDispatch(message, isError) {
+  window.dispatchEvent(new CustomEvent('sync-update', {detail:{message:message, isError:!!isError}}));
+}
+
+async function kvPush() {
   const id=kvId(); if(!id) return;
   const pass=sessionStorage.getItem('vc:kvPass');
-  if(!pass){alert('Session expired \u2014 please re-enter your passphrase to sync.'); renderProfileSync(); return;}
-  const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
-  if(!navigator.onLine){
-    _kvQueuePush();
-    if(st) st.textContent='\uD83D\uDCF5 Offline \u2014 push queued, will retry when back online.';
-    return;
-  }
-  if(st) st.textContent='Encrypting\u2026';
+  if(!pass){ renderProfileSync(); return; }
+  if(!navigator.onLine){ _kvQueuePush(); _syncDispatch('\uD83D\uDCF5 Offline \u2014 push queued.'); return; }
+  _syncDispatch('Syncing\u2026');
   try {
-    const blob=await _encrypt(serialise(), pass);
+    const payload = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '{}';
+    const blob=await _encrypt(payload, pass);
     const blobRecovery=sessionStorage.getItem('vc:blobRecovery')||'';
     const version=(parseInt(sessionStorage.getItem('vc:version')||'0',10)||0)+1;
     const r=await fetch(_D1_BASE+'/sync/push/'+id, {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({blob, blob_recovery:blobRecovery, version})
     });
-    if(r.status===409){if(st) st.textContent='\u26A0 Version conflict \u2014 pull first to get latest data.'; return;}
-    if(r.status===429){if(st) st.textContent='\u26A0 Rate limited \u2014 wait 30s and try again.'; return;}
-    if(!r.ok){if(st) st.textContent='\u26A0 Push failed ('+r.status+')'; _kvQueuePush(); return;}
+    if(r.status===409){ _syncDispatch('\u26A0 Version conflict \u2014 sign out and back in to resync.', true); return; }
+    if(r.status===429){ _syncDispatch('\u26A0 Rate limited \u2014 will retry.', true); _kvQueuePush(); return; }
+    if(!r.ok){ _syncDispatch('\u26A0 Push failed ('+r.status+')', true); _kvQueuePush(); return; }
     sessionStorage.setItem('vc:version', String(version));
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
     localStorage.removeItem('vc:kvPendingPush');
-    if(st) st.textContent='\u2713 Synced: '+new Date(now).toLocaleTimeString();
-  } catch(e){
-    _kvQueuePush();
-    if(st) st.textContent='\u26A0 Network error \u2014 push queued.';
-  }
+    _syncDispatch('\u2713 Synced: '+new Date(now).toLocaleTimeString());
+  } catch(e){ _kvQueuePush(); _syncDispatch('\u26A0 Network error \u2014 push queued.', true); }
 }
 
 // Pull and decrypt data from Worker KV
-async function kvPull(statusElId) {
+async function kvPull() {
   const id=kvId(); if(!id) return;
   const pass=sessionStorage.getItem('vc:kvPass');
-  if(!pass){alert('Session expired \u2014 please re-enter your passphrase to sync.'); renderProfileSync(); return;}
-  const st=statusElId?document.getElementById(statusElId):document.getElementById('kvSyncStatus');
-  if(st) st.textContent='Fetching\u2026';
+  if(!pass){ renderProfileSync(); return; }
+  _syncDispatch('Fetching\u2026');
   try {
     const r=await fetch(GORDY_SYNC_URL+id);
-    if(r.status===404){if(st) st.textContent='\u26A0 No data found for this ID.'; return;}
-    if(!r.ok){if(st) st.textContent='\u26A0 Pull failed ('+r.status+')'; return;}
+    if(r.status===404){ _syncDispatch('\u26A0 No data found for this ID.', true); return; }
+    if(!r.ok){ _syncDispatch('\u26A0 Pull failed ('+r.status+')', true); return; }
     const envelope=await r.text();
-    if(st) st.textContent='Decrypting\u2026';
+    _syncDispatch('Decrypting\u2026');
     let plaintext;
     try { plaintext=await _decrypt(envelope, pass); }
-    catch { if(st) st.textContent='\u26A0 Wrong passphrase or corrupted data.'; return; }
+    catch { _syncDispatch('\u26A0 Wrong passphrase or corrupted data.', true); return; }
     processDataText(plaintext);
     const ts=new Date().toLocaleTimeString();
     localStorage.setItem('vc:kvLastSync', ts);
-    if(st) st.textContent='\u2713 Loaded: '+ts;
-  } catch(e){if(st) st.textContent='\u26A0 Pull error: '+e.message;}
+    _syncDispatch('\u2713 Loaded: '+ts);
+  } catch(e){ _syncDispatch('\u26A0 Pull error: '+e.message, true); }
 }
 
 // Banner load -- pull if connected, else prompt
@@ -112,7 +108,7 @@ async function bannerLoadGist() {
     alert('No sync profile connected.\n\nSet up a sync profile in the Profile tab, or import your data file manually.');
     return;
   }
-  await kvPull('kvSyncStatus');
+  await kvPull();
   const hasData=bag.length||courses.length||rounds.length||history.length;
   if(hasData) document.getElementById('uploadBanner').style.display='none';
 }
@@ -121,7 +117,15 @@ async function bannerLoadGist() {
 async function syncSave() {
   if(!kvMode()) return;
   if(!sessionStorage.getItem('vc:kvPass')) return;
-  await kvPush('kvSyncStatus');
+  await kvPush();
+}
+
+// Debounced background sync -- called from store.save() on every state mutation
+let _bgSyncTimer = null;
+function queueBackgroundSync() {
+  if(!kvMode()||!sessionStorage.getItem('vc:kvPass')) return;
+  clearTimeout(_bgSyncTimer);
+  _bgSyncTimer = setTimeout(function() { kvPush(); }, 3000);
 }
 
 // -- Offline resilience
@@ -140,7 +144,7 @@ async function _kvRetryPending() {
   if(!localStorage.getItem('vc:kvPendingPush')) return;
   if(!kvMode()||!sessionStorage.getItem('vc:kvPass')) return;
   localStorage.removeItem('vc:kvPendingPush');
-  await kvPush('kvSyncStatus');
+  await kvPush();
 }
 
 window.addEventListener('online', _kvRetryPending);
@@ -189,7 +193,7 @@ async function finishSyncSetup(newId) {
   if(st) st.textContent='Creating profile\u2026';
   sessionStorage.setItem('vc:kvPass', a);
   localStorage.setItem('vc:kvId', newId);
-  await kvPush('kvSetupStatus');
+  await kvPush();
   renderProfileSync();
 }
 
@@ -224,7 +228,8 @@ async function finishSyncLoad() {
   if(st) st.textContent='Connecting\u2026';
   sessionStorage.setItem('vc:kvPass', pass);
   localStorage.setItem('vc:kvId', id);
-  await kvPull('kvLoadStatus');
+  await kvPull();
+  if(st) st.textContent=''; // kvPull result surfaced via sync-update event
   renderProfileSync();
 }
 
@@ -262,8 +267,6 @@ function renderProfileSync() {
         </div>
         <button class="btn" style="margin-bottom:10px" onclick="const p=document.getElementById('kvSessionPass')?.value;if(p){sessionStorage.setItem('vc:kvPass',p);renderProfileSync();}">Unlock</button>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" onclick="kvPush('kvSyncStatus')" ${!hasPass?'disabled':''}>\u2191 Push</button>
-        <button class="btn sec" onclick="_profilePull()" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
         <button class="btn sec" onclick="saveData()">\u2B07 Export backup</button>
         <button class="btn danger" onclick="disconnectSync()">Disconnect</button>
         ${window.PublicKeyCredential
@@ -339,7 +342,7 @@ function _doSignOut() {
 }
 
 Object.assign(window, {
-  kvId, kvMode, kvPush, kvPull, syncSave, _fmtAgo,
+  kvId, kvMode, kvPush, kvPull, syncSave, queueBackgroundSync, _fmtAgo,
   bannerLoadGist, startSyncSetup, finishSyncSetup,
   showSyncLoad, finishSyncLoad, disconnectSync,
   renderProfileSync, renderGistSettings, checkAppUpdate,
@@ -350,14 +353,10 @@ Object.assign(window, {
 async function _profilePull() {
   const syncId = localStorage.getItem('vc:kvId');
   const passphrase = sessionStorage.getItem('vc:kvPass');
-  const st = document.getElementById('kvSyncStatus');
-  if (!syncId || !passphrase) {
-    if (st) st.textContent = '\u26A0 Sign in first to pull data.';
-    return;
-  }
-  if (st) st.textContent = 'Pulling\u2026';
+  if (!syncId || !passphrase) { _syncDispatch('\u26A0 Sign in first to pull data.', true); return; }
+  _syncDispatch('Pulling\u2026');
   const result = await dbPull(syncId, passphrase);
-  if (st) st.textContent = result.ok ? '\u2713 Pull complete.' : '\u26A0 Pull failed' + (result.error ? ': ' + result.error : '.');
+  _syncDispatch(result.ok ? '\u2713 Pull complete.' : '\u26A0 Pull failed' + (result.error ? ': ' + result.error : '.'), !result.ok);
 }
 
 // -- D1 API (Session C) -------------------------------------------------------
