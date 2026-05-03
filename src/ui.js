@@ -12,6 +12,12 @@ import { renderClubs } from './clubs.js';
 import { renderCourseList } from './courses.js';
 import { renderHandicap } from './rounds.js';
 
+// -- Sync status listener (sync.js dispatches 'sync-update' CustomEvents) -----
+window.addEventListener('sync-update', function(e) {
+  var st = document.getElementById('kvSyncStatus');
+  if (st) { st.textContent = e.detail.message; st.style.color = e.detail.isError ? 'var(--danger)' : ''; }
+});
+
 // -- Save / Import ------------------------------------------------------------
 async function saveData() {
   const state = await getJsonState();
@@ -970,12 +976,9 @@ function renderDropdown() {
   if(kvMode()) {
     const dotColor=offline?'var(--gold)':pending?'var(--gold)':'var(--gr)';
     if(dot) dot.style.background=dotColor;
-    const label=offline?'\uD83D\uDCF5 Offline':pending?'\u23F3 Push pending':ts?`\uD83D\uDFE2 Synced ${_fmtAgo(tsMs)}`:'\u26AA Connected \u2014 not synced';
+    const label=offline?'\uD83D\uDCF5 Offline':pending?'\u23F3 Sync pending':ts?`\uD83D\uDFE2 Synced ${_fmtAgo(tsMs)}`:'\u26AA Connected \u2014 not synced';
     if(syncSt) syncSt.textContent=label;
-    if(syncBtns) syncBtns.innerHTML=hasPass
-      ?`<button class="btn" style="font-size:.6rem;padding:3px 8px" onclick="kvPush('kvSyncStatus')">\u2191 Push</button>
-         <button class="btn sec" style="font-size:.6rem;padding:3px 8px" onclick="kvPull('kvSyncStatus')" ${offline?'disabled':''}>\u2193 Pull</button>`
-      :`<button class="btn sec" style="font-size:.6rem;padding:3px 8px" onclick="closeProfileDropdown();showTabFromProfile('profile')">Unlock sync \u2192</button>`;
+    if(syncBtns) syncBtns.innerHTML='';
   } else {
     if(dot) dot.style.background='#888';
     if(syncSt) syncSt.textContent='\u26AA No sync profile';
