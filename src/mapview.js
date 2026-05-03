@@ -175,6 +175,11 @@ export class MapView {
       this._map.on('move', this._handleMapMove);
     } else {
       /* Same instance being re-shown (e.g. after hole change returns scroll html) */
+      /* PHASE-B3: Re-fly to current hole BEFORE re-placing markers. Without this,
+         markers project against the prior view's center/zoom -> visible offset
+         until the user toggles to scoring and back. Cheap call (no-op if already
+         showing this hole). */
+      this._showHoleInternal(this._holeN);
       this._placeTeeMarker();
       this._placeAimMarker();
       this._renderAimLine();
