@@ -312,16 +312,37 @@ function gpsViewOpen() {
         var s2 = lr.players[lr.curPlayer].scores[lr.curHole];
         var n2 = (s2 && Array.isArray(s2.shots)) ? s2.shots.length : 1;
         var dispLat = rec.gps_flight.dispersionLat || 0;
-        var dispDir = '';
-        if (Math.abs(dispLat) >= 1) {
-          dispDir = ' \u00B7 ' + Math.round(Math.abs(dispLat)) + 'y ' + (dispLat > 0 ? 'R' : 'L') + ' of aim';
-        }
+        /* PHASE-B3: long/short component. dispLong = projected distance from start
+           along aim direction. aimDist = total distance start->aim. vsAim positive
+           = long of aim, negative = short. */
+        var dispLong = rec.gps_flight.dispersionLong || 0;
+        var aimDist = 0;
+        try {
+          if (typeof window.geomDistanceYds === 'function'
+              && Array.isArray(rec.gps_flight.startLngLat)
+              && Array.isArray(rec.gps_flight.aimLngLat)) {
+            aimDist = window.geomDistanceYds(rec.gps_flight.startLngLat, rec.gps_flight.aimLngLat);
+          }
+        } catch(err) {}
+        var vsAim = dispLong - aimDist;
+        var dispParts = [];
+        if (Math.abs(vsAim)   >= 1) dispParts.push(Math.round(Math.abs(vsAim))   + 'y ' + (vsAim   > 0 ? 'long'  : 'short'));
+        if (Math.abs(dispLat) >= 1) dispParts.push(Math.round(Math.abs(dispLat)) + 'y ' + (dispLat > 0 ? 'right' : 'left'));
+        var dispDir = dispParts.length ? ' \u00B7 ' + dispParts.join(', ') + ' of aim' : '';
         _gvShowToast(
           'Shot ' + n2 + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown') + dispDir,
           'success'
         );
       } else {
         _gvShowToast('Shot logged', 'info');
+      }
+      /* PHASE-B3: Auto-engage putt mode when ball lands on green. Mirrors the
+         GPS-geofence path (_maybePromptOnGreen) but triggered by lie tagging,
+         which works for map-tracked shots regardless of where the phone is.
+         Once on, gpsPuttBar shows; user adds putts; existing on_green flow
+         (lrCompleteHole when shot_mode==='on_green') handles hole completion. */
+      if (rec && rec.lie === 'green' && !_puttMode) {
+        _puttMode = true;
       }
       if (typeof gpsViewRender === 'function') gpsViewRender();
       /* PHASE-B2: Refresh line baseline so next shot's strategic line starts
@@ -331,21 +352,11 @@ function gpsViewOpen() {
   }
   /* Wire compass listener */
   window.addEventListener('deviceorientation', _gpsViewOnHeading, true);
-  /* PHASE-B2: Refresh aim + line baseline immediately so aim renders without
-     requiring a scoring-toggle round-trip. Sets lineStartOverride from last
-     shot's endLngLat (off-tee for shot 1) so the strategic distance shows
-     "ball position to aim", not "phone to aim". */
+  /* PHASE-B3: Set line baseline from last shot endLngLat (or null = tee fallback).
+     Aim marker placement is handled by MapView.mount() which runs via _lrMapMount
+     -> includes _showHoleInternal + _placeAimMarker. The synchronous _placeAimMarker
+     call previously here caused projection-stale offset; removed. */
   _gvRefreshLineStart();
-  if (lr._mapInstance && Array.isArray(lr._mapAim)) {
-    try {
-      if (typeof lr._mapInstance._placeAimMarker === 'function') {
-        lr._mapInstance._placeAimMarker(lr._mapAim);
-      }
-      if (typeof lr._mapInstance._renderAimLine === 'function') {
-        lr._mapInstance._renderAimLine();
-      }
-    } catch(e) {}
-  }
   /* Start render loop */
   _gpsViewScheduleRender(true);
 }
@@ -1006,22 +1017,48 @@ function _renderModeBanner() {
   var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
   var s     = lr.players[lr.curPlayer].scores[lr.curHole];
   var n     = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
-  /* Note: when armed, shotsN already incremented in stArmShot? No -- stCloseShot pushes.
-     During armed state s.shots.length is still the pre-shot count, so n is correct
-     (the "next" shot number) for both idle and armed states. */
   var msg, bg;
   if (armed) {
     msg = '\uD83C\uDFAF Tap landing for Shot ' + n;
-    bg  = 'linear-gradient(90deg, var(--ac2), var(--ac3))';  /* armed: emphasised */
+    bg  = 'linear-gradient(90deg, var(--ac2), var(--ac3))';
   } else {
     msg = '\uD83C\uDFAF Tap target to arm Shot ' + n;
-    bg  = 'var(--sf)';                                        /* idle: low-key */
+    bg  = 'var(--sf)';
+  }
+  /* PHASE-B3: Club chip row -- shown only when shot is armed and no club set yet.
+     Tap a chip to assign club to the armed shot. Reads bag from window.bag. */
+  var clubChips = '';
+  if (armed && !armed.club && window.bag && window.bag.length) {
+    var chips = window.bag.map(function(c) {
+      var label = c.name || c.id;
+      return '<button class="btn sec" style="font-size:.62rem;padding:4px 10px;'
+        + 'border-radius:14px;flex:0 0 auto" '
+        + 'onclick="gpsViewSetArmedClub(\'' + (c.id || '').replace(/'/g, "\\'") + '\')">'
+        + label + '</button>';
+    }).join('');
+    clubChips =
+        '<div style="padding:6px 10px 8px;background:var(--bg);border-bottom:1px solid var(--br);'
+      +   'display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch">'
+      + chips + '</div>';
   }
   el.style.display = '';
-  el.innerHTML = '<div style="padding:6px 12px;background:' + bg + ';'
-    + 'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
-    + 'color:var(--tx);text-align:center;letter-spacing:.02em">'
-    + msg + '</div>';
+  el.innerHTML =
+      '<div style="padding:6px 12px;background:' + bg + ';'
+    +   'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
+    +   'color:var(--tx);text-align:center;letter-spacing:.02em">'
+    +   msg + '</div>'
+    + clubChips;
+}
+
+/* PHASE-B3: Assign a club to the armed shot. Mutates lrState._shotArmed.club
+   in place and re-renders so the mode banner hides the chip row. The club
+   value lands in the shot record on stCloseShot since stArmShot stores armed.club. */
+function gpsViewSetArmedClub(clubId) {
+  var lr = window.lrState;
+  if (!lr || !lr._shotArmed) return;
+  lr._shotArmed.club = clubId || '';
+  if (typeof window._lrPersist === 'function') window._lrPersist();
+  gpsViewRender();
 }
 
 function _renderShotChip() {
@@ -1151,6 +1188,7 @@ function gpsViewOnMapDoubleTap(lngLat) {
 Object.assign(window, {
   gpsViewOpen, gpsViewClose, gpsViewToggle, gpsViewRender,
   gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker, gpsViewTrackingToggle, gpsViewGpsToggle,
+  gpsViewSetArmedClub,
   gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt,
   gpsViewCancelShot,
   lrxYardsToGreen
