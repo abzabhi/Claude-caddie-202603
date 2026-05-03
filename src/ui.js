@@ -4,7 +4,8 @@
 
 import { bag, courses, rounds, history, profile, rangeSessions,
          save, today, uid, serialise,
-         setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs } from './store.js'; /* SLUG1c */
+         setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs,
+         wipeEnvironment } from './store.js'; /* SLUG1c */
 import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag, calcHandicap } from './geo.js'; /* ASKB-1, TRENDS-1 */
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
@@ -1064,6 +1065,7 @@ function confirmClearAll() {
 }
 function signOut() {
   ['vc:gateUnlocked','vc:kvPass','vc:verify','vc:siteVerify'].forEach(k=>sessionStorage.removeItem(k)); /* GUEST2 */
+  wipeEnvironment();
   location.reload();
 }
 
@@ -1381,7 +1383,7 @@ Object.assign(window, {
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
   updateCourseDropdowns, renderAll, serialise,
-  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut,
+  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut, wipeEnvironment,
   showConfirmModal,
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
