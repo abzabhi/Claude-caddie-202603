@@ -111,6 +111,13 @@ export function clearAll() {
   Object.keys(profile).forEach(k=>delete profile[k]);
 }
 
+export function wipeEnvironment() {
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('vc:') || k.startsWith('gordy:'))
+    .forEach(k => localStorage.removeItem(k));
+  clearAll();
+}
+
 export function serialise() {
   const lines = ['VIRTUAL CADDIE DATA \u2014 v3', 'DataVersion: 3', 'Exported: '+today(), 'FlightDataVersion: 1', ''];
   lines.push('=== PROFILE ===');
