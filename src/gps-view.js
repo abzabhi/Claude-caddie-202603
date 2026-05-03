@@ -205,40 +205,68 @@ function gpsViewOpen() {
       if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
       /* Tracker behaviour: only if explicitly enabled. */
       if (!lr._trackerOn) return;
-      /* If somehow already armed (shouldn't happen because aim is locked once
-         armed), do nothing — landing is the onMapClick wrap's job. */
-      var armedAlready = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
-      if (armedAlready) return;
-      /* Arm: clear any prior dispersion overlay first so the user sees a fresh state. */
-      if (lr._mapInstance && typeof lr._mapInstance.clearDispersionLines === 'function') {
-        try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+      /* PHASE-SPRINT Task 4: One-tap flow. A single tap on the map immediately
+         records the shot at the tapped location. No arming step needed.
+         stRecordLocation handles start=lastShot/tee, end=lngLat, GPS-agnostic. */
+      var rec = null;
+      if (typeof window.stRecordLocation === 'function') {
+        try { rec = window.stRecordLocation(lngLat); } catch(e) {}
       }
-      var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
-      if (typeof window.stArmShot === 'function') {
-        try { window.stArmShot(lngLat, '', current); } catch(e) {}
-      }
-      /* Inspect armed state to determine success and produce feedback. */
-      var armedNow = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
-      if (armedNow) {
-        _gvJustArmedTs = Date.now();
-        /* Lock the aim and pin the line start to the armed start so the visuals
-           freeze at the moment of arming (no GPS jitter on the line). */
-        if (lr._mapInstance) {
-          if (typeof lr._mapInstance.setAimLocked === 'function') {
-            try { lr._mapInstance.setAimLocked(true); } catch(e) {}
-          }
-          if (typeof lr._mapInstance.setLineStartOverride === 'function') {
-            try { lr._mapInstance.setLineStartOverride(armedNow.startLngLat); } catch(e) {}
-          }
+      if (rec) {
+        /* Draw dispersion line: start → end (aim = end in one-tap flow, so
+           green line and red line overlap — both drawn for API consistency). */
+        if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
+          try {
+            lr._mapInstance.setDispersionLines({
+              startLL: rec.gps_flight.startLngLat,
+              aimLL:   rec.gps_flight.endLngLat,
+              endLL:   rec.gps_flight.endLngLat
+            });
+          } catch(e2) {}
         }
-        /* Compute shot number for the toast. */
-        var s = lr.players[lr.curPlayer].scores[lr.curHole];
-        var n = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
-        _gvShowToast('Shot ' + n + ' armed \u2192 tap landing', 'info');
+        /* Refresh line baseline so next shot starts from this end point. */
+        _gvRefreshLineStart();
+        var sNow = lr.players[lr.curPlayer].scores[lr.curHole];
+        var nNow = (sNow && Array.isArray(sNow.shots)) ? sNow.shots.length : 1;
+        _gvShowToast(
+          'Shot ' + nNow + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown'),
+          'success'
+        );
+        if (rec.lie === 'green' && !_puttMode) _puttMode = true;
       } else {
-        _gvShowToast("Can't arm shot \u2014 no GPS or tee position yet", 'error');
+        _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
       }
       if (typeof gpsViewRender === 'function') gpsViewRender();
+
+      /* PHASE-SPRINT: Old two-tap arm flow deprecated below — preserved as comment.
+      // var armedAlready = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
+      // if (armedAlready) return;
+      // if (lr._mapInstance && typeof lr._mapInstance.clearDispersionLines === 'function') {
+      //   try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
+      // }
+      // var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
+      // if (typeof window.stArmShot === 'function') {
+      //   try { window.stArmShot(lngLat, '', current); } catch(e) {}
+      // }
+      // var armedNow = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+      // if (armedNow) {
+      //   _gvJustArmedTs = Date.now();
+      //   if (lr._mapInstance) {
+      //     if (typeof lr._mapInstance.setAimLocked === 'function') {
+      //       try { lr._mapInstance.setAimLocked(true); } catch(e) {}
+      //     }
+      //     if (typeof lr._mapInstance.setLineStartOverride === 'function') {
+      //       try { lr._mapInstance.setLineStartOverride(armedNow.startLngLat); } catch(e) {}
+      //     }
+      //   }
+      //   var s = lr.players[lr.curPlayer].scores[lr.curHole];
+      //   var n = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
+      //   _gvShowToast('Shot ' + n + ' armed \u2192 tap landing', 'info');
+      // } else {
+      //   _gvShowToast("Can't arm shot \u2014 no GPS or tee position yet", 'error');
+      // }
+      // if (typeof gpsViewRender === 'function') gpsViewRender();
+      */
     };
   }
 
@@ -266,29 +294,15 @@ function gpsViewOpen() {
     };
   }
 
-  /* LR-EXTRAS: wrap MapView's onMapClick to handle LANDING taps when aim is
-     locked (a shot is armed). The aim-locked branch in MapView._handleMapClick
-     fires only this callback — onAimChange is suppressed — so this is the sole
-     entry point for landing detection. */
+  /* LR-EXTRAS: wrap MapView's onMapClick. Old role: handle LANDING taps in the
+     two-tap arm/land flow. PHASE-SPRINT Task 4: shot logging now happens in the
+     _onAimChange wrap (one-tap flow). This handler now only ensures stale aim-lock
+     state is cleared on any click, and preserves the old logic as a comment. */
   if (lr._mapInstance && _gvOriginalMapClickCb === null) {
     _gvOriginalMapClickCb = lr._mapInstance._onMapClick || null;
     lr._mapInstance._onMapClick = function(e) {
       if (_gvOriginalMapClickCb) { try { _gvOriginalMapClickCb(e); } catch(err) {} }
-      if (!lr._trackerOn) return;
-      var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
-      if (!armed) return;
-      /* Reject the same physical tap that just armed the shot (onAimChange and
-         onMapClick both fire on a single unlocked click; we only want LANDING
-         to fire on the NEXT tap). 250ms guard window. */
-      if (Date.now() - _gvJustArmedTs < 250) return;
-      var lngLat = e && e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
-      if (!lngLat) return;
-      var rec = null;
-      if (typeof window.stCloseShot === 'function') {
-        try { rec = window.stCloseShot(lngLat); } catch(err) {}
-      }
-      /* Release the lock + line override regardless of whether stCloseShot
-         succeeded — leaving the aim locked with no shot armed would be wedged. */
+      /* Safety: release any stale aim-lock that may have been left from a prior session. */
       if (lr._mapInstance) {
         if (typeof lr._mapInstance.setAimLocked === 'function') {
           try { lr._mapInstance.setAimLocked(false); } catch(err) {}
@@ -297,74 +311,36 @@ function gpsViewOpen() {
           try { lr._mapInstance.setLineStartOverride(null); } catch(err) {}
         }
       }
-      if (rec && rec.gps_flight) {
-        /* Draw dispersion: intended (start->aim) green, actual (start->end) red.
-           Stays visible until the next shot is armed (or hole change / cancel). */
-        if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
-          try {
-            lr._mapInstance.setDispersionLines({
-              startLL: rec.gps_flight.startLngLat,
-              aimLL:   rec.gps_flight.aimLngLat,
-              endLL:   rec.gps_flight.endLngLat
-            });
-          } catch(err) {}
-        }
-        /* Toast: distance + lie + dispersion direction. */
-        var s2 = lr.players[lr.curPlayer].scores[lr.curHole];
-        var n2 = (s2 && Array.isArray(s2.shots)) ? s2.shots.length : 1;
-        var dispLat = rec.gps_flight.dispersionLat || 0;
-        /* PHASE-B3: long/short component. dispLong = projected distance from start
-           along aim direction. aimDist = total distance start->aim. vsAim positive
-           = long of aim, negative = short. */
-        var dispLong = rec.gps_flight.dispersionLong || 0;
-        var aimDist = 0;
-        try {
-          if (typeof window.geomDistanceYds === 'function'
-              && Array.isArray(rec.gps_flight.startLngLat)
-              && Array.isArray(rec.gps_flight.aimLngLat)) {
-            aimDist = window.geomDistanceYds(rec.gps_flight.startLngLat, rec.gps_flight.aimLngLat);
-          }
-        } catch(err) {}
-        var vsAim = dispLong - aimDist;
-        var dispParts = [];
-        if (Math.abs(vsAim)   >= 1) dispParts.push(Math.round(Math.abs(vsAim))   + 'y ' + (vsAim   > 0 ? 'long'  : 'short'));
-        if (Math.abs(dispLat) >= 1) dispParts.push(Math.round(Math.abs(dispLat)) + 'y ' + (dispLat > 0 ? 'right' : 'left'));
-        var dispDir = dispParts.length ? ' \u00B7 ' + dispParts.join(', ') + ' of aim' : '';
-        _gvShowToast(
-          'Shot ' + n2 + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown') + dispDir,
-          'success'
-        );
-      } else {
-        _gvShowToast('Shot logged', 'info');
-      }
-      /* PHASE-B3: Auto-engage putt mode when ball lands on green. Mirrors the
-         GPS-geofence path (_maybePromptOnGreen) but triggered by lie tagging,
-         which works for map-tracked shots regardless of where the phone is.
-         Once on, gpsPuttBar shows; user adds putts; existing on_green flow
-         (lrCompleteHole when shot_mode==='on_green') handles hole completion. */
-      if (rec && rec.lie === 'green' && !_puttMode) {
-        _puttMode = true;
-      }
-      if (typeof gpsViewRender === 'function') gpsViewRender();
-      /* PHASE-B2: Refresh line baseline so next shot's strategic line starts
-         from this shot's endLngLat. */
-      _gvRefreshLineStart();
+      /* OLD two-tap landing logic — preserved per "comment, don't delete" rule:
+      // if (!lr._trackerOn) return;
+      // var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+      // if (!armed) return;
+      // if (Date.now() - _gvJustArmedTs < 250) return;
+      // var lngLat = e && e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
+      // if (!lngLat) return;
+      // var rec = null;
+      // if (typeof window.stCloseShot === 'function') {
+      //   try { rec = window.stCloseShot(lngLat); } catch(err) {}
+      // }
+      // if (rec && rec.gps_flight) { ... dispersion draw + toast ... }
+      // else if (rec) { _gvShowToast('Shot logged', 'info'); }
+      // if (rec && rec.lie === 'green' && !_puttMode) { _puttMode = true; }
+      // if (typeof gpsViewRender === 'function') gpsViewRender();
+      // _gvRefreshLineStart();
+      */
     };
   }
   /* Wire compass listener */
   window.addEventListener('deviceorientation', _gpsViewOnHeading, true);
-  /* PHASE-B4: Force MapLibre to recompute projection. While #gpsViewScreen is
-     display:none the map's container has 0x0 size; on reveal MapLibre still
-     thinks it's that size until resize() is called. Stale projection is the
-     root cause of: aim reticle offset, click->lngLat returning wrong coords
-     (which made lie detection appear to misfire on correctly-tapped polygons).
-     Microtask delay lets CSS layout settle after display:flex. */
+  /* PHASE-B4 (original 50ms setTimeout — replaced by ResizeObserver in _renderMinimap):
   setTimeout(function() {
     if (lr._mapInstance && lr._mapInstance._map
         && typeof lr._mapInstance._map.resize === 'function') {
       try { lr._mapInstance._map.resize(); } catch(e) {}
     }
-  }, 50);
+  }, 50); */
+  /* PHASE-SPRINT: ResizeObserver attached in _renderMinimap once #gpsMapCanvas
+     exists in the DOM — see comment there. */
   /* PHASE-B3: Set line baseline from last shot endLngLat (or null = tee fallback). */
   _gvRefreshLineStart();
   /* Start render loop */
@@ -862,6 +838,29 @@ function _renderMinimap() {
     if (typeof window._lrMapMount === 'function') {
       try { window._lrMapMount(); } catch(e) { /* surfaced on next tick if it failed */ }
     }
+    /* PHASE-SPRINT Task 3: ResizeObserver replaces the 50ms setTimeout in gpsViewOpen.
+       We attach here because this is the first moment #gpsMapCanvas exists in the DOM.
+       Fires once when the canvas gains real dimensions, calls map.resize(), then
+       disconnects immediately so it never runs again. */
+    (function() {
+      var canvas = document.getElementById('gpsMapCanvas');
+      if (!canvas || typeof ResizeObserver === 'undefined') return;
+      var ro = new ResizeObserver(function(entries) {
+        var entry = entries[0];
+        if (!entry) return;
+        var w = entry.contentRect ? entry.contentRect.width  : canvas.offsetWidth;
+        var h = entry.contentRect ? entry.contentRect.height : canvas.offsetHeight;
+        if (w > 0 && h > 0) {
+          ro.disconnect();
+          var lrInner = window.lrState;
+          if (lrInner && lrInner._mapInstance && lrInner._mapInstance._map
+              && typeof lrInner._mapInstance._map.resize === 'function') {
+            try { lrInner._mapInstance._map.resize(); } catch(e) {}
+          }
+        }
+      });
+      ro.observe(canvas);
+    }());
   }
   /* Snap to current hole on first render and on hole changes. */
   var holeN = lr.curHole + 1;
@@ -927,8 +926,9 @@ function _calcYardsToGreen() {
   if (!fromPt && Array.isArray(holeEntry.tee)) fromPt = holeEntry.tee;
   /* Priority 3: hole line start. */
   if (!fromPt && Array.isArray(holeEntry.line) && holeEntry.line.length) fromPt = holeEntry.line[0];
-  /* Priority 4: phone GPS (last-resort fallback only). */
-  if (!fromPt && _gpsLast) fromPt = [_gpsLast[0], _gpsLast[1]];
+  /* PHASE-SPRINT Task 5: Priority 4 phone GPS fallback removed. Strategic distance
+     must come from ball position or tee only — phone location is not a strategy input.
+  // if (!fromPt && _gpsLast) fromPt = [_gpsLast[0], _gpsLast[1]]; */
   if (!fromPt) return null;
   try { return geomDistanceYds(fromPt, holeEntry.green); } catch(e) { return null; }
 }
@@ -936,11 +936,33 @@ function _calcYardsToGreen() {
 function _renderYards() {
   var el = document.getElementById('gpsYards');
   if (!el) return;
+  /* Strategic distance: ball (last shot end) or tee → green. GPS-agnostic. */
   var y = _calcYardsToGreen();
-  el.innerHTML = '<div style="text-align:center;padding:14px 8px">'
+  /* Walking distance: phone GPS → green. Only shown when GPS is available. */
+  var walkY = null;
+  if (_gpsLast) {
+    var geo2 = _gvGetGeo();
+    var he2  = geo2 ? _gvHoleEntry(geo2) : null;
+    if (he2 && Array.isArray(he2.green)) {
+      try { walkY = Math.round(geomDistanceYds([_gpsLast[0], _gpsLast[1]], he2.green)); } catch(e) {}
+    }
+  }
+  /* Render: strategic yardage large, walking distance small below.
+     OLD single-value version preserved:
+  // el.innerHTML = '<div style="text-align:center;padding:14px 8px">'
+  //   + '<div style="font-family:\'DM Mono\',monospace;font-size:2.4rem;font-weight:700;color:var(--tx);line-height:1">'
+  //   + (y != null ? y : '\u2014') + '</div>'
+  //   + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">yds to green</div>'
+  //   + '</div>';
+  */
+  el.innerHTML = '<div style="text-align:center;padding:14px 8px 10px">'
     + '<div style="font-family:\'DM Mono\',monospace;font-size:2.4rem;font-weight:700;color:var(--tx);line-height:1">'
-    + (y != null ? y : '\u2014') + '</div>'
-    + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">yds to green</div>'
+    + (y != null ? Math.round(y) : '\u2014') + '</div>'
+    + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">ball to pin</div>'
+    + (walkY != null
+        ? '<div style="font-size:.7rem;color:var(--tx2);margin-top:5px;font-family:\'DM Mono\',monospace">'
+          + walkY + '<span style="font-size:.55rem;color:var(--tx3);margin-left:3px">yds walking</span></div>'
+        : '')
     + '</div>';
 }
 
@@ -1074,118 +1096,241 @@ function _renderHazards() {
    Active shot chip + putt bar + on-green prompt
    ───────────────────────────────────────────────────────── */
 
-/* PHASE-B1: Persistent mode banner. Three states:
-   - tracker off: hidden entirely (no DOM impact)
-   - tracker on, no shot armed: "Tap target to arm shot N"
-   - tracker on, shot armed: "Tap landing for shot N"
-   Replaces the easy-to-miss toast as the primary affordance for shot logging.
-   Toasts still fire for confirmation events; this strip stays put across them. */
+/* PHASE-SPRINT Task 2: _renderModeBanner rewritten to initialize sub-elements once
+   and update them in-place on subsequent GPS ticks. This prevents the club/flight/lie
+   chip buttons from being destroyed before the user can tap them.
+   Old innerHTML version preserved at the bottom of this function. */
 function _renderModeBanner() {
   var el = document.getElementById('gpsModeBanner');
   if (!el) return;
   var lr = window.lrState;
   if (!lr || !lr._trackerOn || _puttMode) {
     el.style.display = 'none';
-    el.innerHTML = '';
     return;
   }
   var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
   var s     = lr.players[lr.curPlayer].scores[lr.curHole];
   var n     = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
-  var msg, bg;
-  if (armed) {
-    msg = '\uD83C\uDFAF Tap landing for Shot ' + n;
-    bg  = 'linear-gradient(90deg, var(--ac2), var(--ac3))';
-  } else {
-    msg = '\uD83C\uDFAF Tap target to arm Shot ' + n;
-    bg  = 'var(--sf)';
+
+  /* ── Initialize DOM structure once ── */
+  if (!el.dataset.mbInit) {
+    el.dataset.mbInit = '1';
+
+    /* Main message strip */
+    var msgDiv = document.createElement('div');
+    msgDiv.id = 'gpsMBMsg';
+    msgDiv.style.cssText = 'padding:6px 12px;border-bottom:1px solid var(--br);'
+      + 'font-size:.7rem;font-weight:600;color:var(--tx);text-align:center;letter-spacing:.02em';
+    el.appendChild(msgDiv);
+
+    /* Club chip row */
+    var clubRow = document.createElement('div');
+    clubRow.id = 'gpsMBClubRow';
+    clubRow.style.cssText = 'padding:6px 10px 8px;background:var(--bg);'
+      + 'border-bottom:1px solid var(--br);display:flex;gap:6px;'
+      + 'overflow-x:auto;-webkit-overflow-scrolling:touch';
+    el.appendChild(clubRow);
+
+    /* Flight chip row */
+    var flightRow = document.createElement('div');
+    flightRow.id = 'gpsMBFlightRow';
+    flightRow.style.cssText = 'padding:5px 10px 7px;background:var(--bg);'
+      + 'border-bottom:1px solid var(--br);display:flex;gap:5px;align-items:center;'
+      + 'overflow-x:auto;-webkit-overflow-scrolling:touch';
+    var flightLabel = document.createElement('span');
+    flightLabel.style.cssText = 'font-size:.6rem;color:var(--tx3);flex:0 0 auto';
+    flightLabel.textContent = 'Shape:';
+    flightRow.appendChild(flightLabel);
+    var flightBtns = document.createElement('span');
+    flightBtns.id = 'gpsMBFlightBtns';
+    flightBtns.style.cssText = 'display:flex;gap:5px;flex-wrap:nowrap';
+    flightRow.appendChild(flightBtns);
+    el.appendChild(flightRow);
+
+    /* Lie chip row */
+    var lieRow = document.createElement('div');
+    lieRow.id = 'gpsMBLieRow';
+    lieRow.style.cssText = 'padding:5px 10px 7px;background:var(--bg);'
+      + 'border-bottom:1px solid var(--br);display:flex;gap:5px;align-items:center;'
+      + 'overflow-x:auto;-webkit-overflow-scrolling:touch';
+    var lieLabel = document.createElement('span');
+    lieLabel.style.cssText = 'font-size:.6rem;color:var(--tx3);flex:0 0 auto';
+    lieLabel.textContent = 'Lie:';
+    lieRow.appendChild(lieLabel);
+    var lieBtns = document.createElement('span');
+    lieBtns.id = 'gpsMBLieBtns';
+    lieBtns.style.cssText = 'display:flex;gap:5px;flex-wrap:nowrap';
+    lieRow.appendChild(lieBtns);
+    el.appendChild(lieRow);
+
+    /* Penalty row */
+    var penRow = document.createElement('div');
+    penRow.id = 'gpsMBPenRow';
+    penRow.style.cssText = 'padding:5px 10px 7px;background:var(--ac3);'
+      + 'border-bottom:1px solid var(--br);display:flex;gap:5px;align-items:center';
+    var penLabel = document.createElement('span');
+    penLabel.style.cssText = 'font-size:.62rem;color:var(--tx);font-weight:600;flex:0 0 auto';
+    penLabel.textContent = 'Penalty?';
+    penRow.appendChild(penLabel);
+    ['No','+1','+2'].forEach(function(lbl, i) {
+      var b = document.createElement('button');
+      b.className = 'btn sec';
+      b.style.cssText = 'font-size:.6rem;padding:3px 9px;border-radius:12px';
+      b.textContent = lbl;
+      b.onclick = (function(strokes){ return function(){ gpsViewApplyPenalty(strokes); }; })(i);
+      penRow.appendChild(b);
+    });
+    el.appendChild(penRow);
+
+    /* End-hole row */
+    var endRow = document.createElement('div');
+    endRow.id = 'gpsMBEndRow';
+    endRow.style.cssText = 'padding:4px 10px;background:var(--bg);display:flex;justify-content:flex-end';
+    var endBtn = document.createElement('button');
+    endBtn.className = 'btn sec';
+    endBtn.style.cssText = 'font-size:.6rem;padding:3px 12px;border-radius:12px';
+    endBtn.textContent = 'End hole';
+    endBtn.onclick = function() { gpsViewEndHole(); };
+    endRow.appendChild(endBtn);
+    el.appendChild(endRow);
   }
-  /* PHASE-B3: Club chip row -- shown only when shot is armed and no club set yet.
-     Tap a chip to assign club to the armed shot. Reads bag from window.bag. */
-  var clubChips = '';
-  if (armed && !armed.club && window.bag && window.bag.length) {
-    var chips = window.bag.map(function(c) {
-      var label = c.name || c.id;
-      return '<button class="btn sec" style="font-size:.62rem;padding:4px 10px;'
-        + 'border-radius:14px;flex:0 0 auto" '
-        + 'onclick="gpsViewSetArmedClub(\'' + (c.id || '').replace(/'/g, "\\'") + '\')">'
-        + label + '</button>';
-    }).join('');
-    clubChips =
-        '<div style="padding:6px 10px 8px;background:var(--bg);border-bottom:1px solid var(--br);'
-      +   'display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch">'
-      + chips + '</div>';
-  }
-  /* PHASE-B4: Lie quick-correct row -- shown after a shot lands (not armed) so user
-     can correct auto-detected lie when polygon mapping is wrong. Tapping writes via
-     stOverrideLie which mutates the most-recent shot in place. */
-  var lieChips = '';
-  if (!armed && s && Array.isArray(s.shots) && s.shots.length) {
-    var last = s.shots[s.shots.length - 1];
-    var lies = ['fairway','rough','sand','recovery','green','tee'];
-    var lieRow = lies.map(function(L) {
-      var active = last.lie === L;
-      return '<button class="btn ' + (active ? 'pri' : 'sec') + '" '
-        + 'style="font-size:.6rem;padding:3px 9px;border-radius:12px;flex:0 0 auto" '
-        + 'onclick="gpsViewCorrectLie(\'' + L + '\')">' + L + '</button>';
-    }).join('');
-    lieChips =
-        '<div style="padding:5px 10px 7px;background:var(--bg);border-bottom:1px solid var(--br);'
-      +   'display:flex;gap:5px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch">'
-      +   '<span style="font-size:.6rem;color:var(--tx3);flex:0 0 auto">Lie:</span>'
-      + lieRow
-      + '</div>';
-  }
-  /* PHASE-B4: Flight pattern chip row -- shown when armed AND club chosen.
-     Persists onto rec.flight_path via stCloseShot reading lr._shotArmed.flight_path. */
-  var flightChips = '';
-  if (armed && armed.club) {
-    var paths = ['straight','draw','fade','hook','slice','push','pull'];
-    var cur = armed.flight_path || '';
-    var pRow = paths.map(function(p) {
-      var on = cur === p;
-      return '<button class="btn ' + (on ? 'pri' : 'sec') + '" '
-        + 'style="font-size:.6rem;padding:3px 9px;border-radius:12px;flex:0 0 auto" '
-        + 'onclick="gpsViewSetArmedFlight(\'' + p + '\')">' + p + '</button>';
-    }).join('');
-    flightChips =
-        '<div style="padding:5px 10px 7px;background:var(--bg);border-bottom:1px solid var(--br);'
-      +   'display:flex;gap:5px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch">'
-      +   '<span style="font-size:.6rem;color:var(--tx3);flex:0 0 auto">Shape:</span>'
-      + pRow + '</div>';
-  }
-  /* PHASE-B4: Penalty prompt -- shown after a shot lands in hazard. */
-  var penaltyChips = '';
-  if (!armed && s && Array.isArray(s.shots) && s.shots.length) {
-    var lst = s.shots[s.shots.length - 1];
-    if (lst && (lst.lie === 'recovery' || lst.lie === 'sand') && !lst.penalty_strokes && !lst._penaltyDismissed) {
-      penaltyChips =
-          '<div style="padding:5px 10px 7px;background:var(--ac3);border-bottom:1px solid var(--br);'
-        +   'display:flex;gap:5px;align-items:center">'
-        +   '<span style="font-size:.62rem;color:var(--tx);font-weight:600;flex:0 0 auto">Penalty?</span>'
-        +   '<button class="btn sec" style="font-size:.6rem;padding:3px 9px;border-radius:12px" onclick="gpsViewApplyPenalty(0)">No</button>'
-        +   '<button class="btn sec" style="font-size:.6rem;padding:3px 9px;border-radius:12px" onclick="gpsViewApplyPenalty(1)">+1</button>'
-        +   '<button class="btn sec" style="font-size:.6rem;padding:3px 9px;border-radius:12px" onclick="gpsViewApplyPenalty(2)">+2</button>'
-        + '</div>';
+
+  /* ── Update message strip ── */
+  var msgEl = document.getElementById('gpsMBMsg');
+  if (msgEl) {
+    if (armed) {
+      msgEl.textContent = '\uD83C\uDFAF Tap landing for Shot ' + n;
+      msgEl.style.background = 'linear-gradient(90deg, var(--ac2), var(--ac3))';
+    } else {
+      msgEl.textContent = '\uD83C\uDFAF Tap target to arm Shot ' + n;
+      msgEl.style.background = 'var(--sf)';
     }
   }
-  /* PHASE-B4: End-hole button -- always available when shots exist. */
-  var endHole = '';
-  if (s && Array.isArray(s.shots) && s.shots.length) {
-    endHole =
-        '<div style="padding:4px 10px;background:var(--bg);display:flex;justify-content:flex-end">'
-      +   '<button class="btn sec" style="font-size:.6rem;padding:3px 12px;border-radius:12px" '
-      +     'onclick="gpsViewEndHole()">End hole</button>'
-      + '</div>';
+
+  /* ── Club chip row ── */
+  var clubRowEl = document.getElementById('gpsMBClubRow');
+  if (clubRowEl) {
+    var showClub = !!(armed && !armed.club && window.bag && window.bag.length);
+    if (showClub) {
+      /* Rebuild only if bag changed length (very rare) or first time visible. */
+      if (String(clubRowEl.dataset.bagLen) !== String(window.bag.length)) {
+        clubRowEl.dataset.bagLen = window.bag.length;
+        /* Remove old buttons */
+        while (clubRowEl.firstChild) clubRowEl.removeChild(clubRowEl.firstChild);
+        window.bag.forEach(function(c) {
+          var b = document.createElement('button');
+          b.className = 'btn sec';
+          b.style.cssText = 'font-size:.62rem;padding:4px 10px;border-radius:14px;flex:0 0 auto';
+          b.textContent = c.name || c.id;
+          b.onclick = (function(id){ return function(){ gpsViewSetArmedClub(id); }; })(c.id || '');
+          clubRowEl.appendChild(b);
+        });
+      }
+      clubRowEl.style.display = 'flex';
+    } else {
+      clubRowEl.style.display = 'none';
+    }
   }
+
+  /* ── Flight chip row ── */
+  var flightRowEl = document.getElementById('gpsMBFlightRow');
+  var flightBtnsEl = document.getElementById('gpsMBFlightBtns');
+  if (flightRowEl) {
+    var showFlight = !!(armed && armed.club);
+    if (showFlight && flightBtnsEl) {
+      var paths = ['straight','draw','fade','hook','slice','push','pull'];
+      var cur = armed.flight_path || '';
+      /* Build buttons once, then just toggle className. */
+      if (!flightBtnsEl.dataset.built) {
+        flightBtnsEl.dataset.built = '1';
+        paths.forEach(function(p) {
+          var b = document.createElement('button');
+          b.dataset.fp = p;
+          b.style.cssText = 'font-size:.6rem;padding:3px 9px;border-radius:12px;flex:0 0 auto';
+          b.textContent = p;
+          b.onclick = (function(path){ return function(){ gpsViewSetArmedFlight(path); }; })(p);
+          flightBtnsEl.appendChild(b);
+        });
+      }
+      /* Update active state only. */
+      var fBtns = flightBtnsEl.querySelectorAll('button');
+      for (var fi = 0; fi < fBtns.length; fi++) {
+        fBtns[fi].className = 'btn ' + (fBtns[fi].dataset.fp === cur ? 'pri' : 'sec');
+      }
+      flightRowEl.style.display = 'flex';
+    } else {
+      flightRowEl.style.display = 'none';
+    }
+  }
+
+  /* ── Lie chip row ── */
+  var lieRowEl  = document.getElementById('gpsMBLieRow');
+  var lieBtnsEl = document.getElementById('gpsMBLieBtns');
+  if (lieRowEl) {
+    var lastShot = (!armed && s && Array.isArray(s.shots) && s.shots.length)
+      ? s.shots[s.shots.length - 1] : null;
+    if (lastShot && lieBtnsEl) {
+      var lies = ['fairway','rough','sand','recovery','green','tee'];
+      if (!lieBtnsEl.dataset.built) {
+        lieBtnsEl.dataset.built = '1';
+        lies.forEach(function(L) {
+          var b = document.createElement('button');
+          b.dataset.lie = L;
+          b.style.cssText = 'font-size:.6rem;padding:3px 9px;border-radius:12px;flex:0 0 auto';
+          b.textContent = L;
+          b.onclick = (function(lie){ return function(){ gpsViewCorrectLie(lie); }; })(L);
+          lieBtnsEl.appendChild(b);
+        });
+      }
+      /* Update active state only. */
+      var lBtns = lieBtnsEl.querySelectorAll('button');
+      for (var li2 = 0; li2 < lBtns.length; li2++) {
+        lBtns[li2].className = 'btn ' + (lBtns[li2].dataset.lie === lastShot.lie ? 'pri' : 'sec');
+      }
+      lieRowEl.style.display = 'flex';
+    } else {
+      lieRowEl.style.display = 'none';
+    }
+  }
+
+  /* ── Penalty row ── */
+  var penRowEl = document.getElementById('gpsMBPenRow');
+  if (penRowEl) {
+    var lst2 = (!armed && s && Array.isArray(s.shots) && s.shots.length)
+      ? s.shots[s.shots.length - 1] : null;
+    var showPen = !!(lst2 && (lst2.lie === 'recovery' || lst2.lie === 'sand')
+      && !lst2.penalty_strokes && !lst2._penaltyDismissed);
+    penRowEl.style.display = showPen ? 'flex' : 'none';
+  }
+
+  /* ── End-hole row ── */
+  var endRowEl = document.getElementById('gpsMBEndRow');
+  if (endRowEl) {
+    endRowEl.style.display = (s && Array.isArray(s.shots) && s.shots.length) ? 'flex' : 'none';
+  }
+
   el.style.display = '';
-  el.innerHTML =
-      '<div style="padding:6px 12px;background:' + bg + ';'
-    +   'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
-    +   'color:var(--tx);text-align:center;letter-spacing:.02em">'
-    +   msg + '</div>'
-    + clubChips + flightChips + lieChips + penaltyChips + endHole;
 }
+
+/* OLD _renderModeBanner (innerHTML version) — preserved per "comment, don't delete" rule:
+// function _renderModeBanner() {
+//   var el = document.getElementById('gpsModeBanner');
+//   if (!el) return;
+//   var lr = window.lrState;
+//   if (!lr || !lr._trackerOn || _puttMode) { el.style.display = 'none'; el.innerHTML = ''; return; }
+//   var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+//   var s     = lr.players[lr.curPlayer].scores[lr.curHole];
+//   var n     = (s && Array.isArray(s.shots)) ? (s.shots.length + 1) : 1;
+//   var msg, bg;
+//   if (armed) { msg = '🎯 Tap landing for Shot ' + n; bg = 'linear-gradient(90deg, var(--ac2), var(--ac3))'; }
+//   else       { msg = '🎯 Tap target to arm Shot ' + n; bg = 'var(--sf)'; }
+//   var clubChips = '';
+//   if (armed && !armed.club && window.bag && window.bag.length) { ... }
+//   var lieChips = ''; var flightChips = ''; var penaltyChips = ''; var endHole = '';
+//   // ...full string-building elided; see prior version in git / handoff.
+//   el.style.display = '';
+//   el.innerHTML = '<div...>' + msg + '</div>' + clubChips + flightChips + lieChips + penaltyChips + endHole;
+// }
 
 /* PHASE-B4: Correct the auto-detected lie of the most-recent shot. */
 function gpsViewCorrectLie(lie) {
@@ -1238,30 +1383,57 @@ function gpsViewSetArmedClub(clubId) {
   gpsViewRender();
 }
 
+/* PHASE-SPRINT Task 2: _renderShotChip rewritten to initialize DOM once and update
+   in-place on subsequent ticks, preventing button destruction during GPS renders.
+   Old innerHTML version preserved below. */
 function _renderShotChip() {
   var el = document.getElementById('gpsShotChip');
   if (!el) return;
   var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
-  if (!armed || _puttMode) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  /* PHASE-B1: Slimmed to Cancel-only. The "shot armed" message now lives in
-     the mode banner above the map (gpsModeBanner) so it's seen at a glance.
-     This chip retains only the cancel affordance, kept small and right-aligned.
-     Original (preserved as comment):
-  // el.innerHTML = '<div style="padding:8px 12px;background:var(--ac3);border-top:1px solid var(--br);font-size:.7rem;display:flex;align-items:center;gap:8px">'
-  //   + '<span style="color:var(--tx)">\u25CB Shot armed</span>'
-  //   + (armed.club ? '<span style="color:var(--tx2)">\u00B7 ' + armed.club + '</span>' : '')
-  //   + '<span style="margin-left:auto;color:var(--tx3);font-size:.6rem">tap landing to log</span>'
-  //   + '<button class="btn sec" style="font-size:.6rem;padding:2px 8px" onclick="gpsViewCancelShot()">Cancel</button>'
-  //   + '</div>';
-  */
+  if (!armed || _puttMode) { el.style.display = 'none'; return; }
+
+  /* Initialize children once. */
+  if (!el.dataset.scInit) {
+    el.dataset.scInit = '1';
+    var wrap = document.createElement('div');
+    wrap.id = 'gpsShotChipWrap';
+    wrap.style.cssText = 'padding:6px 12px;border-top:1px solid var(--br);'
+      + 'font-size:.7rem;display:flex;align-items:center;gap:8px;background:var(--bg)';
+    var clubSpan = document.createElement('span');
+    clubSpan.id = 'gpsShotChipClub';
+    clubSpan.style.color = 'var(--tx2)';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn sec';
+    cancelBtn.style.cssText = 'font-size:.62rem;padding:3px 12px;margin-left:auto';
+    cancelBtn.textContent = 'Cancel shot';
+    cancelBtn.onclick = function() { gpsViewCancelShot(); };
+    wrap.appendChild(clubSpan);
+    wrap.appendChild(cancelBtn);
+    el.appendChild(wrap);
+  }
+
+  /* Update in-place. */
   el.style.display = '';
-  el.innerHTML = '<div style="padding:6px 12px;border-top:1px solid var(--br);'
-    + 'font-size:.7rem;display:flex;align-items:center;gap:8px;background:var(--bg)">'
-    + (armed.club ? '<span style="color:var(--tx2)">' + armed.club + '</span>' : '')
-    + '<button class="btn sec" style="font-size:.62rem;padding:3px 12px;margin-left:auto" '
-    +   'onclick="gpsViewCancelShot()">Cancel shot</button>'
-    + '</div>';
+  var clubEl = document.getElementById('gpsShotChipClub');
+  if (clubEl) {
+    clubEl.textContent = armed.club || '';
+    clubEl.style.display = armed.club ? '' : 'none';
+  }
 }
+/* OLD _renderShotChip (innerHTML version) — preserved per "comment, don't delete" rule:
+// function _renderShotChip() {
+//   var el = document.getElementById('gpsShotChip');
+//   if (!el) return;
+//   var armed = (typeof window.stGetActive === 'function') ? window.stGetActive() : null;
+//   if (!armed || _puttMode) { el.style.display = 'none'; el.innerHTML = ''; return; }
+//   el.style.display = '';
+//   el.innerHTML = '<div style="padding:6px 12px;border-top:1px solid var(--br);'
+//     + 'font-size:.7rem;display:flex;align-items:center;gap:8px;background:var(--bg)">'
+//     + (armed.club ? '<span style="color:var(--tx2)">' + armed.club + '</span>' : '')
+//     + '<button class="btn sec" style="font-size:.62rem;padding:3px 12px;margin-left:auto" '
+//     +   'onclick="gpsViewCancelShot()">Cancel shot</button>'
+//     + '</div>';
+// }
 
 function _renderPuttBar() {
   var el = document.getElementById('gpsPuttBar');
@@ -1351,12 +1523,38 @@ function gpsViewOnMapDoubleTap(lngLat) {
     gpsViewRender();
     return;
   }
-  /* Tracker on, no shot armed: arm. */
-  if (typeof window.stIsArmed === 'function' && window.stIsArmed()) return;
-  /* Set aim too so visual feedback is consistent. */
-  lr._mapAim = lngLat;
-  var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
-  if (typeof window.stArmShot === 'function') window.stArmShot(lngLat, '', current);
+  /* PHASE-SPRINT Task 4: Tracker on — double-tap logs a shot immediately, same
+     as a single tap. stRecordLocation handles start=lastShot/tee, GPS-agnostic.
+     OLD two-tap arm logic preserved as comment:
+  // if (typeof window.stIsArmed === 'function' && window.stIsArmed()) return;
+  // lr._mapAim = lngLat;
+  // var current = _gpsLast ? [_gpsLast[0], _gpsLast[1]] : null;
+  // if (typeof window.stArmShot === 'function') window.stArmShot(lngLat, '', current);
+  // if (typeof window._lrPersist === 'function') window._lrPersist();
+  // gpsViewRender();
+  */
+  var rec = null;
+  if (typeof window.stRecordLocation === 'function') {
+    try { rec = window.stRecordLocation(lngLat); } catch(e) {}
+  }
+  if (rec) {
+    if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
+      try {
+        lr._mapInstance.setDispersionLines({
+          startLL: rec.gps_flight.startLngLat,
+          aimLL:   rec.gps_flight.endLngLat,
+          endLL:   rec.gps_flight.endLngLat
+        });
+      } catch(e2) {}
+    }
+    _gvRefreshLineStart();
+    var s = lr.players[lr.curPlayer].scores[lr.curHole];
+    var n = (s && Array.isArray(s.shots)) ? s.shots.length : 1;
+    _gvShowToast('Shot ' + n + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown'), 'success');
+    if (rec.lie === 'green' && !_puttMode) _puttMode = true;
+  } else {
+    _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
+  }
   if (typeof window._lrPersist === 'function') window._lrPersist();
   gpsViewRender();
 }
