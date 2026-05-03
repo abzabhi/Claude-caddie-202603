@@ -7,29 +7,98 @@ export let profile = {};
 export function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
 export function today() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate()); }
 
-export function save() {
-  localStorage.setItem('vc:bag', JSON.stringify(bag));
-  localStorage.setItem('vc:courses', JSON.stringify(courses));
-  localStorage.setItem('vc:rounds', JSON.stringify(rounds));
-  localStorage.setItem('vc:history', JSON.stringify(history));
-  localStorage.setItem('vc:rangeSessions', JSON.stringify(rangeSessions));
-  localStorage.setItem('vc:profile', JSON.stringify(profile));
+// -- IndexedDB wrapper --------------------------------------------------------
+const _IDB_NAME = 'gordy', _IDB_VER = 1, _IDB_STORE = 'state';
+let _dbPromise = null;
+function _dbOpen() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = new Promise(function(resolve, reject) {
+    var req = indexedDB.open(_IDB_NAME, _IDB_VER);
+    req.onupgradeneeded = function(e) {
+      var db = e.target.result;
+      if (!db.objectStoreNames.contains(_IDB_STORE)) db.createObjectStore(_IDB_STORE);
+    };
+    req.onsuccess = function(e) { resolve(e.target.result); };
+    req.onerror   = function(e) { reject(e.target.error); };
+  });
+  return _dbPromise;
+}
+function _idbPut(key, value) {
+  return _dbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(_IDB_STORE, 'readwrite');
+      var req = tx.objectStore(_IDB_STORE).put(value, key);
+      req.onsuccess = resolve; req.onerror = function(e) { reject(e.target.error); };
+    });
+  });
+}
+function _idbGet(key) {
+  return _dbOpen().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(_IDB_STORE, 'readonly');
+      var req = tx.objectStore(_IDB_STORE).get(key);
+      req.onsuccess = function(e) { resolve(e.target.result); };
+      req.onerror   = function(e) { reject(e.target.error); };
+    });
+  });
+}
+
+// -- Persist & load -----------------------------------------------------------
+export async function save() {
+  await _idbPut('main', {
+    profile: Object.assign({}, profile),
+    bag: bag.slice(),
+    courses: courses.slice(),
+    rounds: rounds.slice(),
+    history: history.slice(),
+    rangeSessions: rangeSessions.slice()
+  });
 }
 
 const _SEED = {bag:[], courses:[], history:[], rangeSessions:[]};
 
-export function load() {
-  try { const b=JSON.parse(localStorage.getItem('vc:bag')); bag=Array.isArray(b)&&b.length?b.filter(x=>x&&x.id):_SEED.bag; } catch { bag=_SEED.bag; }
-  try { const c=JSON.parse(localStorage.getItem('vc:courses')); courses=Array.isArray(c)&&c.length?c.filter(x=>x&&x.id):_SEED.courses; } catch { courses=_SEED.courses; }
-  try { const r=JSON.parse(localStorage.getItem('vc:rounds')); rounds=Array.isArray(r)?r:[]; } catch { rounds=[]; }
-  try { const h=JSON.parse(localStorage.getItem('vc:history')); history=Array.isArray(h)&&h.length?h.filter(x=>x&&x.id):_SEED.history; } catch { history=_SEED.history; }
-  try { const rs=JSON.parse(localStorage.getItem('vc:rangeSessions')); const rsParsed=Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):_SEED.rangeSessions; rangeSessions.splice(0,rangeSessions.length,...rsParsed); } catch { rangeSessions.splice(0,rangeSessions.length); }
-  try { const p=JSON.parse(localStorage.getItem('vc:profile')); profile=p&&typeof p==='object'?p:{}; } catch { profile={}; }
-  bag=bag.filter(x=>x&&x.id);
-  courses=courses.filter(x=>x&&x.id);
-  rounds=rounds.filter(x=>x&&x.id);
-  /* SLUG1c -- delegate to shared reconciler (called from load + every bag-write site) */
-  if(reconcileSlugs()) save();
+export async function load() {
+  var state = null;
+  try { state = await _idbGet('main'); } catch {}
+  if (state && typeof state === 'object' && (state.bag || state.courses || state.profile)) {
+    // Load from IndexedDB
+    var b=state.bag; bag.splice(0,bag.length,...(Array.isArray(b)?b.filter(x=>x&&x.id):[]));
+    var c=state.courses; courses.splice(0,courses.length,...(Array.isArray(c)?c.filter(x=>x&&x.id):[]));
+    var r=state.rounds; rounds.splice(0,rounds.length,...(Array.isArray(r)?r.filter(x=>x&&x.id):[]));
+    var h=state.history; history.splice(0,history.length,...(Array.isArray(h)?h.filter(x=>x&&x.id):[]));
+    var rs=state.rangeSessions; rangeSessions.splice(0,rangeSessions.length,...(Array.isArray(rs)?rs.filter(x=>x&&x.sessionId):[]));
+    var p=state.profile; Object.keys(profile).forEach(k=>delete profile[k]); if(p&&typeof p==='object') Object.assign(profile,p);
+  } else {
+    // Migration: read legacy localStorage keys once, then persist to IDB
+    try { var lb=JSON.parse(localStorage.getItem('vc:bag')); bag.splice(0,bag.length,...(Array.isArray(lb)&&lb.length?lb.filter(x=>x&&x.id):[])); } catch { bag.splice(0,bag.length); }
+    try { var lc=JSON.parse(localStorage.getItem('vc:courses')); courses.splice(0,courses.length,...(Array.isArray(lc)&&lc.length?lc.filter(x=>x&&x.id):[])); } catch { courses.splice(0,courses.length); }
+    try { var lr=JSON.parse(localStorage.getItem('vc:rounds')); rounds.splice(0,rounds.length,...(Array.isArray(lr)?lr.filter(x=>x&&x.id):[])); } catch { rounds.splice(0,rounds.length); }
+    try { var lh=JSON.parse(localStorage.getItem('vc:history')); history.splice(0,history.length,...(Array.isArray(lh)&&lh.length?lh.filter(x=>x&&x.id):[])); } catch { history.splice(0,history.length); }
+    try { var lrs=JSON.parse(localStorage.getItem('vc:rangeSessions')); rangeSessions.splice(0,rangeSessions.length,...(Array.isArray(lrs)?lrs.filter(x=>x&&x.sessionId):[])); } catch { rangeSessions.splice(0,rangeSessions.length); }
+    try { var lp=JSON.parse(localStorage.getItem('vc:profile')); Object.keys(profile).forEach(k=>delete profile[k]); if(lp&&typeof lp==='object') Object.assign(profile,lp); } catch {}
+    // Clean up legacy keys after migration
+    ['vc:bag','vc:courses','vc:rounds','vc:history','vc:rangeSessions','vc:profile'].forEach(k=>localStorage.removeItem(k));
+  }
+  /* SLUG1c -- delegate to shared reconciler */
+  if(reconcileSlugs()) await save();
+}
+
+// -- Active round geo (routed directly to IDB) --------------------------------
+export async function saveGeo(data) { await _idbPut('activeRoundGeo', data); }
+export async function loadGeo() { try { return await _idbGet('activeRoundGeo'); } catch { return null; } }
+
+// -- JSON state snapshot (replaces serialise() for sync/export) ---------------
+export async function getJsonState() {
+  return {
+    profile: Object.assign({}, profile),
+    bag: bag.slice(),
+    courses: courses.slice(),
+    rounds: rounds.slice(),
+    history: history.slice(),
+    rangeSessions: rangeSessions.slice(),
+    hcpMode: localStorage.getItem('vc:hcpMode') || 'calculated',
+    manualHcp: localStorage.getItem('vc:manualHcp') || ''
+  };
 }
 
 /* SLUG1c -- shared slug reconciler. Callable from load() and from any bag-write
@@ -111,11 +180,16 @@ export function clearAll() {
   Object.keys(profile).forEach(k=>delete profile[k]);
 }
 
-export function wipeEnvironment() {
+export async function wipeEnvironment() {
   Object.keys(localStorage)
     .filter(k => k.startsWith('vc:') || k.startsWith('gordy:'))
     .forEach(k => localStorage.removeItem(k));
   clearAll();
+  _dbPromise = null; // reset cached handle before delete
+  await new Promise(function(res) {
+    var req = indexedDB.deleteDatabase(_IDB_NAME);
+    req.onsuccess = req.onerror = req.onblocked = res;
+  });
 }
 
 export function serialise() {
