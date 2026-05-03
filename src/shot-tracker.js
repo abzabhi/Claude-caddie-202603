@@ -386,9 +386,12 @@ function stRecordLocation(endLngLat) {
   lr._shotArmed = null;
   if (typeof window._lrPersist === 'function') window._lrPersist();
   return rec;
+}
 
 
 
+/* Alias retained for handoff naming clarity; lrGoHole already calls stCancel via the hook. */
+function stCancelOnHoleChange() { stCancel(); }
 
 Object.assign(window, {
   stArmShot, stCloseShot, stCancel, stApplyPenalty, stOverrideLie,
