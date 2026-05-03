@@ -3,9 +3,9 @@
 // Orchestrates all render functions -- last module loaded.
 
 import { bag, courses, rounds, history, profile, rangeSessions,
-         save, today, uid, serialise,
+         save, today, uid,
          setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs,
-         wipeEnvironment } from './store.js'; /* SLUG1c */
+         wipeEnvironment, getJsonState } from './store.js'; /* SLUG1c */
 import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag, calcHandicap } from './geo.js'; /* ASKB-1, TRENDS-1 */
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
@@ -13,12 +13,13 @@ import { renderCourseList } from './courses.js';
 import { renderHandicap } from './rounds.js';
 
 // -- Save / Import ------------------------------------------------------------
-function saveData() {
-  const txt = serialise();
-  const blob = new Blob([txt], {type:'text/plain'});
+async function saveData() {
+  const state = await getJsonState();
+  const txt = JSON.stringify(state, null, 2);
+  const blob = new Blob([txt], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'virtual-caddie-data-'+today()+'.txt';
+  a.download = 'gordy-data-'+today()+'.json';
   a.click();
   URL.revokeObjectURL(a.href);
   const st = document.getElementById('saveStatus');
@@ -381,23 +382,46 @@ function _remapActiveRangeClubIds(oldBag, newBag) { return _remapClubRefs(oldBag
 // Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
 // renderAll is called by gateUnlocked() after this returns.
 function dbLoadData(text) {
-  const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
-  if(newBag.length) { var _oldBag = bag.slice(); setBag(newBag); _remapClubRefs(_oldBag, bag); } /* SLUG2 */
-  if(newRounds.length) setRounds(newRounds);
-  if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
-  if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
-  if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
-  if(newCourses.length){
-    newCourses.forEach(ic=>{
-      const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
-      const existing=courses.find(c=>c.id===ic.id);
-      if(!existing) courses.push(ic);
-      else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
-    });
+  // Detect JSON payload (new format) vs legacy pipe-delimited text
+  var parsed = null;
+  try { parsed = JSON.parse(text); } catch {}
+  if (parsed && typeof parsed === 'object' && (parsed.bag || parsed.courses || parsed.profile)) {
+    // JSON path
+    if (Array.isArray(parsed.bag) && parsed.bag.length) { var _oldBag=bag.slice(); setBag(parsed.bag); _remapClubRefs(_oldBag, bag); }
+    if (Array.isArray(parsed.rounds) && parsed.rounds.length) setRounds(parsed.rounds);
+    if (parsed.profile && Object.keys(parsed.profile).length) setProfile(parsed.profile);
+    if (parsed.hcpMode) localStorage.setItem('vc:hcpMode', parsed.hcpMode);
+    if (parsed.manualHcp) localStorage.setItem('vc:manualHcp', parsed.manualHcp);
+    if (Array.isArray(parsed.courses) && parsed.courses.length) {
+      parsed.courses.forEach(function(ic) {
+        var selTee=ic.tees&&ic.tees.find(function(t){return t.id===ic.selectedTee;}); if(selTee) ic.holes=selTee.holes;
+        var existing=courses.find(function(c){return c.id===ic.id;});
+        if(!existing) courses.push(ic);
+        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
+      });
+    }
+    if (Array.isArray(parsed.history) && parsed.history.length) { var ids=new Set(history.map(function(h){return h.id;})); parsed.history.forEach(function(h){if(!ids.has(h.id)) history.unshift(h);}); }
+    if (Array.isArray(parsed.rangeSessions) && parsed.rangeSessions.length) { var rsIds=new Set(rangeSessions.map(function(s){return s.sessionId;})); parsed.rangeSessions.forEach(function(s){if(!rsIds.has(s.sessionId)) rangeSessions.push(s);}); }
+  } else {
+    // Legacy txt path
+    const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
+    if(newBag.length) { var _oldBag2=bag.slice(); setBag(newBag); _remapClubRefs(_oldBag2, bag); }
+    if(newRounds.length) setRounds(newRounds);
+    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
+    if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
+    if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
+    if(newCourses.length){
+      newCourses.forEach(function(ic){
+        var selTee=ic.tees.find(function(t){return t.id===ic.selectedTee;}); if(selTee) ic.holes=selTee.holes;
+        var existing=courses.find(function(c){return c.id===ic.id;});
+        if(!existing) courses.push(ic);
+        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
+      });
+    }
+    if(newHistory.length){var hids=new Set(history.map(function(h){return h.id;})); newHistory.forEach(function(h){if(!hids.has(h.id)) history.unshift(h);});}
+    if(newRangeSessions.length){var rsids=new Set(rangeSessions.map(function(s){return s.sessionId;})); newRangeSessions.forEach(function(s){if(!rsids.has(s.sessionId)) rangeSessions.push(s);});}
   }
-  if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
-  if(newRangeSessions.length){const ids=new Set(rangeSessions.map(s=>s.sessionId)); newRangeSessions.forEach(s=>{if(!ids.has(s.sessionId)) rangeSessions.push(s);});}
-  reconcileSlugs(); /* SLUG1c -- reconcile after sync pull rebuilds bag from blob */
+  reconcileSlugs(); /* SLUG1c */
   save();
 }
 
@@ -1063,9 +1087,9 @@ function confirmClearAll() {
   renderAll();
   if(window.updateSessionPill) window.updateSessionPill();
 }
-function signOut() {
+async function signOut() {
   ['vc:gateUnlocked','vc:kvPass','vc:verify','vc:siteVerify'].forEach(k=>sessionStorage.removeItem(k)); /* GUEST2 */
-  wipeEnvironment();
+  await wipeEnvironment();
   location.reload();
 }
 
@@ -1383,7 +1407,7 @@ Object.assign(window, {
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
   updateCourseDropdowns, renderAll, serialise,
-  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut, wipeEnvironment,
+  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut, wipeEnvironment, getJsonState,
   showConfirmModal,
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
