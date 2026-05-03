@@ -1,4 +1,6 @@
 import { uid, today, save, courses, rounds, history, profile, bag } from './store.js';
+/* PHASE-B3: Expose bag globally so gps-view can render club chip row when shot is armed. */
+if (typeof window !== 'undefined') window.bag = bag;
 import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
 import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
 import { renderHandicap } from './rounds.js';
@@ -1509,7 +1511,7 @@ function _lrDefaultDraft(holeIdx) {
   var lastShot = s.shots && s.shots.length ? s.shots[s.shots.length - 1] : null;
   var dist     = isFirst ? (hole.yards || null) : null;
   var autoMode = isFirst ? 'standard'
-    : lastShot && lastShot.shot_mode === 'approach' && lastShot.radial_ring && lastShot.lie === 'green' ? 'on_green' /* LR-TAB1 */
+    : lastShot && lastShot.shot_mode === 'approach' && lastShot.lie === 'green' ? 'on_green' /* PHASE-B3: was '...&& lastShot.radial_ring && ...' which excluded map-tracked shots */
     : dist !== null && dist <= 100 ? 'approach'
     : 'standard';
   return {
@@ -1651,11 +1653,23 @@ function _lrShotLogHtml(shots) {
     if (zone) parts.push(zone);
     if (sh.flight_path) parts.push(sh.flight_path);
     /* PHASE-B2: Surface GPS-tracked fields when present. gps_flight records have
-       distance, distance-to-pin, and dispersion that the radial fields don't. */
+       distance, distance-to-pin, and dispersion that the radial fields don't.
+       PHASE-B3: dispersion now includes long/short component (vs aim) alongside L/R. */
     if (sh.gps_flight) {
       var gf = sh.gps_flight;
       if (gf.distanceYds) parts.push(Math.round(gf.distanceYds) + 'y');
       if (sh.distanceToHole != null) parts.push(Math.round(sh.distanceToHole) + 'y to pin');
+      var aimDistY = 0;
+      try {
+        if (typeof window.geomDistanceYds === 'function'
+            && Array.isArray(gf.startLngLat) && Array.isArray(gf.aimLngLat)) {
+          aimDistY = window.geomDistanceYds(gf.startLngLat, gf.aimLngLat);
+        }
+      } catch(e) {}
+      var vsAimY = (gf.dispersionLong || 0) - aimDistY;
+      if (Math.abs(vsAimY) >= 1) {
+        parts.push(Math.round(Math.abs(vsAimY)) + 'y ' + (vsAimY > 0 ? 'long' : 'short'));
+      }
       if (gf.dispersionLat && Math.abs(gf.dispersionLat) >= 1) {
         parts.push(Math.round(Math.abs(gf.dispersionLat)) + 'y ' + (gf.dispersionLat > 0 ? 'R' : 'L'));
       }
