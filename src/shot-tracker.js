@@ -304,10 +304,93 @@ function stGetActive() {
   return (window.lrState && window.lrState._shotArmed) ? window.lrState._shotArmed : null;
 }
 
-/* Alias retained for handoff naming clarity; lrGoHole already calls stCancel via the hook. */
-function stCancelOnHoleChange() { stCancel(); }
+/* PHASE-SPRINT Task 4: One-tap shot logging. No arming required.
+   Start point = last shot's endLngLat, or tee if no shots yet.
+   End point = tapped lngLat (aim = end for single-tap flow; dispersion is zero by definition).
+   GPS-agnostic: works when _gpsLast is null. */
+function stRecordLocation(endLngLat) {
+  var lr = window.lrState;
+  if (!lr) return null;
+  if (!Array.isArray(endLngLat) || endLngLat.length < 2) return null;
+
+  /* Resolve start point. */
+  var startLngLat = null;
+  var last = _stLastShot();
+  if (last && last.gps_flight && Array.isArray(last.gps_flight.endLngLat)) {
+    startLngLat = last.gps_flight.endLngLat;
+  }
+  if (!startLngLat) startLngLat = _stCurrentTeeLngLat();
+  if (!startLngLat) return null;  /* no tee data available */
+
+  /* Aim = end (single-tap: where you tapped is both aim and landing). */
+  var aimLngLat = endLngLat;
+
+  /* Geometry. */
+  var distanceYds = 0;
+  try { distanceYds = geomDistanceYds(startLngLat, endLngLat); } catch(e) {}
+
+  var rawLie = null;
+  try {
+    var geo = lr._mapInstance && (typeof lr._mapInstance.getGeometry === 'function'
+      ? lr._mapInstance.getGeometry() : lr._mapInstance._geo);
+    if (geo && geo.polygons) rawLie = geomLieAtPoint(endLngLat, geo.polygons);
+  } catch(e) {}
+  var lie = _stMapLie(rawLie);
+
+  var bearingActual = 0;
+  try { bearingActual = geomBearingDeg(startLngLat, endLngLat); } catch(e) {}
+
+  var distanceToHole = null;
+  var gc = _stGreenCenter();
+  if (gc) { try { distanceToHole = geomDistanceYds(endLngLat, gc); } catch(e) {} }
+
+  /* Shot mode. */
+  var shotMode = 'standard';
+  var greenFeat = _stCurrentGreenFeature();
+  var lastLie2 = last ? last.lie : null;
+  if (lastLie2 === 'green') {
+    shotMode = 'on_green';
+  } else if (greenFeat) {
+    try { if (geomPointInPolygon(endLngLat, greenFeat)) shotMode = 'approach'; } catch(e) {}
+  }
+
+  var rec = {
+    clubId:          '',
+    shot_mode:       shotMode,
+    lie:             lie,
+    radial_ring:     null,
+    radial_segment:  null,
+    flight_path:     null,
+    gps_flight: {
+      startLngLat:     startLngLat,
+      endLngLat:       endLngLat,
+      aimLngLat:       aimLngLat,
+      distanceYds:     distanceYds,
+      dispersionLong:  0,
+      dispersionLat:   0,
+      bearingIntended: +bearingActual.toFixed(1),
+      bearingActual:   +bearingActual.toFixed(1)
+    },
+    distanceToHole:  distanceToHole,
+    is_ob:           false,
+    penalty_strokes: 0,
+    timestamp:       new Date().toISOString(),
+    entryType:       'live'
+  };
+
+  var s = lr.players[lr.curPlayer].scores[lr.curHole];
+  if (!Array.isArray(s.shots)) s.shots = [];
+  s.shots.push(rec);
+
+  /* Ensure no stale armed state left over. */
+  lr._shotArmed = null;
+  if (typeof window._lrPersist === 'function') window._lrPersist();
+  return rec;
+}
+
+
 
 Object.assign(window, {
   stArmShot, stCloseShot, stCancel, stApplyPenalty, stOverrideLie,
-  stLogPutt, stIsArmed, stGetActive, stCancelOnHoleChange
+  stLogPutt, stIsArmed, stGetActive, stCancelOnHoleChange, stRecordLocation
 });
