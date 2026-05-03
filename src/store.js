@@ -53,6 +53,7 @@ export async function save() {
     history: history.slice(),
     rangeSessions: rangeSessions.slice()
   });
+  if (window.queueBackgroundSync) window.queueBackgroundSync();
 }
 
 const _SEED = {bag:[], courses:[], history:[], rangeSessions:[]};
