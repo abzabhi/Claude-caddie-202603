@@ -1,5 +1,5 @@
 import { calcHandicap, calcDiff, fmtDate, deriveStats, calcImplied } from './geo.js';
-import { rounds, history, bag, courses, profile, removeRound, save, today } from './store.js';
+import { rounds, history, bag, courses, profile, removeRound, save, today, uid } from './store.js';
 import { getTypeLabel } from './clubs.js';
 
 function renderHandicap() {
