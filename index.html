@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GOrdy the Virtual Caddy</title>
+<title>Gordy the Virtual Caddy</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#3d6b35">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2397,6 +2397,7 @@ _gateNewSitePass = sp;
     sessionStorage.setItem('vc:version', '1');
     dbEncrypt('gordy-verify', _gateNewPass).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
     sessionStorage.setItem('vc:gateUnlocked', '1');
+    if (window.wipeEnvironment) window.wipeEnvironment(); /* Task1 -- clear any prior user's RAM/storage */
     gateUnlocked(null);
   }
 }
