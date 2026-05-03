@@ -352,10 +352,19 @@ function gpsViewOpen() {
   }
   /* Wire compass listener */
   window.addEventListener('deviceorientation', _gpsViewOnHeading, true);
-  /* PHASE-B3: Set line baseline from last shot endLngLat (or null = tee fallback).
-     Aim marker placement is handled by MapView.mount() which runs via _lrMapMount
-     -> includes _showHoleInternal + _placeAimMarker. The synchronous _placeAimMarker
-     call previously here caused projection-stale offset; removed. */
+  /* PHASE-B4: Force MapLibre to recompute projection. While #gpsViewScreen is
+     display:none the map's container has 0x0 size; on reveal MapLibre still
+     thinks it's that size until resize() is called. Stale projection is the
+     root cause of: aim reticle offset, click->lngLat returning wrong coords
+     (which made lie detection appear to misfire on correctly-tapped polygons).
+     Microtask delay lets CSS layout settle after display:flex. */
+  setTimeout(function() {
+    if (lr._mapInstance && lr._mapInstance._map
+        && typeof lr._mapInstance._map.resize === 'function') {
+      try { lr._mapInstance._map.resize(); } catch(e) {}
+    }
+  }, 50);
+  /* PHASE-B3: Set line baseline from last shot endLngLat (or null = tee fallback). */
   _gvRefreshLineStart();
   /* Start render loop */
   _gpsViewScheduleRender(true);
@@ -636,31 +645,55 @@ function gpsViewGpsToggle() {
   if (!lr) return;
   var goingOn = !lr._gpsOn;
   if (goingOn) {
-    if (typeof window._lrMapGpsPromptIfNeeded === 'function'
-        && !window._lrMapGpsPromptIfNeeded()) return;
-    if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
-      try { lr._mapInstance.startGps(); } catch(e) {}
+    /* PHASE-B4: Always prompt on explicit user toggle. Bypass the round-level
+       _gpsPrompted gate (which is for auto-restarts only). Browser native prompt
+       fires for the user; permission cached at browser level after first accept. */
+    if (!('geolocation' in navigator)) {
+      _gvShowToast('GPS not available on this device', 'warn');
+      return;
     }
-    lr._gpsOn = true;
-  } else {
-    /* Turning GPS off: tracker can't function without GPS, so cascade off. */
-    if (lr._trackerOn) {
-      lr._trackerOn = false;
-      if (typeof window.stCancel === 'function') window.stCancel();
-      if (lr._mapInstance) {
-        if (typeof lr._mapInstance.setAimLocked === 'function') {
-          try { lr._mapInstance.setAimLocked(false); } catch(e) {}
+    /* Trigger native permission prompt explicitly via getCurrentPosition. If user
+       denies, do not enable. If granted, proceed to start watch. */
+    navigator.geolocation.getCurrentPosition(
+      function(/*pos*/) {
+        if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
+          try { lr._mapInstance.startGps(); } catch(e) {}
         }
-        if (typeof lr._mapInstance.clearDispersionLines === 'function') {
-          try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
-        }
+        lr._gpsOn = true;
+        if (typeof window._lrPersist === 'function') window._lrPersist();
+        gpsViewRender();
+      },
+      function(/*err*/) {
+        _gvShowToast('GPS permission denied', 'warn');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+    return;  /* state flipped only on success callback */
+  }
+  /* Turning OFF: stop BOTH watches (MapView's AND gps-view's own). */
+  if (lr._trackerOn) {
+    lr._trackerOn = false;
+    if (typeof window.stCancel === 'function') window.stCancel();
+    if (lr._mapInstance) {
+      if (typeof lr._mapInstance.setAimLocked === 'function') {
+        try { lr._mapInstance.setAimLocked(false); } catch(e) {}
+      }
+      if (typeof lr._mapInstance.clearDispersionLines === 'function') {
+        try { lr._mapInstance.clearDispersionLines(); } catch(e) {}
       }
     }
-    if (lr._mapInstance && typeof lr._mapInstance.stopGps === 'function') {
-      try { lr._mapInstance.stopGps(); } catch(e) {}
-    }
-    lr._gpsOn = false;
   }
+  if (lr._mapInstance && typeof lr._mapInstance.stopGps === 'function') {
+    try { lr._mapInstance.stopGps(); } catch(e) {}
+  }
+  /* PHASE-B4: stop gps-view's own watch too (started in gpsViewOpen as fallback
+     when MapView wasn't running its own). Not stopping this is why GPS appeared
+     to stay on even after toggle off. */
+  if (_gpsWatchId != null) {
+    try { geomStopGpsWatch(_gpsWatchId); } catch(e) {}
+    _gpsWatchId = null;
+  }
+  lr._gpsOn = false;
   if (typeof window._lrPersist === 'function') window._lrPersist();
   gpsViewRender();
 }
@@ -675,19 +708,26 @@ function gpsViewTrackingToggle() {
   if (!lr) return;
   var goingOn = !lr._trackerOn;
   if (goingOn) {
-    /* Ensure GPS is running. _lrMapGpsToggle already wraps the prompt + start path
-       and handles the case where _gpsOn is already true (no-op). We invoke its core
-       behaviour inline to avoid the extra lrRenderHole + auto-open recursion. */
     if (!lr._gpsOn) {
-      if (typeof window._lrMapGpsPromptIfNeeded === 'function'
-          && !window._lrMapGpsPromptIfNeeded()) {
-        /* User declined the prompt; do not enable tracker either. */
+      /* PHASE-B4: Direct browser-native prompt; honor user agreement. */
+      if (!('geolocation' in navigator)) {
+        _gvShowToast('GPS not available on this device', 'warn');
         return;
       }
-      if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
-        try { lr._mapInstance.startGps(); } catch(e) {}
-      }
-      lr._gpsOn = true;
+      navigator.geolocation.getCurrentPosition(
+        function(/*pos*/) {
+          if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
+            try { lr._mapInstance.startGps(); } catch(e) {}
+          }
+          lr._gpsOn = true;
+          lr._trackerOn = true;
+          if (typeof window._lrPersist === 'function') window._lrPersist();
+          gpsViewRender();
+        },
+        function(/*err*/) { _gvShowToast('GPS permission denied; tracker needs GPS', 'warn'); },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+      return;
     }
     lr._trackerOn = true;
   } else {
@@ -1041,13 +1081,126 @@ function _renderModeBanner() {
       +   'display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch">'
       + chips + '</div>';
   }
+  /* PHASE-B4: Lie quick-correct row -- shown after a shot lands (not armed) so user
+     can correct auto-detected lie when polygon mapping is wrong. Tapping writes via
+     stOverrideLie which mutates the most-recent shot in place. */
+  var lieChips = '';
+  if (!armed && s && Array.isArray(s.shots) && s.shots.length) {
+    var last = s.shots[s.shots.length - 1];
+    var lies = ['fairway','rough','sand','recovery','green','tee'];
+    var lieRow = lies.map(function(L) {
+      var active = last.lie === L;
+      return '<button class="btn ' + (active ? 'pri' : 'sec') + '" '
+        + 'style="font-size:.6rem;padding:3px 9px;border-radius:12px;flex:0 0 auto" '
+        + 'onclick="gpsViewCorrectLie(\'' + L + '\')">' + L + '</button>';
+    }).join('');
+    lieChips =
+        '<div style="padding:5px 10px 7px;background:var(--bg);border-bottom:1px solid var(--br);'
+      +   'display:flex;gap:5px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch">'
+      +   '<span style="font-size:.6rem;color:var(--tx3);flex:0 0 auto">Lie:</span>'
+      + lieRow
+      + '</div>';
+  }
   el.style.display = '';
   el.innerHTML =
       '<div style="padding:6px 12px;background:' + bg + ';'
     +   'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
     +   'color:var(--tx);text-align:center;letter-spacing:.02em">'
     +   msg + '</div>'
-    + clubChips;
+    + clubChips + lieChips;
+}
+
+  /* PHASE-B4: Flight pattern chip row -- shown when armed AND club chosen.
+     Persists onto rec.flight_path via stCloseShot reading lr._shotArmed.flight_path. */
+  var flightChips = '';
+  if (armed && armed.club) {
+    var paths = ['straight','draw','fade','hook','slice','push','pull'];
+    var cur = armed.flight_path || '';
+    var pRow = paths.map(function(p) {
+      var on = cur === p;
+      return '<button class="btn ' + (on ? 'pri' : 'sec') + '" '
+        + 'style="font-size:.6rem;padding:3px 9px;border-radius:12px;flex:0 0 auto" '
+        + 'onclick="gpsViewSetArmedFlight(\'' + p + '\')">' + p + '</button>';
+    }).join('');
+    flightChips =
+        '<div style="padding:5px 10px 7px;background:var(--bg);border-bottom:1px solid var(--br);'
+      +   'display:flex;gap:5px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch">'
+      +   '<span style="font-size:.6rem;color:var(--tx3);flex:0 0 auto">Shape:</span>'
+      + pRow + '</div>';
+  }
+  /* PHASE-B4: Penalty prompt -- shown after a shot lands in hazard (lie === 'recovery'
+     for water, or 'sand' for bunker) when penalty_strokes still 0. Tap to apply. */
+  var penaltyChips = '';
+  if (!armed && s && Array.isArray(s.shots) && s.shots.length) {
+    var lst = s.shots[s.shots.length - 1];
+    if (lst && (lst.lie === 'recovery' || lst.lie === 'sand') && !lst.penalty_strokes && !lst._penaltyDismissed) {
+      penaltyChips =
+          '<div style="padding:5px 10px 7px;background:var(--ac3);border-bottom:1px solid var(--br);'
+        +   'display:flex;gap:5px;align-items:center">'
+        +   '<span style="font-size:.62rem;color:var(--tx);font-weight:600;flex:0 0 auto">Penalty?</span>'
+        +   '<button class="btn sec" style="font-size:.6rem;padding:3px 9px;border-radius:12px" onclick="gpsViewApplyPenalty(0)">No</button>'
+        +   '<button class="btn sec" style="font-size:.6rem;padding:3px 9px;border-radius:12px" onclick="gpsViewApplyPenalty(1)">+1</button>'
+        +   '<button class="btn sec" style="font-size:.6rem;padding:3px 9px;border-radius:12px" onclick="gpsViewApplyPenalty(2)">+2</button>'
+        + '</div>';
+    }
+  }
+  /* PHASE-B4: End-hole button -- always available when shots exist. Calls existing
+     lrCompleteHole. Putt-snap remains primary path; this is the explicit fallback. */
+  var endHole = '';
+  if (s && Array.isArray(s.shots) && s.shots.length) {
+    endHole =
+        '<div style="padding:4px 10px;background:var(--bg);display:flex;justify-content:flex-end">'
+      +   '<button class="btn sec" style="font-size:.6rem;padding:3px 12px;border-radius:12px" '
+      +     'onclick="gpsViewEndHole()">End hole</button>'
+      + '</div>';
+  }
+  el.style.display = '';
+  el.innerHTML =
+      '<div style="padding:6px 12px;background:' + bg + ';'
+    +   'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
+    +   'color:var(--tx);text-align:center;letter-spacing:.02em">'
+    +   msg + '</div>'
+    + clubChips + flightChips + lieChips + penaltyChips + endHole;
+}
+
+/* PHASE-B4: Correct the auto-detected lie of the most-recent shot. */
+function gpsViewCorrectLie(lie) {
+  if (typeof window.stOverrideLie === 'function') window.stOverrideLie(lie);
+  if (lie === 'green') _puttMode = true;
+  gpsViewRender();
+}
+
+/* PHASE-B4: Set flight pattern on the armed shot. Lands in rec.flight_path on close. */
+function gpsViewSetArmedFlight(p) {
+  var lr = window.lrState;
+  if (!lr || !lr._shotArmed) return;
+  lr._shotArmed.flight_path = p || '';
+  if (typeof window._lrPersist === 'function') window._lrPersist();
+  gpsViewRender();
+}
+
+/* PHASE-B4: Apply (or dismiss) penalty on the most-recent shot. 0 = dismiss prompt. */
+function gpsViewApplyPenalty(strokes) {
+  var lr = window.lrState;
+  if (!lr) return;
+  var s = lr.players[lr.curPlayer].scores[lr.curHole];
+  if (!s || !Array.isArray(s.shots) || !s.shots.length) return;
+  var last = s.shots[s.shots.length - 1];
+  if (strokes > 0) {
+    if (typeof window.stApplyPenalty === 'function') window.stApplyPenalty(strokes, false);
+  } else {
+    last._penaltyDismissed = true;  /* hide the prompt without applying */
+    if (typeof window._lrPersist === 'function') window._lrPersist();
+  }
+  gpsViewRender();
+}
+
+/* PHASE-B4: Explicit end-hole. Calls live-round's lrCompleteHole which handles
+   FIR/GIR derivation, putts folding, score finalisation, and hole advance. */
+function gpsViewEndHole() {
+  if (typeof window.lrCompleteHole === 'function') {
+    try { window.lrCompleteHole(); } catch(e) {}
+  }
 }
 
 /* PHASE-B3: Assign a club to the armed shot. Mutates lrState._shotArmed.club
@@ -1188,7 +1341,7 @@ function gpsViewOnMapDoubleTap(lngLat) {
 Object.assign(window, {
   gpsViewOpen, gpsViewClose, gpsViewToggle, gpsViewRender,
   gpsViewToggleBanner, gpsViewToggleMapMode, gpsViewToggleTracker, gpsViewTrackingToggle, gpsViewGpsToggle,
-  gpsViewSetArmedClub,
+  gpsViewSetArmedClub, gpsViewCorrectLie, gpsViewSetArmedFlight, gpsViewApplyPenalty, gpsViewEndHole,
   gpsViewOnMapTap, gpsViewOnMapDoubleTap, gpsViewLogPutt, gpsViewOnGreenPrompt,
   gpsViewCancelShot,
   lrxYardsToGreen
