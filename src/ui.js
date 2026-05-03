@@ -1409,7 +1409,7 @@ Object.assign(window, {
   showTabFromProfile,
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
-  updateCourseDropdowns, renderAll, serialise,
+  updateCourseDropdowns, renderAll, 
   showDisclaimer, acceptDisclaimer, confirmClearAll, signOut, wipeEnvironment, getJsonState,
   showConfirmModal,
   updateChecklist, dismissChecklist, showFirstRunCard,
