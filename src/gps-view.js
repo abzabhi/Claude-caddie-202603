@@ -1331,6 +1331,7 @@ function _renderModeBanner() {
 //   el.style.display = '';
 //   el.innerHTML = '<div...>' + msg + '</div>' + clubChips + flightChips + lieChips + penaltyChips + endHole;
 // }
+*/
 
 /* PHASE-B4: Correct the auto-detected lie of the most-recent shot. */
 function gpsViewCorrectLie(lie) {
@@ -1434,6 +1435,7 @@ function _renderShotChip() {
 //     +   'onclick="gpsViewCancelShot()">Cancel shot</button>'
 //     + '</div>';
 // }
+*/
 
 function _renderPuttBar() {
   var el = document.getElementById('gpsPuttBar');
