@@ -1,4 +1,4 @@
-import { serialise, save, bag, courses, rounds, history } from './store.js';
+import { serialise, save, bag, courses, rounds, history, wipeEnvironment } from './store.js';
 
 const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
 const APP_LATEST_FILE = 'golf-caddie-latest.html';
@@ -330,11 +330,8 @@ async function signOutSync() {
 }
 
 function _doSignOut() {
-  localStorage.removeItem('vc:kvId');
-  localStorage.removeItem('vc:kvLastSync');
-  localStorage.removeItem('vc:kvLastSyncTs');
-  localStorage.removeItem('vc:kvPendingPush');
   sessionStorage.removeItem('vc:kvPass');
+  wipeEnvironment(); /* Task1 -- wipes all vc:/gordy: localStorage keys + clears RAM */
   renderProfileSync();
   closeProfileDropdown();
   renderDropdown();
