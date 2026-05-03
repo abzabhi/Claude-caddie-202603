@@ -1101,15 +1101,6 @@ function _renderModeBanner() {
       + lieRow
       + '</div>';
   }
-  el.style.display = '';
-  el.innerHTML =
-      '<div style="padding:6px 12px;background:' + bg + ';'
-    +   'border-bottom:1px solid var(--br);font-size:.7rem;font-weight:600;'
-    +   'color:var(--tx);text-align:center;letter-spacing:.02em">'
-    +   msg + '</div>'
-    + clubChips + lieChips;
-}
-
   /* PHASE-B4: Flight pattern chip row -- shown when armed AND club chosen.
      Persists onto rec.flight_path via stCloseShot reading lr._shotArmed.flight_path. */
   var flightChips = '';
@@ -1128,8 +1119,7 @@ function _renderModeBanner() {
       +   '<span style="font-size:.6rem;color:var(--tx3);flex:0 0 auto">Shape:</span>'
       + pRow + '</div>';
   }
-  /* PHASE-B4: Penalty prompt -- shown after a shot lands in hazard (lie === 'recovery'
-     for water, or 'sand' for bunker) when penalty_strokes still 0. Tap to apply. */
+  /* PHASE-B4: Penalty prompt -- shown after a shot lands in hazard. */
   var penaltyChips = '';
   if (!armed && s && Array.isArray(s.shots) && s.shots.length) {
     var lst = s.shots[s.shots.length - 1];
@@ -1144,8 +1134,7 @@ function _renderModeBanner() {
         + '</div>';
     }
   }
-  /* PHASE-B4: End-hole button -- always available when shots exist. Calls existing
-     lrCompleteHole. Putt-snap remains primary path; this is the explicit fallback. */
+  /* PHASE-B4: End-hole button -- always available when shots exist. */
   var endHole = '';
   if (s && Array.isArray(s.shots) && s.shots.length) {
     endHole =
