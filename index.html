@@ -1518,8 +1518,65 @@
               <button class="btn sec" style="flex:1;font-size:.65rem" data-action="gir-prompt" data-val="null">Skip</button>
             </div>
           </div>
-          <!-- Inner content — shot form + shot log + caddie (still string-built, deferred to 4c-ii) -->
-          <div id="lrAdvancedInner"></div>
+          <!-- Inner content — shot form (string-built, 4c-ii partial) -->
+          <div id="lrAdvancedInner">
+            <!-- Shot log — populated by _lrRenderShotLog() -->
+            <div id="lrShotLog" style="display:none;margin-bottom:10px">
+              <div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:4px">Shot Log</div>
+              <div id="lrShotLogRows"></div>
+            </div>
+            <!-- Shot form — static structure, populated by _lrRenderShotForm() -->
+            <div id="lrShotFormInner" style="display:none">
+              <div class="card" style="margin-bottom:8px">
+                <div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">
+                  <span id="lrShotLabel" style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">Shot 1</span>
+                  <span id="lrShotSgLine" style="font-size:.62rem;color:var(--tx3);display:none"></span>
+                </div>
+                <!-- Mode buttons -->
+                <div style="display:flex;gap:6px;margin-bottom:10px">
+                  <button class="implied-tog" id="lrModeBtnStandard" style="flex:1" data-action="set-shot-mode" data-mode="standard">Standard</button>
+                  <button class="implied-tog" id="lrModeBtnApproach" style="flex:1" data-action="set-shot-mode" data-mode="approach">Approach</button>
+                  <button class="implied-tog" id="lrModeBtnOnGreen" style="flex:1" data-action="set-shot-mode" data-mode="on_green">On Green</button>
+                </div>
+                <!-- Distance -->
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Distance to Hole (yds)</div>
+                  <input id="lrShotDistInput" type="number" inputmode="numeric" class="field"
+                    style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none">
+                </div>
+                <!-- Club select -->
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Club</div>
+                  <select id="lrShotClubSelect" class="field"
+                    style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none">
+                    <option value="">-- Club --</option>
+                  </select>
+                </div>
+                <!-- Result Zone (SVG injected here) -->
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Result Zone</div>
+                  <div id="lrRadialSvgWrap" style="display:flex;justify-content:center"></div>
+                  <div id="lrZoneLabel" style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">—</div>
+                </div>
+                <!-- Lie buttons -->
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Lie</div>
+                  <div id="lrLieBtns" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px"></div>
+                </div>
+                <!-- Flight path buttons -->
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Flight Path</div>
+                  <div style="display:flex;gap:6px;margin-top:4px">
+                    <button class="implied-tog" id="lrFpStraight" style="flex:1" data-action="set-flight-path" data-fp="straight">Straight</button>
+                    <button class="implied-tog" id="lrFpLtr"      style="flex:1" data-action="set-flight-path" data-fp="left-to-right">L→R</button>
+                    <button class="implied-tog" id="lrFpRtl"      style="flex:1" data-action="set-flight-path" data-fp="right-to-left">R→L</button>
+                  </div>
+                </div>
+                <!-- Record Shot button -->
+                <button class="rbtn" style="width:100%" id="lrRecordShotBtn" data-action="record-shot">Record Shot</button>
+              </div>
+            </div>
+          </div>
           <!-- GIR/FIR toggles — shown when shots.length > 0 -->
           <div id="lrGirFirBlock" style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
             <div class="card" style="margin-bottom:0">
@@ -1552,8 +1609,28 @@
           <div id="lrCompleteHoleRow" style="display:none">
             <button class="btn sec" style="width:100%;margin-top:8px" data-action="complete-hole">✓ Hole Complete</button>
           </div>
-          <!-- Caddie companion — string-built, rendered into this container -->
-          <div id="lrCaddieWrapper"></div>
+          <!-- Caddie companion — static structure, populated by _lrCaddieCompanionRender() -->
+          <div id="lrCaddieWrapper">
+            <div style="margin-top:8px;border-top:1px solid var(--br);padding-top:8px">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">🤖 Caddie Session</span>
+                <div id="lrCaddieSessionPicker" style="flex:1;min-width:0"></div>
+              </div>
+            </div>
+            <div id="lrCaddieTeeWarning" style="display:none;font-size:.6rem;color:var(--danger);padding:4px 0"></div>
+            <div id="lrCaddieBagBlock" style="display:none;border:1px solid var(--br);border-radius:6px;margin-top:8px;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;cursor:pointer;background:var(--sf)" data-action="toggle-session-bag">
+                <span style="font-size:.62rem;font-weight:600;color:var(--tx2)">🍎 Optimised Bag</span>
+                <span id="lrCaddieBagArrow" style="font-size:.6rem;color:var(--tx3)">▼</span>
+              </div>
+              <div id="lrCaddieBagRows" style="display:none;padding:6px 10px 8px"></div>
+            </div>
+            <div id="lrCaddieAdviceBlock" style="display:none;border:1px solid var(--ac2);border-radius:6px;margin-top:8px;padding:8px 10px;background:var(--sf)">
+              <div id="lrCaddieAdviceMeta" style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ac2);margin-bottom:4px"></div>
+              <div id="lrCaddieAdviceStrokes" style="font-size:.65rem;font-weight:600;color:var(--tx);margin-bottom:3px;display:none"></div>
+              <div id="lrCaddieAdviceText" style="font-size:.62rem;color:var(--tx2);line-height:1.45;display:none"></div>
+            </div>
+          </div>
         </div>
       </div>
       <div id="lrTallyStripWrapper"></div>
