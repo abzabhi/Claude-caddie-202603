@@ -1500,7 +1500,62 @@
           <textarea id="lrNoteInput" data-action="note-input" style="display:none;width:100%;background:var(--bg);border:1px solid var(--gr2);border-radius:6px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:10px;outline:none;resize:none;margin-top:8px;min-height:70px"></textarea>
         </div>
       </div>
-      <div id="lrAdvancedWrapper"></div>
+      <div id="lrAdvancedWrapper">
+        <!-- Collapsible header -->
+        <div class="collapsible-hdr" id="lrAdvancedHdr" data-action="toggle-advanced"
+          style="cursor:pointer;padding:10px 0;font-size:.72rem;font-family:'DM Mono',monospace;
+          color:var(--tx3);display:flex;justify-content:space-between;border-top:1px solid var(--br);margin-top:10px">
+          <span>Advanced Mode</span><span id="lrAdvancedArrow">▼</span>
+        </div>
+        <!-- Body — hidden when collapsed -->
+        <div id="lrAdvancedBody" style="display:none;padding-bottom:12px">
+          <!-- GIR prompt block — shown only when _lrGirPromptPending -->
+          <div id="lrGirPromptBlock" style="display:none" class="card" style="margin-bottom:8px">
+            <div style="font-size:.68rem;margin-bottom:10px">Did you reach the green?</div>
+            <div style="display:flex;gap:8px">
+              <button class="lr-tog" style="flex:1" data-action="gir-prompt" data-val="true">✓ Yes</button>
+              <button class="lr-tog" style="flex:1" data-action="gir-prompt" data-val="false">✗ No</button>
+              <button class="btn sec" style="flex:1;font-size:.65rem" data-action="gir-prompt" data-val="null">Skip</button>
+            </div>
+          </div>
+          <!-- Inner content — shot form + shot log + caddie (still string-built, deferred to 4c-ii) -->
+          <div id="lrAdvancedInner"></div>
+          <!-- GIR/FIR toggles — shown when shots.length > 0 -->
+          <div id="lrGirFirBlock" style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+            <div class="card" style="margin-bottom:0">
+              <div class="card-title">GIR</div>
+              <div style="display:flex;gap:6px;margin-top:4px">
+                <button class="lr-tog" id="lrAdvGirYes" style="flex:1" data-action="gir-adv" data-val="true">✓</button>
+                <button class="lr-tog" id="lrAdvGirNo"  style="flex:1" data-action="gir-adv" data-val="false">✗</button>
+              </div>
+            </div>
+            <div class="card" style="margin-bottom:0" id="lrFirCard">
+              <div class="card-title">FIR</div>
+              <div style="display:flex;gap:6px;margin-top:4px">
+                <button class="lr-tog" id="lrAdvFirYes" style="flex:1" data-action="fir-adv" data-val="true">✓</button>
+                <button class="lr-tog" id="lrAdvFirNo"  style="flex:1" data-action="fir-adv" data-val="false">✗</button>
+              </div>
+            </div>
+          </div>
+          <!-- OB block -->
+          <div id="lrObBlock" style="display:none;margin-bottom:10px">
+            <div id="lrObToggle">
+              <button class="implied-tog" id="lrObBtn" data-action="ob-toggle">Penalty: No</button>
+            </div>
+            <div id="lrObConfirmBlock" style="display:none;padding:8px;background:var(--gr2);border-radius:6px;font-size:.68rem">
+              Penalty — add 1 penalty stroke?
+              <button class="btn" style="font-size:.62rem;padding:2px 8px;margin-left:8px;background:var(--danger);color:#fff;border-color:var(--danger)" data-action="ob-confirm" data-val="true">Yes</button>
+              <button class="btn sec" style="font-size:.62rem;padding:2px 8px;margin-left:4px" data-action="ob-confirm" data-val="false">No</button>
+            </div>
+          </div>
+          <!-- Complete Hole / Record Shot buttons -->
+          <div id="lrCompleteHoleRow" style="display:none">
+            <button class="btn sec" style="width:100%;margin-top:8px" data-action="complete-hole">✓ Hole Complete</button>
+          </div>
+          <!-- Caddie companion — string-built, rendered into this container -->
+          <div id="lrCaddieWrapper"></div>
+        </div>
+      </div>
       <div id="lrTallyStripWrapper"></div>
     </div>
     <div class="lr-bottom">
