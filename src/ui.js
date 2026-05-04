@@ -976,8 +976,9 @@ function renderDropdown() {
   const sob=el('ddSignOutBlock');
   if(sob) sob.innerHTML=
     /* SIGNOUT-FIX -- single sign-out button. signOut now handles push-before-clear
-       internally when online + connected. signOutSync remains exposed for back-compat. */
-    `<button class="btn sec" style="width:100%;font-size:.68rem" onclick="signOut()">\u21A9 Sign out</button>`;
+       internally when online + connected. signOutSync remains exposed for back-compat.
+       SIGNOUT-WARN -- danger styling to match destructive action. */
+    `<button class="btn danger" style="width:100%;font-size:.68rem" onclick="signOut()">\u21A9 Sign out</button>`;
 }
 
 // -- Home course helpers ------------------------------------------------------
@@ -1081,8 +1082,18 @@ function confirmClearAll() {
 /* SIGNOUT-FIX -- full identity reset on sign-out.
    Clears all user-scoped local + session data so the next user/guest sees a clean slate.
    Preserves device-level keys: disclaimer, PWA prompt, gist content caches, app version,
-   biometric credential pointers (per-syncId, not per-session). */
-async function signOut() {
+   biometric credential pointers (per-syncId, not per-session).
+   SIGNOUT-WARN -- now wrapped in confirm modal with danger styling. */
+function signOut() {
+  showConfirmModal(
+    'Sign out?',
+    'Sign out and clear data from this device? Your data is safe in the cloud if synced. Local-only data will be lost.',
+    function() { _doSignOut(); },
+    true
+  );
+}
+
+async function _doSignOut() {
   // If connected + unlocked + online, attempt one final push so unsaved data syncs.
   // Failure is non-fatal -- queued push flag will retry on reconnect.
   try {
