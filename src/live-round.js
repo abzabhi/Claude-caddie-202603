@@ -368,8 +368,11 @@ blk.className = 'lr-hole-blk '+pc;
 const nEl = document.getElementById('lrHoleN');
 nEl.className = 'lr-hole-n '+pc;
 nEl.textContent = h.n;
-document.getElementById('lrHoleInfo').innerHTML =
-  `Par ${h.par}${h.yards?' \u00B7 '+h.yards+' yds':''} <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">\u270E</span>`;
+document.getElementById('lrHolePar').textContent = h.par;
+const ydsEl = document.getElementById('lrHoleYds');
+const ydsSep = document.getElementById('lrHoleYdsSep');
+if (h.yards) { ydsEl.textContent = h.yards; ydsSep.style.display = ''; }
+else { ydsEl.textContent = ''; ydsSep.style.display = 'none'; }
 document.getElementById('lrHoleSi').textContent =
   h.handicap ? `SI ${h.handicap}` : '';
 // Par picker \u2014 hide on hole change, highlight active par
@@ -410,9 +413,15 @@ document.getElementById('lrRunningLbl').textContent =
 const tabsEl = document.getElementById('lrPlayerTabs');
 if(lrState.players.length > 1 && !shared) {
   tabsEl.style.display = 'flex';
-  tabsEl.innerHTML = lrState.players.map((p,i)=>
-    `<button class="lr-player-tab${i===pi?' active':''}" onclick="lrSetPlayer(${i})">${escHtml(p.name.split(' ')[0]||'P'+(i+1))}${p.isMe?' \u2605':''}</button>`
-  ).join('');
+  const tpl = document.getElementById('lrPlayerTabTpl');
+  tabsEl.textContent = '';
+  lrState.players.forEach(function(p, i) {
+    const btn = tpl.content.cloneNode(true).querySelector('button');
+    btn.textContent = (p.name.split(' ')[0] || 'P'+(i+1)) + (p.isMe ? ' \u2605' : '');
+    btn.className = 'lr-player-tab' + (i === pi ? ' active' : '');
+    btn.onclick = function() { lrSetPlayer(i); };
+    tabsEl.appendChild(btn);
+  });
 } else {
   tabsEl.style.display = 'none';
 }
@@ -435,33 +444,24 @@ const scroll = document.getElementById('lrScroll');
 // }
 */
 
+const scoreWrapper = document.getElementById('lrScoreBlockWrapper');
+const advWrapper   = document.getElementById('lrAdvancedWrapper');
+const tallyWrapper = document.getElementById('lrTallyStripWrapper');
+
 if(shared) {
-  // Scramble / foursomes: one score for the team (use player 0)
-  const ts = lrState.players[0].scores[lrState.curHole];
-  scroll.innerHTML = lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
+  scoreWrapper.innerHTML = lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
 } else {
-  scroll.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
+  scoreWrapper.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
 }
 
-/* PHASE-A: Resume-map pill block deleted. Map entry now via the always-visible
-   bottom-nav Map button on lrHoleScreen. Original block preserved as comment:
-// if (_lrMapGeo && lrState && !lrState._mapOpen) {
-//   scroll.innerHTML =
-//       '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
-//     +   '<button class="btn" style="font-size:.6rem;padding:4px 12px;border-radius:16px" '
-//     +     'onclick="_lrMapResume()">\uD83D\uDDFA Resume map</button>'
-//     + '</div>' + scroll.innerHTML;
-// }
-*/
-
 /* Phase 4: advanced mode collapsible */
-scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
+advWrapper.innerHTML = _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
 
 /* Caddie session companion */
-scroll.innerHTML += _lrCaddieCompanionHtml();
+advWrapper.innerHTML += _lrCaddieCompanionHtml();
 
 // Tally strip
-scroll.innerHTML += lrTallyStrip();
+tallyWrapper.innerHTML = lrTallyStrip();
 
 // Nav
 document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
