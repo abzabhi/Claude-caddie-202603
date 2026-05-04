@@ -1477,10 +1477,37 @@
  <div id="gpsViewScreen" style="display:none;flex-direction:column;height:100%;background:var(--bg);">
     <div id="gpsBanner" class="lrx-banner-host" data-collapsed="false"></div>
     <div id="gpsModeBanner" style="display:none"></div>
-    <div id="gpsMapWrap" style="flex:1;min-height:200px;background:var(--bg2);position:relative;overflow:hidden"></div>    <div id="gpsYards"></div>
-    <div id="gpsHazards" style="max-height:140px;overflow-y:auto"></div>
+    <div id="gpsMapWrap" style="flex:1;min-height:200px;background:var(--bg2);position:relative;overflow:hidden"></div>
+    <div id="gpsYards">
+      <div style="text-align:center;padding:14px 8px 10px">
+        <div id="gpsDistVal" style="font-family:'DM Mono',monospace;font-size:2.4rem;font-weight:700;color:var(--tx);line-height:1">—</div>
+        <div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">ball to pin</div>
+        <div id="gpsWalkRow" style="display:none;font-size:.7rem;color:var(--tx2);margin-top:5px;font-family:'DM Mono',monospace">
+          <span id="gpsWalkVal"></span><span style="font-size:.55rem;color:var(--tx3);margin-left:3px">yds walking</span>
+        </div>
+      </div>
+    </div>
+    <div id="gpsHazards" style="max-height:140px;overflow-y:auto">
+      <div style="padding:6px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">To Aim</div>
+          <div id="gpsHazColToAim"></div>
+        </div>
+        <div>
+          <div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Aim → Green</div>
+          <div id="gpsHazColAimGreen"></div>
+        </div>
+      </div>
+    </div>
     <div id="gpsShotChip" style="display:none"></div>
-    <div id="gpsPuttBar" style="display:none"></div>
+    <div id="gpsPuttBar" style="display:none">
+      <div style="padding:8px 12px;background:var(--sf);border-top:1px solid var(--br);display:flex;align-items:center;gap:10px">
+        <span style="font-size:.7rem;color:var(--tx)">Putts</span>
+        <button class="lr-step-btn sm" onclick="gpsViewLogPutt(-1)">−</button>
+        <span id="gpsPuttCount" style="font-family:'DM Mono',monospace;font-weight:700;color:var(--tx);min-width:18px;text-align:center">0</span>
+        <button class="lr-step-btn sm" onclick="gpsViewLogPutt(1)">+</button>
+      </div>
+    </div>
     <div class="lr-bottom">
       <button class="lr-nav-btn" onclick="lrGoHole(-1)"><span class="lr-nav-icon">←</span><span>Prev</span></button>
       <div class="lr-nav-sep"></div>
