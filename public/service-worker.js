@@ -1,5 +1,5 @@
-// gordy-v4 — increment this string on every index.html or src/ update to bust cache for installed PWA users
-var CACHE = 'gordy-v4';
+// gordy-v6 — increment this string on every index.html or src/ update to bust cache for installed PWA users
+var CACHE = 'gordy-v6';
 
 var SHELL = [
   '/',
@@ -23,7 +23,8 @@ var SHELL = [
   '/src/caddie.js',
   '/src/ui.js',
   '/src/geomap.js',
-  '/src/gps-view.js'
+  '/src/gps-view.js',
+  '/src/shot-tracker.js'
 ];
 
 // These URLs always require live network — never serve from cache
@@ -68,7 +69,8 @@ self.addEventListener('fetch', function(e) {
   // Determine strategy: Network-First for HTML and JS, Cache-First for everything else
   var isHtmlOrJs = url.endsWith('/') ||
                    url.endsWith('/index.html') ||
-                   url.endsWith('.js');
+                   url.endsWith('.js') ||
+                   url.endsWith('.css');
 
   if (isHtmlOrJs) {
     // Network-First: always try network, fall back to cache
