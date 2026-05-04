@@ -1,5 +1,4 @@
-import { save, bag, courses, rounds, history, wipeEnvironment } from './store.js';
-
+import { save, bag, courses, rounds, history, wipeEnvironment,getJsonState } from './store.js';
 const MASTER_GIST_RAW = 'https://gist.githubusercontent.com/abzabhi/e91a5f6d85e17ab75b1defaa5fc9dab9/raw/';
 const APP_LATEST_FILE = 'golf-caddie-latest.html';
 
