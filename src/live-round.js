@@ -1668,28 +1668,15 @@ function _lrClubOptions(selectedId) {
   return opts;
 }
 
-function _lrShotLogHtml(shots) {
-  if (!shots || !shots.length) return '';
-  var rows = shots.map(function(sh, i) {
-    var zone   = sh.radial_ring ? _lrZoneLabel(sh.radial_ring, sh.radial_segment) : '';
-    var obTag  = sh.is_ob
-      ? ' <span style="color:var(--danger);font-size:.6rem">Penalty+' + (sh.penalty_strokes || 0) + '</span>'
-      : '';
-    var sgTag = (sh.sg !== null && sh.sg !== undefined)
-      ? ' <span style="color:' + _lrSGColor(sh.sg) + ';font-size:.6rem">\u00B7 SG: ' + _lrFmtSG(sh.sg) + '</span>'
-      : '';
-    var editBtn = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:4px"'
-      + ' onclick="lrEditShot(' + i + ')">Edit</button>';
-    var delBtn  = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:2px;color:var(--danger)"'
-      + ' onclick="lrDeleteShot(' + i + ')">\u2715</button>';
-    var confirmHtml = (_lrDeleteConfirmIdx === i)
-      ? '<div style="margin-top:4px;font-size:.6rem;display:flex;gap:6px;align-items:center">'
-          + '<span style="color:var(--danger)">Delete this shot?</span>'
-          + '<button class="btn" style="background:var(--danger);color:#fff;border-color:var(--danger);'
-          + 'font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotConfirm(' + i + ')">Yes</button>'
-          + '<button class="btn sec" style="font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotCancel()">No</button>'
-          + '</div>'
-      : '';
+function _lrRenderShotLog(shots) {
+  var container = document.getElementById('lrShotLog');
+  var rowsEl    = document.getElementById('lrShotLogRows');
+  if (!container || !rowsEl) return;
+  if (!shots || !shots.length) { container.style.display = 'none'; return; }
+  container.style.display = '';
+  rowsEl.textContent = '';
+  shots.forEach(function(sh, i) {
+    var zone = sh.radial_ring ? _lrZoneLabel(sh.radial_ring, sh.radial_segment) : '';
     var clubDisplay = (function() {
       var c = bag && bag.find(function(x) { return x.id === sh.clubId; });
       return c ? [c.type, c.identifier].filter(Boolean).join(' ') : '\u2014';
@@ -1697,9 +1684,6 @@ function _lrShotLogHtml(shots) {
     var parts = ['Shot ' + (i + 1), clubDisplay, sh.shot_mode, sh.lie || '\u2014'];
     if (zone) parts.push(zone);
     if (sh.flight_path) parts.push(sh.flight_path);
-    /* PHASE-B2: Surface GPS-tracked fields when present. gps_flight records have
-       distance, distance-to-pin, and dispersion that the radial fields don't.
-       PHASE-B3: dispersion now includes long/short component (vs aim) alongside L/R. */
     if (sh.gps_flight) {
       var gf = sh.gps_flight;
       if (gf.distanceYds) parts.push(Math.round(gf.distanceYds) + 'y');
@@ -1712,22 +1696,74 @@ function _lrShotLogHtml(shots) {
         }
       } catch(e) {}
       var vsAimY = (gf.dispersionLong || 0) - aimDistY;
-      if (Math.abs(vsAimY) >= 1) {
-        parts.push(Math.round(Math.abs(vsAimY)) + 'y ' + (vsAimY > 0 ? 'long' : 'short'));
-      }
-      if (gf.dispersionLat && Math.abs(gf.dispersionLat) >= 1) {
-        parts.push(Math.round(Math.abs(gf.dispersionLat)) + 'y ' + (gf.dispersionLat > 0 ? 'R' : 'L'));
-      }
+      if (Math.abs(vsAimY) >= 1) parts.push(Math.round(Math.abs(vsAimY)) + 'y ' + (vsAimY > 0 ? 'long' : 'short'));
+      if (gf.dispersionLat && Math.abs(gf.dispersionLat) >= 1) parts.push(Math.round(Math.abs(gf.dispersionLat)) + 'y ' + (gf.dispersionLat > 0 ? 'R' : 'L'));
     }
-    return '<div style="font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)">'
-      + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'
-      + '<span>' + parts.join(' \u00B7 ') + obTag + sgTag + '</span>' + editBtn + delBtn
-      + '</div>' + confirmHtml + '</div>';
-  }).join('');
-  return '<div style="margin-bottom:10px">'
-    + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:4px">Shot Log</div>'
-    + rows + '</div>';
+    /* Row wrapper */
+    var row = document.createElement('div');
+    row.style.cssText = 'font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)';
+    /* Main line */
+    var main = document.createElement('div');
+    main.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:2px';
+    var txt = document.createElement('span');
+    txt.textContent = parts.join(' \u00B7 ');
+    if (sh.is_ob) {
+      var obTag = document.createElement('span');
+      obTag.style.cssText = 'color:var(--danger);font-size:.6rem';
+      obTag.textContent = ' Penalty+' + (sh.penalty_strokes || 0);
+      txt.appendChild(obTag);
+    }
+    if (sh.sg !== null && sh.sg !== undefined) {
+      var sgTag = document.createElement('span');
+      sgTag.style.cssText = 'color:' + _lrSGColor(sh.sg) + ';font-size:.6rem';
+      sgTag.textContent = ' \u00B7 SG: ' + _lrFmtSG(sh.sg);
+      txt.appendChild(sgTag);
+    }
+    var editBtn = document.createElement('button');
+    editBtn.className = 'btn sec';
+    editBtn.style.cssText = 'font-size:.55rem;padding:1px 5px;margin-left:4px';
+    editBtn.textContent = 'Edit';
+    editBtn.dataset.action = 'edit-shot';
+    editBtn.dataset.idx = i;
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn sec';
+    delBtn.style.cssText = 'font-size:.55rem;padding:1px 5px;margin-left:2px;color:var(--danger)';
+    delBtn.textContent = '\u2715';
+    delBtn.dataset.action = 'delete-shot';
+    delBtn.dataset.idx = i;
+    main.appendChild(txt);
+    main.appendChild(editBtn);
+    main.appendChild(delBtn);
+    row.appendChild(main);
+    /* Delete confirm row */
+    if (_lrDeleteConfirmIdx === i) {
+      var confirm = document.createElement('div');
+      confirm.style.cssText = 'margin-top:4px;font-size:.6rem;display:flex;gap:6px;align-items:center';
+      var confirmLbl = document.createElement('span');
+      confirmLbl.style.color = 'var(--danger)';
+      confirmLbl.textContent = 'Delete this shot?';
+      var yesBtn = document.createElement('button');
+      yesBtn.className = 'btn';
+      yesBtn.style.cssText = 'background:var(--danger);color:#fff;border-color:var(--danger);font-size:.55rem;padding:1px 6px';
+      yesBtn.textContent = 'Yes';
+      yesBtn.dataset.action = 'delete-shot-confirm';
+      yesBtn.dataset.idx = i;
+      var noBtn = document.createElement('button');
+      noBtn.className = 'btn sec';
+      noBtn.style.cssText = 'font-size:.55rem;padding:1px 6px';
+      noBtn.textContent = 'No';
+      noBtn.dataset.action = 'delete-shot-cancel';
+      confirm.appendChild(confirmLbl);
+      confirm.appendChild(yesBtn);
+      confirm.appendChild(noBtn);
+      row.appendChild(confirm);
+    }
+    rowsEl.appendChild(row);
+  });
 }
+
+/* Keep _lrShotLogHtml as a no-op shim — callers in _lrAdvancedHtml now use _lrRenderShotLog directly */
+function _lrShotLogHtml(shots) { return ''; }
 
 function _lrGirFirToggles(s, hole) {
   var block = document.getElementById('lrGirFirBlock');
@@ -1833,8 +1869,11 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     [['straight','Straight'],['left-to-right','L\u2192R'],['right-to-left','R\u2192L']].forEach(function(fp) {
       fpHtml += '<button class="implied-tog' + (d.flight_path === fp[0] ? ' on' : '') + '" style="flex:1" onclick="lrSetFlightPath(\'' + fp[0] + '\')">' + fp[1] + '</button>';
     });
-    var shotInner = _lrShotLogHtml(shots)
-      + '<div class="card" style="margin-bottom:8px">'
+    /* Render shot log into static container */
+    _lrRenderShotLog(shots);
+    /* Shot form — still string-built (radial SVG, lie, club — deferred) */
+    var shotFormEl = document.getElementById('lrShotFormInner');
+    var shotInner = '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
       + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>' + sgLine
       + '</div>'
@@ -1877,7 +1916,7 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
 
     shotInner += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
       + (_lrEditingIndex !== null ? 'Update Shot' : 'Record Shot') + '</button></div>';
-    innerBlock.innerHTML = shotInner;
+    if (shotFormEl) shotFormEl.innerHTML = shotInner;
 
     /* GIR/FIR and Hole Complete once shots logged */
     if (shots.length > 0) {
@@ -1907,16 +1946,135 @@ function _lrAttachAdvancedListener() {
     else if (action === 'fir-adv')         { lrToggleFir(btn.dataset.val === 'true'); }
     else if (action === 'ob-toggle')       { lrToggleOb(); }
     else if (action === 'ob-confirm')      { lrObConfirm(btn.dataset.val === 'true'); }
-    else if (action === 'complete-hole')   { lrCompleteHole(); }
+    else if (action === 'edit-shot')           { lrEditShot(parseInt(btn.dataset.idx, 10)); }
+    else if (action === 'delete-shot')         { lrDeleteShot(parseInt(btn.dataset.idx, 10)); }
+    else if (action === 'delete-shot-confirm') { lrDeleteShotConfirm(parseInt(btn.dataset.idx, 10)); }
+    else if (action === 'delete-shot-cancel')  { lrDeleteShotCancel(); }
+    else if (action === 'toggle-session-bag')  { lrToggleSessionBag(); }
   });
 }
 
-/* Caddie companion: renders into static #lrCaddieWrapper using existing string builder */
+/* Caddie companion: populates static #lrCaddieWrapper nodes */
 function _lrCaddieCompanionRender() {
   _lrAttachAdvancedListener();
-  var el = document.getElementById('lrCaddieWrapper');
-  if (!el) return;
-  el.innerHTML = _lrCaddieCompanionHtml();
+  if (!lrState) return;
+  var sid = lrState.linkedSessionId;
+  var matches = _lrMatchingSessions(lrState.courseName || '');
+  var tee = lrState.tee || '';
+
+  /* Session picker */
+  var pickerEl = document.getElementById('lrCaddieSessionPicker');
+  if (pickerEl) {
+    pickerEl.textContent = '';
+    if (matches.length) {
+      var sel = document.createElement('select');
+      sel.style.cssText = 'flex:1;min-width:0;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.65rem;padding:3px 6px;outline:none';
+      sel.onchange = function() { lrLinkSession(this.value); };
+      var none = document.createElement('option');
+      none.value = ''; none.textContent = '\u2014 None \u2014';
+      sel.appendChild(none);
+      matches.forEach(function(h) {
+        var opt = document.createElement('option');
+        opt.value = h.id;
+        opt.selected = h.id === sid;
+        var warn = tee && h.tee && h.tee !== tee ? ' (\u26A0 ' + h.tee + ' tee)' : '';
+        opt.textContent = h.date + ' \u00B7 ' + (h.course || '') + warn;
+        sel.appendChild(opt);
+      });
+      pickerEl.appendChild(sel);
+    } else if (sid) {
+      var unlinkBtn = document.createElement('button');
+      unlinkBtn.className = 'btn sec';
+      unlinkBtn.style.cssText = 'font-size:.58rem;padding:2px 8px';
+      unlinkBtn.textContent = 'Unlink';
+      unlinkBtn.onclick = function() { lrLinkSession(''); };
+      pickerEl.appendChild(unlinkBtn);
+    } else {
+      var noSess = document.createElement('span');
+      noSess.style.cssText = 'font-size:.6rem;color:var(--tx3)';
+      noSess.textContent = 'No matching sessions for this course';
+      pickerEl.appendChild(noSess);
+    }
+  }
+
+  if (!sid) {
+    _lrCaddieHideLinkedBlocks();
+    return;
+  }
+  var data = _lrParseSession(sid);
+  if (!data) { _lrCaddieHideLinkedBlocks(); return; }
+
+  /* Tee mismatch warning */
+  var warnEl = document.getElementById('lrCaddieTeeWarning');
+  if (warnEl) {
+    if (data.sessionTee && lrState.tee && data.sessionTee !== lrState.tee) {
+      warnEl.textContent = '\u26A0 Session is for ' + data.sessionTee + ' tees \u2014 you are playing ' + lrState.tee;
+      warnEl.style.display = '';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+
+  /* Optimised Bag */
+  var bagBlock = document.getElementById('lrCaddieBagBlock');
+  var bagRows  = document.getElementById('lrCaddieBagRows');
+  var bagArrow = document.getElementById('lrCaddieBagArrow');
+  if (bagBlock) {
+    if (data.bagLines.length) {
+      bagBlock.style.display = '';
+      var bagOpen = lrState._sessionBagOpen;
+      if (bagArrow) bagArrow.textContent = bagOpen ? '\u25B2' : '\u25BC';
+      if (bagRows) {
+        bagRows.style.display = bagOpen ? '' : 'none';
+        if (bagOpen) {
+          bagRows.textContent = '';
+          data.bagLines.forEach(function(l) {
+            var m = l.match(/^(\d+)\.\s+(.+?)\s+\u2014\s+([0-9\u2013\-]+ yds)\s+(.+)/);
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:6px;font-size:.62rem;padding:2px 0;border-bottom:1px solid var(--br)';
+            if (m) {
+              var n = document.createElement('span'); n.style.cssText = 'color:var(--tx3);width:16px'; n.textContent = m[1] + '.';
+              var name = document.createElement('span'); name.style.cssText = 'flex:1;color:var(--tx)'; name.textContent = m[2];
+              var yds = document.createElement('span'); yds.style.cssText = 'color:var(--ac2);white-space:nowrap'; yds.textContent = m[3];
+              var note = document.createElement('span'); note.style.cssText = 'color:var(--tx3);font-size:.58rem;text-align:right;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'; note.textContent = m[4];
+              row.appendChild(n); row.appendChild(name); row.appendChild(yds); row.appendChild(note);
+            } else {
+              row.style.cssText = 'font-size:.62rem;color:var(--tx2);padding:2px 0';
+              row.textContent = l;
+            }
+            bagRows.appendChild(row);
+          });
+        }
+      }
+    } else {
+      bagBlock.style.display = 'none';
+    }
+  }
+
+  /* Hole Advice */
+  var adviceBlock   = document.getElementById('lrCaddieAdviceBlock');
+  var adviceMeta    = document.getElementById('lrCaddieAdviceMeta');
+  var adviceStrokes = document.getElementById('lrCaddieAdviceStrokes');
+  var adviceText    = document.getElementById('lrCaddieAdviceText');
+  var holeNum = lrState.holes[lrState.curHole] ? lrState.holes[lrState.curHole].n : null;
+  var advice  = holeNum ? data.holeMap[holeNum] : null;
+  if (adviceBlock) {
+    if (advice) {
+      adviceBlock.style.display = '';
+      if (adviceMeta) adviceMeta.textContent = 'Hole ' + advice.num
+        + (advice.par ? ' \u00B7 Par ' + advice.par : '')
+        + (advice.yds ? ' \u00B7 ' + advice.yds + ' yds' : '');
+      if (adviceStrokes) { adviceStrokes.textContent = advice.strokes || ''; adviceStrokes.style.display = advice.strokes ? '' : 'none'; }
+      if (adviceText)    { adviceText.textContent    = advice.advice  || ''; adviceText.style.display    = advice.advice  ? '' : 'none'; }
+    } else {
+      adviceBlock.style.display = 'none';
+    }
+  }
+}
+
+function _lrCaddieHideLinkedBlocks() {
+  var ids = ['lrCaddieTeeWarning','lrCaddieBagBlock','lrCaddieAdviceBlock'];
+  ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
 }
 
 
