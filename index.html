@@ -1430,7 +1430,7 @@
         <div style="font-size:.48rem;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase">Hole</div>
       </div>
       <div style="flex:1">
-        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--tx);cursor:pointer;display:inline-flex;align-items:center;gap:5px" id="lrHoleInfo" onclick="lrTogParPicker()" title="Tap to edit par">Par · Yds <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">✎</span></div>
+        <div style="font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:var(--tx);cursor:pointer;display:inline-flex;align-items:center;gap:5px" id="lrHoleInfo" onclick="lrTogParPicker()" title="Tap to edit par">Par <span id="lrHolePar"></span><span id="lrHoleYdsSep" style="display:none"> · </span><span id="lrHoleYds"></span><span style="font-size:.5rem;opacity:.4;font-family:sans-serif;margin-left:5px">✎</span></div>
         <div style="font-size:.6rem;color:var(--tx3);margin-top:3px" id="lrHoleSi"></div>
         <div id="lrParPicker" style="display:none;gap:4px;margin-top:5px">
           <button class="btn sec" style="font-size:.56rem;padding:2px 7px" data-par="3" onclick="lrSetPar(3)">Par 3</button>
@@ -1456,8 +1456,13 @@
         <button id="lrNetBtn" onclick="lrSetView('net')">Net</button>
       </div>
     </div>
+    <template id="lrPlayerTabTpl"><button class="lr-player-tab"></button></template>
     <div id="lrPlayerTabs" style="display:flex;border-bottom:1px solid var(--br);background:var(--sf);flex-shrink:0;overflow-x:auto;"></div>
-    <div class="lr-scroll" id="lrScroll"></div>
+    <div class="lr-scroll" id="lrScroll">
+      <div id="lrScoreBlockWrapper"></div>
+      <div id="lrAdvancedWrapper"></div>
+      <div id="lrTallyStripWrapper"></div>
+    </div>
     <div class="lr-bottom">
       <button class="lr-nav-btn" id="lrPrevBtn" onclick="lrGoHole(-1)" disabled><span class="lr-nav-icon">←</span><span>Prev</span></button>
       <div class="lr-nav-sep"></div>
