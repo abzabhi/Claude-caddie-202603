@@ -2343,6 +2343,9 @@ _gateNewSitePass = sp;
     /* GUEST1 -- stamp encrypted site-password verify token for offline unlock of guest sessions */
     dbEncrypt('gordy-site-verify', sp).then(function(svt) { sessionStorage.setItem('vc:siteVerify', svt); });
     if (step === 'guest') {
+      /* SIGNOUT-FIX -- guest is a distinct identity; clear any prior account/guest data. */
+      if (typeof window._clearLocalUserData === 'function') window._clearLocalUserData();
+      sessionStorage.removeItem('gordy:lastLoadedId');
       sessionStorage.setItem('vc:gateUnlocked', 'guest');
       setTimeout(function() { gateUnlocked(null); }, 0);
       return;
@@ -2382,8 +2385,12 @@ _gateNewSitePass = sp;
     _gateErr('gateNewErr4', '');
     if (!answer) { _gateErr('gateNewErr4', 'Enter your security answer.'); return; }
     _gateLoading(true);
-    // Initial blob is empty app state (new user has no data yet)
-    var blob         = await dbEncrypt('', _gateNewPass);
+    /* SIGNOUT-FIX -- preserve any local-only / guest data the user has built up.
+       Serialise current in-memory state as the initial blob instead of empty string.
+       If state is empty (true new user), serialise() still returns valid (empty-shaped) text. */
+    var initialPlaintext = '';
+    try { if (window.serialise) initialPlaintext = window.serialise() || ''; } catch(e){}
+    var blob         = await dbEncrypt(initialPlaintext, _gateNewPass);
     var blobRecovery = await dbEncrypt(answer, _gateNewPass);
     var r3 = await dbRegister(_gateNewId, _gateNewSitePass, blob, blobRecovery, question);
     _gateLoading(false);
