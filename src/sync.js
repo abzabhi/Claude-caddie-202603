@@ -5,6 +5,7 @@ const APP_LATEST_FILE = 'golf-caddie-latest.html';
 
 // -- Gordy Sync -- encrypted KV via Cloudflare Worker
 const GORDY_SYNC_URL = 'https://gordy-sync.gordythevirtualcaddie.workers.dev/sync/';
+const _D1_BASE = 'https://gordy-sync.gordythevirtualcaddie.workers.dev';
 
 function kvId()  { return localStorage.getItem('vc:kvId')||''; }
 function kvMode(){ return !!kvId(); }
@@ -361,7 +362,6 @@ async function _profilePull() {
 }
 
 // -- D1 API (Session C) -------------------------------------------------------
-const _D1_BASE = 'https://gordy-sync.gordythevirtualcaddie.workers.dev';
 function _normId(s) { return /^GRD-/i.test(s) ? s : 'GRD-' + s; }
 
 // Public wrappers so gate functions in index.html can encrypt/decrypt
