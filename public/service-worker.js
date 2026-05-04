@@ -1,5 +1,5 @@
-// gordy-v3 — increment this string on every index.html or src/ update to bust cache for installed PWA users
-var CACHE = 'gordy-v3';
+// gordy-v4 — increment this string on every index.html or src/ update to bust cache for installed PWA users
+var CACHE = 'gordy-v4';
 
 var SHELL = [
   '/',
@@ -22,12 +22,8 @@ var SHELL = [
   '/src/sync.js',
   '/src/caddie.js',
   '/src/ui.js',
-  '/fonts/dm-mono-300.woff2',
-  '/fonts/dm-mono-400.woff2',
-  '/fonts/dm-mono-500.woff2',
-  '/fonts/playfair-400.woff2',
-  '/fonts/playfair-600.woff2',
-  '/fonts/playfair-700.woff2'
+  '/src/geomap.js',
+  '/src/gps-view.js'
 ];
 
 // These URLs always require live network — never serve from cache
