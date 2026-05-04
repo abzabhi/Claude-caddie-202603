@@ -307,38 +307,15 @@ async function checkAppUpdate() {
   } catch {}
 }
 
+/* SIGNOUT-FIX -- legacy entry point kept for back-compat. The dropdown no longer
+   shows this button; the unified signOut() in ui.js handles push-before-clear.
+   Anything still calling signOutSync gets the same correct behavior. */
 async function signOutSync() {
-  const id=kvId();
-  const hasPass=!!sessionStorage.getItem('vc:kvPass');
-  const choice=confirm(
-    `Sign out of sync profile ${id}?\n\nChoose an option:\n  OK = Push to cloud first, then sign out\n  Cancel = I'll choose below`
-  );
-  if(choice) {
-    if(!hasPass) {
-      const p=prompt('Enter your passphrase to push before signing out:');
-      if(!p) return;
-      sessionStorage.setItem('vc:kvPass',p);
-    }
-    await kvPush(null);
-    _doSignOut();
-  } else {
-    const dl=confirm('Download a local backup TXT first, then sign out?');
-    if(!dl) return;
-    saveData();
-    setTimeout(_doSignOut, 800);
-  }
-}
-
-function _doSignOut() {
-  localStorage.removeItem('vc:kvId');
-  localStorage.removeItem('vc:kvLastSync');
-  localStorage.removeItem('vc:kvLastSyncTs');
-  localStorage.removeItem('vc:kvPendingPush');
+  if (typeof window.signOut === 'function') { await window.signOut(); return; }
+  // Fallback (should not reach in normal load order): clear sync creds + reload
+  ['vc:kvId','vc:kvLastSync','vc:kvLastSyncTs','vc:kvPendingPush'].forEach(function(k){ try{localStorage.removeItem(k);}catch(e){} });
   sessionStorage.removeItem('vc:kvPass');
-  renderProfileSync();
-  closeProfileDropdown();
-  renderDropdown();
-  alert('Signed out of sync profile. Your data remains on this device.');
+  location.reload();
 }
 
 Object.assign(window, {
