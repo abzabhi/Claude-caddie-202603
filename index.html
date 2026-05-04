@@ -1318,7 +1318,11 @@
       <button class="btn danger" style="flex:1" onclick="lrDiscardRound()">Discard</button>
       <button class="btn sec" style="flex:1" onclick="lrCancelEndBanner()">Cancel</button>
     </div>
-  </div>
+    <div id="lrDiscardConfirm" style="display:none;margin-top:8px;font-size:.68rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="color:var(--danger)">Discard this round? All scores will be lost.</span>
+      <button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.62rem;padding:2px 8px" data-action="confirm-discard">Discard</button>
+      <button class="btn sec" style="font-size:.62rem;padding:2px 8px" data-action="cancel-discard">Cancel</button>
+    </div>
   <!-- Setup screen -->
   <div id="lrSetup" style="display:flex;flex-direction:column;height:100%;">
     <div class="lr-topbar">
@@ -1575,7 +1579,35 @@
                 <!-- Record Shot button -->
                 <button class="rbtn" style="width:100%" id="lrRecordShotBtn" data-action="record-shot">Record Shot</button>
               </div>
-            </div>
+              <!-- On Green block — hidden by default, shown when shot_mode=on_green -->
+              <div id="lrOnGreenBlock" style="display:none" class="card" style="margin-bottom:8px">
+                <div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">On Green</div>
+                <div style="display:flex;gap:6px;margin-bottom:10px" id="lrOgModeBtns">
+                  <button class="implied-tog" id="lrOgModeStandard" style="flex:1" data-action="set-shot-mode" data-mode="standard">Standard</button>
+                  <button class="implied-tog" id="lrOgModeApproach" style="flex:1" data-action="set-shot-mode" data-mode="approach">Approach</button>
+                  <button class="implied-tog on" id="lrOgModeOnGreen" style="flex:1" data-action="set-shot-mode" data-mode="on_green">On Green</button>
+                </div>
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Distance to Hole (ft)</div>
+                  <input id="lrOgDistInput" type="number" inputmode="numeric" class="field"
+                    style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:5px 8px;outline:none">
+                </div>
+                <div style="margin-bottom:8px">
+                  <div class="card-title">Strokes on Green</div>
+                  <div class="lr-stepper">
+                    <button class="lr-step-btn sm" data-action="adj-chip-putt" data-delta="-1">−</button>
+                    <div class="lr-step-val"><div class="lr-step-num sm" id="lrOgCpcNum">0</div></div>
+                    <button class="lr-step-btn sm" data-action="adj-chip-putt" data-delta="1">+</button>
+                  </div>
+                </div>
+                <div style="margin-bottom:10px">
+                  <div class="card-title">Holed Out</div>
+                  <div style="display:flex;gap:6px;margin-top:4px">
+                    <button class="lr-tog" id="lrOgHoledBtn" style="flex:1" data-action="holed-out">No</button>
+                  </div>
+                </div>
+                <button class="rbtn" style="width:100%;margin-top:10px" data-action="complete-hole">✓ Complete Hole</button>
+              </div>
           </div>
           <!-- GIR/FIR toggles — shown when shots.length > 0 -->
           <div id="lrGirFirBlock" style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
@@ -1633,7 +1665,13 @@
           </div>
         </div>
       </div>
-      <div id="lrTallyStripWrapper"></div>
+      <template id="lrTallyRowTpl">
+        <div class="lr-tally-row">
+          <span class="lr-tally-name"></span>
+          <span class="lr-tally-score"></span>
+        </div>
+      </template>
+      <div id="lrTallyStripWrapper"><div id="lrTallyStripInner" class="lr-tally"></div></div>
     </div>
     <div class="lr-bottom">
       <button class="lr-nav-btn" id="lrPrevBtn" onclick="lrGoHole(-1)" disabled><span class="lr-nav-icon">←</span><span>Prev</span></button>
@@ -1714,13 +1752,63 @@
       <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Round Complete</div>
       <div style="font-family:'Playfair Display',serif;font-size:3rem;font-weight:700;color:var(--ac2)" id="lrSumScore">—</div>
       <div style="font-size:.68rem;color:var(--tx2);margin-top:4px" id="lrSumMeta"></div>
-      <div style="display:flex;gap:16px;justify-content:center;margin-top:14px" id="lrSumStats"></div>
+      <div style="display:flex;gap:16px;justify-content:center;margin-top:14px" id="lrSumStats">
+        <div style="text-align:center" id="lrSumStatVsPar">
+          <div class="lr-step-num sm" id="lrSumVsParVal">—</div>
+          <div style="font-size:.52rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">vs Par</div>
+        </div>
+        <div style="width:1px;background:var(--br);margin:0 6px"></div>
+        <div style="text-align:center">
+          <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:600;color:var(--ac2)" id="lrSumPuttsVal">—</div>
+          <div style="font-size:.52rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">Putts</div>
+        </div>
+        <div style="width:1px;background:var(--br);margin:0 6px"></div>
+        <div style="text-align:center">
+          <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:600;color:var(--ac2)" id="lrSumGirVal">—</div>
+          <div style="font-size:.52rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">GIR</div>
+        </div>
+      </div>
     </div>
     <div style="flex:1;overflow-y:auto;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px;">
-      <div id="lrSumLeaderboard"></div>
+      <template id="lrSumLbRowTpl">
+        <div class="lr-tally-row">
+          <span style="font-size:.6rem;color:var(--tx3);width:18px" class="lb-pos"></span>
+          <span class="lr-tally-name"></span>
+          <span class="lr-tally-score"></span>
+          <span style="font-size:.6rem;color:var(--tx3);min-width:28px;text-align:right" class="lb-diff"></span>
+        </div>
+      </template>
+      <div id="lrSumLeaderboard">
+        <!-- Leaderboard card — shown only for multi-player rounds -->
+        <div class="card" style="margin-bottom:0;display:none" id="lrSumLbCard">
+          <div class="card-title">Leaderboard</div>
+          <div id="lrSumLbRows"></div>
+        </div>
+        <!-- SG card — shown only when data available -->
+        <details id="lrSgCard" style="display:none;margin-top:10px">
+          <summary style="cursor:pointer;color:var(--tx3);padding:8px 0;border-top:1px solid var(--br);list-style:none;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:.8rem;font-weight:600">Strokes Gained</span>
+            <span id="lrSgTotal" style="font-size:.8rem;font-weight:700"></span>
+          </summary>
+          <div class="card" style="margin-top:6px;margin-bottom:0">
+            <table style="width:100%;border-collapse:collapse;font-size:.65rem">
+              <tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Off the Tee</td><td style="text-align:right;padding:5px 2px" id="lrSgOtt"></td></tr>
+              <tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Approach</td><td style="text-align:right;padding:5px 2px" id="lrSgApp"></td></tr>
+              <tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Around the Green</td><td style="text-align:right;padding:5px 2px" id="lrSgArg"></td></tr>
+              <tr><td style="padding:5px 2px;color:var(--tx2)">Putting</td><td style="text-align:right;padding:5px 2px" id="lrSgPutt"></td></tr>
+            </table>
+            <div id="lrSgFirGir" style="display:none;margin-top:8px;font-size:.6rem;color:var(--tx3)"></div>
+          </div>
+        </details>
+      </div>
       <div class="card" style="margin-bottom:0">
         <div class="card-title">Save &amp; Export</div>
-        <div style="font-size:.65rem;color:var(--tx2);line-height:1.7;margin-bottom:10px" id="lrSaveNote"></div>
+        <div style="font-size:.65rem;color:var(--tx2);line-height:1.7;margin-bottom:10px" id="lrSaveNote">
+          <!-- Warning shown when no player marked as me -->
+          <span id="lrSaveNoteWarning" style="display:none">⚠ No player marked as you — round will be saved without handicap eligibility. <a href="#" id="lrSaveNoteBackLink" style="color:var(--ac)">Go back to mark yourself.</a></span>
+          <!-- Normal save note text -->
+          <span id="lrSaveNoteText"></span>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn" onclick="lrSaveRound()">💾 Save Round</button>
           <button class="btn gold" onclick="lrExportPdf()">📄 Export PDF</button>
