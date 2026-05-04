@@ -9,7 +9,7 @@ var SHELL = [
   '/icon-512.png',
   '/main.png',
   '/icon.png',
-  '/styles.css',
+  /*'/styles.css',*/
   '/src/geo.js',
   '/src/constants.js',
   '/src/dispersion.js',
