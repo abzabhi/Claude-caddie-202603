@@ -4095,5 +4095,5 @@ Object.assign(window, {
   lrxInit, lrxHydrate,
   lrxStartHoleTimer, lrxStopHoleTimer, lrxTogglePause,
   lrxIncDrink, lrxDecDrink,
-  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxBannerHtml, lrxTick,
+  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxBannerHtml, lrxTick
 });
