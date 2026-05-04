@@ -62,9 +62,10 @@ async function kvPush() {
   localStorage.removeItem('vc:kvPendingPush'); /* clear optimistically -- re-set on failure */
   _syncDispatch('Syncing\u2026');
   try {
+    const normId = /^GRD-/i.test(id) ? id : 'GRD-' + id;
     const payload = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '{}';
     const blob = await _encrypt(payload, pass);
-    const r = await fetch(GORDY_SYNC_URL + id, { method: 'PUT', body: blob });
+    const r = await fetch(_D1_BASE + '/sync/push/' + normId, { method: 'PUT', body: blob });
     if(!r.ok){ _syncDispatch('\u26A0 Push failed ('+r.status+')', true); _kvQueuePush(); return; }
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
@@ -81,15 +82,18 @@ async function kvPull() {
   if(!pass){ renderProfileSync(); return; }
   _syncDispatch('Fetching\u2026');
   try {
-    const r=await fetch(GORDY_SYNC_URL+id);
+    const normId = /^GRD-/i.test(id) ? id : 'GRD-' + id;
+    const r=await fetch(_D1_BASE + '/sync/pull/' + normId);
     if(r.status===404){ _syncDispatch('\u26A0 No data found for this ID.', true); return; }
     if(!r.ok){ _syncDispatch('\u26A0 Pull failed ('+r.status+')', true); return; }
-    const envelope=await r.text();
+    const j = await r.json().catch(() => ({}));
+    const envelope = j.blob || await r.text();
+    if (j.version != null) sessionStorage.setItem('vc:version', String(j.version));
     _syncDispatch('Decrypting\u2026');
     let plaintext;
     try { plaintext=await _decrypt(envelope, pass); }
     catch { _syncDispatch('\u26A0 Wrong passphrase or corrupted data.', true); return; }
-    processDataText(plaintext);
+    if (window.dbLoadData) window.dbLoadData(plaintext);
     const ts=new Date().toLocaleTimeString();
     localStorage.setItem('vc:kvLastSync', ts);
     _syncDispatch('\u2713 Loaded: '+ts);
