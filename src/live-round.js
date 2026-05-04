@@ -351,7 +351,6 @@ return lrState.players.some(p=>p.handicap!==null);
 
 // -- Render hole view --------------------------------------------------------
 function lrRenderHole() {
-document.getElementById('lrOverlay').style.display = 'flex';
 if(!lrState) return;
 const h   = lrState.holes[lrState.curHole];
 const pc  = lrParClass(h.par);
@@ -369,11 +368,8 @@ blk.className = 'lr-hole-blk '+pc;
 const nEl = document.getElementById('lrHoleN');
 nEl.className = 'lr-hole-n '+pc;
 nEl.textContent = h.n;
-document.getElementById('lrHolePar').textContent = h.par;
-const ydsEl = document.getElementById('lrHoleYds');
-const ydsSep = document.getElementById('lrHoleYdsSep');
-if (h.yards) { ydsEl.textContent = h.yards; ydsSep.style.display = ''; }
-else { ydsEl.textContent = ''; ydsSep.style.display = 'none'; }
+document.getElementById('lrHoleInfo').innerHTML =
+  `Par ${h.par}${h.yards?' \u00B7 '+h.yards+' yds':''} <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">\u270E</span>`;
 document.getElementById('lrHoleSi').textContent =
   h.handicap ? `SI ${h.handicap}` : '';
 // Par picker \u2014 hide on hole change, highlight active par
@@ -414,15 +410,9 @@ document.getElementById('lrRunningLbl').textContent =
 const tabsEl = document.getElementById('lrPlayerTabs');
 if(lrState.players.length > 1 && !shared) {
   tabsEl.style.display = 'flex';
-  const tpl = document.getElementById('lrPlayerTabTpl');
-  tabsEl.textContent = '';
-  lrState.players.forEach(function(p, i) {
-    const btn = tpl.content.cloneNode(true).querySelector('button');
-    btn.textContent = (p.name.split(' ')[0] || 'P'+(i+1)) + (p.isMe ? ' \u2605' : '');
-    btn.className = 'lr-player-tab' + (i === pi ? ' active' : '');
-    btn.onclick = function() { lrSetPlayer(i); };
-    tabsEl.appendChild(btn);
-  });
+  tabsEl.innerHTML = lrState.players.map((p,i)=>
+    `<button class="lr-player-tab${i===pi?' active':''}" onclick="lrSetPlayer(${i})">${escHtml(p.name.split(' ')[0]||'P'+(i+1))}${p.isMe?' \u2605':''}</button>`
+  ).join('');
 } else {
   tabsEl.style.display = 'none';
 }
@@ -445,24 +435,33 @@ const scroll = document.getElementById('lrScroll');
 // }
 */
 
-const scoreWrapper = document.getElementById('lrScoreBlockWrapper');
-const advWrapper   = document.getElementById('lrAdvancedWrapper');
-const tallyWrapper = document.getElementById('lrTallyStripWrapper');
-
 if(shared) {
-  lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
+  // Scramble / foursomes: one score for the team (use player 0)
+  const ts = lrState.players[0].scores[lrState.curHole];
+  scroll.innerHTML = lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
 } else {
-  lrScoreBlock(player, lrState.curHole, h, pi, false);
+  scroll.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
 }
 
+/* PHASE-A: Resume-map pill block deleted. Map entry now via the always-visible
+   bottom-nav Map button on lrHoleScreen. Original block preserved as comment:
+// if (_lrMapGeo && lrState && !lrState._mapOpen) {
+//   scroll.innerHTML =
+//       '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">'
+//     +   '<button class="btn" style="font-size:.6rem;padding:4px 12px;border-radius:16px" '
+//     +     'onclick="_lrMapResume()">\uD83D\uDDFA Resume map</button>'
+//     + '</div>' + scroll.innerHTML;
+// }
+*/
+
 /* Phase 4: advanced mode collapsible */
-_lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
+scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
 
 /* Caddie session companion */
-_lrCaddieCompanionRender();
+scroll.innerHTML += _lrCaddieCompanionHtml();
 
 // Tally strip
-lrTallyStrip();
+scroll.innerHTML += lrTallyStrip();
 
 // Nav
 document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
@@ -475,127 +474,72 @@ document.getElementById('lrNextBtn').className    =
 if (typeof lrxRenderBanner === 'function') lrxRenderBanner();
 }
 
-/* Attach delegated listener once to #lrScoreBlockWrapper */
-var _lrScoreBlockListenerAttached = false;
-function _lrAttachScoreBlockListener() {
-  if (_lrScoreBlockListenerAttached) return;
-  var wrapper = document.getElementById('lrScoreBlockWrapper');
-  if (!wrapper) return;
-  _lrScoreBlockListenerAttached = true;
-  wrapper.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    var ctx = document.getElementById('lrScoreCtx');
-    var pi     = parseInt(ctx.dataset.pi, 10);
-    var hole   = parseInt(ctx.dataset.hole, 10);
-    var shared = ctx.dataset.shared === 'true';
-    var action = btn.dataset.action;
-    if (action === 'adj') {
-      lrAdj(pi, hole, btn.dataset.field, parseInt(btn.dataset.delta, 10), shared);
-    } else if (action === 'gir') {
-      lrSetGir(pi, hole, btn.dataset.val === 'true', shared);
-    } else if (action === 'note') {
-      lrToggleNote(pi, hole);
-    }
-  });
-  /* Textarea input delegation */
-  wrapper.addEventListener('input', function(e) {
-    var el = e.target.closest('[data-action="note-input"]');
-    if (!el) return;
-    var ctx = document.getElementById('lrScoreCtx');
-    var pi     = parseInt(ctx.dataset.pi, 10);
-    var hole   = parseInt(ctx.dataset.hole, 10);
-    var shared = ctx.dataset.shared === 'true';
-    lrSaveNote(pi, hole, el.value, shared);
-  });
-}
-
 function lrScoreBlock(player, holeIdx, hole, pi, shared) {
-  _lrAttachScoreBlockListener();
-  const s    = player.scores[holeIdx];
-  const diff = lrRelTopar(s.score, hole.par);
-  const netS = lrHasAnyHandicap() ? lrNetScore(player, holeIdx) : null;
-  const pts  = lrState.mode==='stableford' ? lrStablefordPts(player, holeIdx) : null;
-  const displayScore = (lrState.netView && netS!==null) ? netS : s.score;
-  const displayDiff  = (lrState.netView && netS!==null) ? lrRelTopar(netS, hole.par) : diff;
+const s    = player.scores[holeIdx];
+const diff = lrRelTopar(s.score, hole.par);
+const netS = lrHasAnyHandicap() ? lrNetScore(player, holeIdx) : null;
+const pts  = lrState.mode==='stableford' ? lrStablefordPts(player, holeIdx) : null;
+const displayScore = (lrState.netView && netS!==null) ? netS : s.score;
+const displayDiff  = (lrState.netView && netS!==null) ? lrRelTopar(netS, hole.par) : diff;
+const label = shared ? 'Team Score' : 'Score';
 
-  /* Update context node so delegated listener reads correct pi/hole/shared */
-  const ctx = document.getElementById('lrScoreCtx');
-  ctx.dataset.pi     = pi;
-  ctx.dataset.hole   = holeIdx;
-  ctx.dataset.shared = shared ? 'true' : 'false';
+const extraInfo = [
+  netS!==null && !lrState.netView ? `Net: ${netS}` : '',
+  pts!==null  ? `${pts} pt${pts!==1?'s':''}` : '',
+].filter(Boolean).join(' \u00B7 ');
 
-  /* Score card */
-  document.getElementById('lrScoreLabel').textContent = shared ? 'Team Score' : 'Score';
-  const scoreNum = document.getElementById('lrScoreNum');
-  const scoreRel = document.getElementById('lrScoreRel');
-  const relCls = displayScore !== null ? lrRelCls(displayDiff) : '';
-  scoreNum.textContent  = displayScore !== null ? displayScore : '\u2014';
-  scoreNum.className    = 'lr-step-num ' + relCls;
-  scoreRel.textContent  = displayScore !== null ? lrRelLabel(displayDiff) : 'tap to set';
-  scoreRel.className    = 'lr-step-rel ' + relCls;
-  const extraEl = document.getElementById('lrScoreExtra');
-  const extraInfo = [
-    netS !== null && !lrState.netView ? 'Net: ' + netS : '',
-    pts  !== null ? pts + ' pt' + (pts !== 1 ? 's' : '') : '',
-  ].filter(Boolean).join(' \u00B7 ');
-  if (extraInfo) { extraEl.textContent = extraInfo; extraEl.style.display = ''; }
-  else           { extraEl.textContent = '';         extraEl.style.display = 'none'; }
-
-  /* Putts */
-  document.getElementById('lrPuttNum').textContent = s.putts !== null ? s.putts : '\u2014';
-
-  /* GIR card — hide when advanced mode is open and shots exist */
-  const shots = s.shots || [];
-  const hideGir = _lrAdvancedOpen && shots.length > 0;
-  const girCard = document.getElementById('lrGirCard');
-  girCard.style.display = hideGir ? 'none' : '';
-  if (!hideGir) {
-    const girYes = document.getElementById('lrGirYesBtn');
-    const girNo  = document.getElementById('lrGirNoBtn');
-    girYes.className = 'lr-tog' + (s.gir === true  ? ' on-y' : '');
-    girNo.className  = 'lr-tog' + (s.gir === false ? ' on-n' : '');
-    const par2 = hole.par - 2;
-    document.getElementById('lrGirReach').textContent =
-      'Reach in ' + par2 + ' stroke' + (par2 !== 1 ? 's' : '');
-  }
-
-  /* Note card */
-  const noteToggle = document.getElementById('lrNoteToggle');
-  noteToggle.textContent = '\uD83D\uDCDD ' + (s.notes
-    ? s.notes.slice(0, 40) + (s.notes.length > 40 ? '\u2026' : '')
-    : 'Add a note\u2026');
-  const noteInput = document.getElementById('lrNoteInput');
-  noteInput.style.display = (s.notes || lrState._noteOpen) ? 'block' : 'none';
-  /* Only reset value when not focused to avoid clobbering active typing */
-  if (document.activeElement !== noteInput) noteInput.value = s.notes || '';
+return `<div class="card" style="margin-bottom:0">
+  <div class="card-title">${label}</div>
+  <div class="lr-stepper" style="border-radius:8px;overflow:hidden">
+    <button class="lr-step-btn" onclick="lrAdj(${pi},${holeIdx},'score',-1,${shared})">\u2212</button>
+    <div class="lr-step-val">
+      <div class="lr-step-num ${displayScore!==null?lrRelCls(displayDiff):''}">${displayScore!==null?displayScore:'\u2014'}</div>
+      <div class="lr-step-rel ${displayScore!==null?lrRelCls(displayDiff):''}">${displayScore!==null?lrRelLabel(displayDiff):'tap to set'}</div>
+      ${extraInfo?`<div style="font-size:.54rem;color:var(--tx3);margin-top:2px">${extraInfo}</div>`:''}
+    </div>
+    <button class="lr-step-btn" onclick="lrAdj(${pi},${holeIdx},'score',1,${shared})">+</button>
+  </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div class="card" style="margin-bottom:0">
+    <div class="card-title">Putts</div>
+    <div class="lr-stepper">
+      <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',-1,${shared})">\u2212</button>
+      <div class="lr-step-val"><div class="lr-step-num sm">${s.putts!==null?s.putts:'\u2014'}</div></div>
+      <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',1,${shared})">+</button>
+    </div>
+  </div>
+  ${(()=>{ const _shots = s.shots||[]; const _hide = _lrAdvancedOpen && _shots.length > 0; return _hide ? '' : `
+  <div class="card" style="margin-bottom:0">
+    <div class="card-title">GIR</div>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <button class="lr-tog ${s.gir===true?'on-y':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},true,${shared})">\u2713 Yes</button>
+      <button class="lr-tog ${s.gir===false?'on-n':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},false,${shared})">\u2717 No</button>
+    </div>
+    <div style="font-size:.54rem;color:var(--tx3);margin-top:6px">Reach in ${hole.par-2} stroke${hole.par-2!==1?'s':''}</div>
+  </div>`; })()}
+</div>
+<div class="card" style="margin-bottom:0" id="lrNoteCard">
+  <button class="notes-toggle" id="lrNoteToggle" onclick="lrToggleNote(${pi},${holeIdx})">\uD83D\uDCDD ${s.notes?s.notes.slice(0,40)+(s.notes.length>40?'\u2026':''):'Add a note\u2026'}</button>
+  <textarea id="lrNoteInput" style="display:${s.notes||lrState._noteOpen?'block':'none'};width:100%;background:var(--bg);border:1px solid var(--gr2);border-radius:6px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:10px;outline:none;resize:none;margin-top:8px;min-height:70px" oninput="lrSaveNote(${pi},${holeIdx},this.value,${shared})">${s.notes||''}</textarea>
+</div>`;
 }
 
 function lrTallyStrip() {
-  var inner = document.getElementById('lrTallyStripInner');
-  if (!inner) return;
-  if (!lrState || lrState.players.length < 2) { inner.textContent = ''; return; }
-  var tpl = document.getElementById('lrTallyRowTpl');
-  var mode = lrState.mode;
-  var shared = LR_MODES[mode] && LR_MODES[mode].shared;
-  inner.textContent = '';
-  var entries = shared
-    ? lrState.teams.map(function(t) {
-        var p0 = lrState.players.find(function(p) { return t.playerIds.includes(p.id); });
-        var rt = p0 ? lrRunningTotal(lrState.players.indexOf(p0)) : null;
-        return { name: t.name, rt: rt, isMe: false };
-      })
-    : lrState.players.map(function(p, i) {
-        return { name: p.name + (p.isMe ? ' \u2605' : ''), rt: lrRunningTotal(i), isMe: p.isMe };
-      });
-  entries.forEach(function(e) {
-    var row = tpl.content.cloneNode(true).querySelector('.lr-tally-row');
-    row.querySelector('.lr-tally-name').textContent = e.name;
-    var scoreEl = row.querySelector('.lr-tally-score');
-    scoreEl.textContent = e.rt !== null ? lrRelLabel(e.rt) : '\u2014';
-    scoreEl.className = 'lr-tally-score' + (e.rt !== null ? ' ' + lrRelCls(e.rt) : '');
-    inner.appendChild(row);
-  });
+if(lrState.players.length < 2) return '';
+const mode = lrState.mode;
+const shared = LR_MODES[mode]?.shared;
+const rows = shared
+  ? lrState.teams.map(t=>{
+      const p0 = lrState.players.find(p=>t.playerIds.includes(p.id));
+      const rt = p0 ? lrRunningTotal(lrState.players.indexOf(p0)) : null;
+      return `<div class="lr-tally-row"><span class="lr-tally-name">${escHtml(t.name)}</span><span class="lr-tally-score ${rt!==null?lrRelCls(rt):''}">${rt!==null?lrRelLabel(rt):'\u2014'}</span></div>`;
+    })
+  : lrState.players.map((p,i)=>{
+      const rt = lrRunningTotal(i);
+      return `<div class="lr-tally-row"><span class="lr-tally-name">${escHtml(p.name)}${p.isMe?' \u2605':''}</span><span class="lr-tally-score ${rt!==null?lrRelCls(rt):''}">${rt!==null?lrRelLabel(rt):'\u2014'}</span></div>`;
+    });
+return `<div class="lr-tally">${rows.join('')}</div>`;
 }
 
 // -- Interaction ------------------------------------------------------------
@@ -913,93 +857,91 @@ document.getElementById('lrSumScore').className   = 'lrSumScore '+(played?lrRelC
 document.getElementById('lrSumMeta').textContent  =
   [lrState.courseName, lrState.tee?lrState.tee+' tees':'', played+' holes'].filter(Boolean).join(' \u00B7 ');
 
-var vsParEl = document.getElementById('lrSumVsParVal');
-if (vsParEl) {
-  vsParEl.textContent = diff !== null ? lrRelLabel(diff) : '\u2014';
-  vsParEl.className = 'lr-step-num sm' + (diff !== null ? ' ' + lrRelCls(diff) : '');
-}
-var puttsEl = document.getElementById('lrSumPuttsVal');
-if (puttsEl) puttsEl.textContent = totalPutts || '\u2014';
-var girEl = document.getElementById('lrSumGirVal');
-if (girEl) girEl.textContent = girOf ? girCount + '/' + girOf : '\u2014';
+document.getElementById('lrSumStats').innerHTML = [
+  {lbl:'vs Par', val:diff!==null?lrRelLabel(diff):'\u2014', cls:diff!==null?lrRelCls(diff):''},
+  {lbl:'Putts',  val:totalPutts||'\u2014', cls:''},
+  {lbl:'GIR',    val:girOf?`${girCount}/${girOf}`:'\u2014', cls:''},
+].map(x=>`<div style="text-align:center">
+  <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:600;color:var(--ac2)" class="${x.cls}">${x.val}</div>
+  <div style="font-size:.52rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">${x.lbl}</div>
+</div>`).join('<div style="width:1px;background:var(--br);margin:0 6px"></div>');
 
 // Leaderboard
-var lbCard = document.getElementById('lrSumLbCard');
-var lbRows = document.getElementById('lrSumLbRows');
-var lbTpl  = document.getElementById('lrSumLbRowTpl');
-if (lbCard && lbRows && lbTpl) {
-  if (lrState.players.length > 1) {
-    lbCard.style.display = '';
-    lbRows.textContent = '';
-    var sorted = lrState.players.slice().sort(function(a,b) {
-      return a.scores.reduce(function(t,s){return t+(s.score||0);},0)
-           - b.scores.reduce(function(t,s){return t+(s.score||0);},0);
-    });
-    sorted.forEach(function(p, pos) {
-      var sc  = p.scores.reduce(function(t,s){return t+(s.score||0);},0);
-      var par = lrState.holes.reduce(function(t,h){return t+h.par;},0);
-      var d   = sc ? sc - par : null;
-      var row = lbTpl.content.cloneNode(true).querySelector('.lr-tally-row');
-      row.querySelector('.lb-pos').textContent = (pos+1) + '.';
-      row.querySelector('.lr-tally-name').textContent = p.name + (p.isMe ? ' \u2605' : '');
-      var scEl = row.querySelector('.lr-tally-score');
-      scEl.textContent = sc || '\u2014';
-      scEl.className = 'lr-tally-score' + (d !== null ? ' ' + lrRelCls(d) : '');
-      row.querySelector('.lb-diff').textContent = d !== null ? lrRelLabel(d) : '';
-      lbRows.appendChild(row);
-    });
-  } else {
-    lbCard.style.display = 'none';
-  }
-}
+const sorted = [...lrState.players].sort((a,b)=>{
+  const as=a.scores.reduce((t,s)=>t+(s.score||0),0);
+  const bs=b.scores.reduce((t,s)=>t+(s.score||0),0);
+  return as-bs;
+});
+document.getElementById('lrSumLeaderboard').innerHTML = lrState.players.length>1
+  ? `<div class="card" style="margin-bottom:0"><div class="card-title">Leaderboard</div>
+  ${sorted.map((p,pos)=>{
+    const sc=p.scores.reduce((t,s)=>t+(s.score||0),0);
+    const par=lrState.holes.reduce((t,h)=>t+h.par,0);
+    const d=sc?sc-par:null;
+    return `<div class="lr-tally-row">
+      <span style="font-size:.6rem;color:var(--tx3);width:18px">${pos+1}.</span>
+      <span class="lr-tally-name">${escHtml(p.name)}${p.isMe?' \u2605':''}</span>
+      <span class="lr-tally-score ${d!==null?lrRelCls(d):''}">${sc||'\u2014'}</span>
+      <span style="font-size:.6rem;color:var(--tx3);min-width:28px;text-align:right">${d!==null?lrRelLabel(d):''}</span>
+    </div>`;
+  }).join('')}</div>` : '';
 
 /* SG summary card */
 (function() {
   var _sgMe = meIdx >= 0 ? lrState.players[meIdx] : null;
-  var sgCard = document.getElementById('lrSgCard');
-  if (!_sgMe || !sgCard) return;
+  if (!_sgMe) return;
   var _sgData = _lrRoundSG(_sgMe.scores, lrState.holes);
   var _sgHasData = _sgMe.scores.some(function(s) {
     return s.shots && s.shots.some(function(sh) { return sh.sg !== null && sh.sg !== undefined; });
   });
-  if (!_sgHasData) { sgCard.style.display = 'none'; return; }
-  sgCard.style.display = '';
-  function _sgFmtEl(v) {
-    var span = document.createElement('span');
-    span.style.color = _lrSGColor(v);
-    span.textContent = (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2);
-    return span;
+  if (!_sgHasData) return;
+  function _sgFmt(v) {
+    return '<span style="color:' + _lrSGColor(v) + '">'
+      + (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2) + '</span>';
   }
-  var totalEl = document.getElementById('lrSgTotal');
-  if (totalEl) { totalEl.textContent = ''; totalEl.appendChild(_sgFmtEl(_sgData.total)); totalEl.style.color = _lrSGColor(_sgData.total); }
-  [['lrSgOtt','OTT'],['lrSgApp','APP'],['lrSgArg','ARG'],['lrSgPutt','PUTT']].forEach(function(pair) {
-    var el = document.getElementById(pair[0]);
-    if (el) { el.textContent = ''; el.appendChild(_sgFmtEl(_sgData[pair[1]])); }
-  });
   var _firData = _lrRoundFIR(_sgMe.scores, lrState.holes);
-  var _girHit  = _sgMe.scores.filter(function(s) { return s.gir === true; }).length;
+  var _girHit = _sgMe.scores.filter(function(s) { return s.gir === true; }).length;
   var _girElig = _sgMe.scores.filter(function(s) { return s.gir !== null && s.gir !== undefined; }).length;
-  var _firStr  = _firData.eligible > 0 ? 'FIR: ' + _firData.hit + '/' + _firData.eligible + ' (' + Math.round((_firData.pct||0)*100) + '%)' : '';
-  var _girStr  = _girElig > 0 ? 'GIR: ' + _girHit + '/' + _girElig + ' (' + Math.round(_girHit/_girElig*100) + '%)' : '';
-  var fgLine = [_firStr, _girStr].filter(Boolean).join(' \u00B7 ');
-  var fgEl = document.getElementById('lrSgFirGir');
-  if (fgEl) { fgEl.textContent = fgLine; fgEl.style.display = fgLine ? '' : 'none'; }
+  var _firGirLine = '';
+  if (_firData.eligible > 0 || _girElig > 0) {
+    var _firStr = _firData.eligible > 0
+      ? 'FIR: ' + _firData.hit + '/' + _firData.eligible
+        + ' (' + Math.round((_firData.pct || 0) * 100) + '%)'
+      : '';
+    var _girStr = _girElig > 0
+      ? 'GIR: ' + _girHit + '/' + _girElig
+        + ' (' + Math.round(_girHit / _girElig * 100) + '%)'
+      : '';
+    _firGirLine = [_firStr, _girStr].filter(Boolean).join(' \u00B7 ');
+  }
+  var _sgCard = '<details style="margin-top:10px"><summary style="cursor:pointer;'
+    + 'color:var(--tx3);padding:8px 0;'
+    + 'border-top:1px solid var(--br);list-style:none;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:.8rem;font-weight:600">Strokes Gained</span>'
+    + '<span style="color:' + _lrSGColor(_sgData.total) + ';font-size:.8rem;font-weight:700">'
+    + (_sgData.total >= 0 ? '+' : '\u2212') + Math.abs(_sgData.total).toFixed(2) + '</span>'
+    + '</summary>'
+    + '<div class="card" style="margin-top:6px;margin-bottom:0">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:.65rem">'
+    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Off the Tee</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.OTT) + '</td></tr>'
+    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Approach</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.APP) + '</td></tr>'
+    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Around the Green</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.ARG) + '</td></tr>'
+    + '<tr><td style="padding:5px 2px;color:var(--tx2)">Putting</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.PUTT) + '</td></tr>'
+    + '</table>'
+    + (_firGirLine ? '<div style="margin-top:8px;font-size:.6rem;color:var(--tx3)">' + _firGirLine + '</div>' : '')
+    + '</div></details>';
+  document.getElementById('lrSumLeaderboard').innerHTML += _sgCard;
 })();
 
 // Save note
-var warningEl = document.getElementById('lrSaveNoteWarning');
-var noteTextEl = document.getElementById('lrSaveNoteText');
-var backLink = document.getElementById('lrSaveNoteBackLink');
+const noteEl = document.getElementById('lrSaveNote');
 if(meIdx<0) {
-  if (warningEl) warningEl.style.display = '';
-  if (noteTextEl) noteTextEl.textContent = '';
-  if (backLink) backLink.onclick = function(e) { e.preventDefault(); lrShowScreen('lrHoleScreen'); lrRenderHole(); };
+  noteEl.innerHTML = '\u26A0 No player marked as you \u2014 round will be saved without handicap eligibility. <a href="#" onclick="event.preventDefault();lrShowScreen(\'lrHoleScreen\');lrRenderHole()">Go back to mark yourself.</a>';
 } else {
-  if (warningEl) warningEl.style.display = 'none';
   const hasSI = lrState.holes.every(h=>h.handicap>0);
   const capNote = lrState.countForHandicap && me?.handicap && hasSI
     ? ' Net double bogey cap applied per hole for differential.' : '';
-  if (noteTextEl) noteTextEl.textContent = lrState.countForHandicap
+  noteEl.textContent = lrState.countForHandicap
     ? 'Your score will be saved and counted toward your handicap.'+capNote
     : 'Your score will be saved but excluded from handicap calculation.';
 }
@@ -1402,19 +1344,17 @@ if(w){ w.document.open(); w.document.write(html); w.document.close(); }
 // Uses inline confirm strip (not banner) matching range discard pattern.
 // Hole screen discard is accessible via lrEndBanner Discard button (index.html).
 function lrDiscardRound() {
-var el = document.getElementById('lrDiscardConfirm');
-if (!el) return;
-el.style.display = 'flex';
-/* Attach delegated listener once */
-if (!el.dataset.listenerAttached) {
-  el.dataset.listenerAttached = '1';
-  el.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    if (btn.dataset.action === 'confirm-discard') { lrConfirmDiscard(); }
-    else if (btn.dataset.action === 'cancel-discard') { el.style.display = 'none'; }
-  });
-}
+if(document.getElementById('lrDiscardConfirm')) return;
+var btn = document.querySelector('[onclick="lrDiscardRound()"]');
+if(!btn) return;
+var wrap = document.createElement('div');
+wrap.id = 'lrDiscardConfirm';
+wrap.style.cssText = 'margin-top:8px;font-size:.68rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+wrap.innerHTML = '<span style="color:var(--danger)">Discard this round? All scores will be lost.</span>' +
+  '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.62rem;padding:2px 8px" onclick="lrConfirmDiscard()">' +
+  'Discard</button>' +
+  '<button class="btn sec" style="font-size:.62rem;padding:2px 8px" onclick="document.getElementById(\'lrDiscardConfirm\').remove()">Cancel</button>';
+btn.parentNode.insertBefore(wrap, btn.nextSibling);
 }
 function lrConfirmDiscard() {
 const banner = document.getElementById('lrEndBanner');
@@ -1614,71 +1554,48 @@ function _lrArcPath(cx, cy, r1, r2, startDeg, endDeg) {
 /* Radial SVG builder -- matches range.js _buildRadialSVG (interactive mode only, onclick wired to lrSelectZone)
    isApproach=true: inner+bull get muted green base fill to indicate proximity to hole; flag icon on bull */
 function _buildLrRadialSVG(selRing, selSeg, isApproach) {
-  var ns = 'http://www.w3.org/2000/svg';
   var cx = 150, cy = 150;
   var rB = ZONE_RING_RADII.bull, rI = ZONE_RING_RADII.inner, rO = ZONE_RING_RADII.outer;
-  var svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 300 300');
-  svg.style.cssText = 'width:100%;max-width:300px;display:block;margin:0 auto';
-
-  /* Background */
-  var bg1 = document.createElementNS(ns, 'rect');
-  bg1.setAttribute('width','300'); bg1.setAttribute('height','300'); bg1.setAttribute('fill','#6a9a50');
-  var bg2 = document.createElementNS(ns, 'rect');
-  bg2.setAttribute('x','90'); bg2.setAttribute('y','0'); bg2.setAttribute('width','120'); bg2.setAttribute('height','300'); bg2.setAttribute('fill','#9ec880');
-  svg.appendChild(bg1); svg.appendChild(bg2);
-
-  function makePath(d, fill, strk, sw, ring, seg) {
-    var el = document.createElementNS(ns, 'path');
-    el.setAttribute('d', d); el.setAttribute('fill', fill);
-    el.setAttribute('stroke', strk); el.setAttribute('stroke-width', sw);
-    el.style.cssText = 'cursor:pointer;touch-action:manipulation';
-    el.addEventListener('click', function() { lrSelectZone(ring, seg); });
-    return el;
-  }
-
+  var bg = '<rect width="300" height="300" fill="#6a9a50"/>'
+    + '<rect x="90" y="0" width="120" height="300" fill="#9ec880"/>';
+  var paths = '';
   /* 8 inner segments */
   for (var i = 0; i < 8; i++) {
     var isSel    = selRing === 'inner' && selSeg === i;
     var baseFill = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
-    svg.appendChild(makePath(
-      _lrArcPath(cx, cy, rB, rI, (i * 45) - 22.5, (i * 45) + 22.5),
-      isSel ? 'rgba(180,30,30,0.45)' : baseFill,
-      isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)',
-      isSel ? '2.5' : '1.5', 'inner', i
-    ));
+    var fill     = isSel ? 'rgba(180,30,30,0.45)' : baseFill;
+    var strk     = isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+    var sw       = isSel ? '2.5' : '1.5';
+    var d        = _lrArcPath(cx, cy, rB, rI, (i * 45) - 22.5, (i * 45) + 22.5);
+    paths += '<path d="' + d + '" fill="' + fill + '" stroke="' + strk + '" stroke-width="' + sw
+      + '" onclick="lrSelectZone(\'inner\',' + i + ')" style="cursor:pointer;touch-action:manipulation"></path>';
   }
-  /* 8 outer segments */
+  /* 8 outer segments -- neutral regardless of mode */
   for (var j = 0; j < 8; j++) {
     var isSel2 = selRing === 'outer' && selSeg === j;
-    svg.appendChild(makePath(
-      _lrArcPath(cx, cy, rI, rO, (j * 45) - 22.5, (j * 45) + 22.5),
-      isSel2 ? 'rgba(180,30,30,0.25)' : 'rgba(255,255,255,0.18)',
-      isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)',
-      isSel2 ? '2.5' : '1.5', 'outer', j
-    ));
+    var fill2  = isSel2 ? 'rgba(180,30,30,0.25)' : 'rgba(255,255,255,0.18)';
+    var strk2  = isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+    var sw2    = isSel2 ? '2.5' : '1.5';
+    var d2     = _lrArcPath(cx, cy, rI, rO, (j * 45) - 22.5, (j * 45) + 22.5);
+    paths += '<path d="' + d2 + '" fill="' + fill2 + '" stroke="' + strk2 + '" stroke-width="' + sw2
+      + '" onclick="lrSelectZone(\'outer\',' + j + ')" style="cursor:pointer;touch-action:manipulation"></path>';
   }
   /* Bullseye */
-  var bullSel  = selRing === 'bull';
-  var bullBase = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
-  var bull = document.createElementNS(ns, 'circle');
-  bull.setAttribute('cx','150'); bull.setAttribute('cy','150'); bull.setAttribute('r', rB);
-  bull.setAttribute('fill', bullSel ? 'rgba(180,30,30,0.85)' : bullBase);
-  bull.setAttribute('stroke', bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)');
-  bull.setAttribute('stroke-width', bullSel ? '2.5' : '1.5');
-  bull.style.cssText = 'cursor:pointer;touch-action:manipulation';
-  bull.addEventListener('click', function() { lrSelectZone('bull', null); });
-  svg.appendChild(bull);
-  /* Flag for approach mode */
+  var bullSel      = selRing === 'bull';
+  var bullBaseFill = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
+  var bullFill     = bullSel ? 'rgba(180,30,30,0.85)' : bullBaseFill;
+  var bullStrk     = bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
+  var bullSW       = bullSel ? '2.5' : '1.5';
+  paths += '<circle cx="150" cy="150" r="' + rB + '" fill="' + bullFill + '" stroke="' + bullStrk
+    + '" stroke-width="' + bullSW + '" onclick="lrSelectZone(\'bull\',null)" style="cursor:pointer;touch-action:manipulation"></circle>';
+  /* Flag icon on bull for approach mode */
   if (isApproach) {
-    var line = document.createElementNS(ns, 'line');
-    line.setAttribute('x1','150'); line.setAttribute('y1','132'); line.setAttribute('x2','150'); line.setAttribute('y2','168');
-    line.setAttribute('stroke','rgba(255,255,255,0.85)'); line.setAttribute('stroke-width','2'); line.setAttribute('pointer-events','none');
-    var poly = document.createElementNS(ns, 'polygon');
-    poly.setAttribute('points','150,132 164,139 150,146'); poly.setAttribute('fill','rgba(255,255,255,0.85)'); poly.setAttribute('pointer-events','none');
-    svg.appendChild(line); svg.appendChild(poly);
+    paths += '<line x1="150" y1="132" x2="150" y2="168" stroke="rgba(255,255,255,0.85)" stroke-width="2" pointer-events="none"/>'
+      + '<polygon points="150,132 164,139 150,146" fill="rgba(255,255,255,0.85)" pointer-events="none"/>';
   }
-  return svg;
+  return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"'
+    + ' style="width:100%;max-width:300px;display:block;margin:0 auto">'
+    + bg + paths + '</svg>';
 }
 
 function _lrZoneLabel(ring, seg) {
@@ -1706,15 +1623,28 @@ function _lrClubOptions(selectedId) {
   return opts;
 }
 
-function _lrRenderShotLog(shots) {
-  var container = document.getElementById('lrShotLog');
-  var rowsEl    = document.getElementById('lrShotLogRows');
-  if (!container || !rowsEl) return;
-  if (!shots || !shots.length) { container.style.display = 'none'; return; }
-  container.style.display = '';
-  rowsEl.textContent = '';
-  shots.forEach(function(sh, i) {
-    var zone = sh.radial_ring ? _lrZoneLabel(sh.radial_ring, sh.radial_segment) : '';
+function _lrShotLogHtml(shots) {
+  if (!shots || !shots.length) return '';
+  var rows = shots.map(function(sh, i) {
+    var zone   = sh.radial_ring ? _lrZoneLabel(sh.radial_ring, sh.radial_segment) : '';
+    var obTag  = sh.is_ob
+      ? ' <span style="color:var(--danger);font-size:.6rem">Penalty+' + (sh.penalty_strokes || 0) + '</span>'
+      : '';
+    var sgTag = (sh.sg !== null && sh.sg !== undefined)
+      ? ' <span style="color:' + _lrSGColor(sh.sg) + ';font-size:.6rem">\u00B7 SG: ' + _lrFmtSG(sh.sg) + '</span>'
+      : '';
+    var editBtn = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:4px"'
+      + ' onclick="lrEditShot(' + i + ')">Edit</button>';
+    var delBtn  = '<button class="btn sec" style="font-size:.55rem;padding:1px 5px;margin-left:2px;color:var(--danger)"'
+      + ' onclick="lrDeleteShot(' + i + ')">\u2715</button>';
+    var confirmHtml = (_lrDeleteConfirmIdx === i)
+      ? '<div style="margin-top:4px;font-size:.6rem;display:flex;gap:6px;align-items:center">'
+          + '<span style="color:var(--danger)">Delete this shot?</span>'
+          + '<button class="btn" style="background:var(--danger);color:#fff;border-color:var(--danger);'
+          + 'font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotConfirm(' + i + ')">Yes</button>'
+          + '<button class="btn sec" style="font-size:.55rem;padding:1px 6px" onclick="lrDeleteShotCancel()">No</button>'
+          + '</div>'
+      : '';
     var clubDisplay = (function() {
       var c = bag && bag.find(function(x) { return x.id === sh.clubId; });
       return c ? [c.type, c.identifier].filter(Boolean).join(' ') : '\u2014';
@@ -1722,6 +1652,9 @@ function _lrRenderShotLog(shots) {
     var parts = ['Shot ' + (i + 1), clubDisplay, sh.shot_mode, sh.lie || '\u2014'];
     if (zone) parts.push(zone);
     if (sh.flight_path) parts.push(sh.flight_path);
+    /* PHASE-B2: Surface GPS-tracked fields when present. gps_flight records have
+       distance, distance-to-pin, and dispersion that the radial fields don't.
+       PHASE-B3: dispersion now includes long/short component (vs aim) alongside L/R. */
     if (sh.gps_flight) {
       var gf = sh.gps_flight;
       if (gf.distanceYds) parts.push(Math.round(gf.distanceYds) + 'y');
@@ -1734,441 +1667,170 @@ function _lrRenderShotLog(shots) {
         }
       } catch(e) {}
       var vsAimY = (gf.dispersionLong || 0) - aimDistY;
-      if (Math.abs(vsAimY) >= 1) parts.push(Math.round(Math.abs(vsAimY)) + 'y ' + (vsAimY > 0 ? 'long' : 'short'));
-      if (gf.dispersionLat && Math.abs(gf.dispersionLat) >= 1) parts.push(Math.round(Math.abs(gf.dispersionLat)) + 'y ' + (gf.dispersionLat > 0 ? 'R' : 'L'));
+      if (Math.abs(vsAimY) >= 1) {
+        parts.push(Math.round(Math.abs(vsAimY)) + 'y ' + (vsAimY > 0 ? 'long' : 'short'));
+      }
+      if (gf.dispersionLat && Math.abs(gf.dispersionLat) >= 1) {
+        parts.push(Math.round(Math.abs(gf.dispersionLat)) + 'y ' + (gf.dispersionLat > 0 ? 'R' : 'L'));
+      }
     }
-    /* Row wrapper */
-    var row = document.createElement('div');
-    row.style.cssText = 'font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)';
-    /* Main line */
-    var main = document.createElement('div');
-    main.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:2px';
-    var txt = document.createElement('span');
-    txt.textContent = parts.join(' \u00B7 ');
-    if (sh.is_ob) {
-      var obTag = document.createElement('span');
-      obTag.style.cssText = 'color:var(--danger);font-size:.6rem';
-      obTag.textContent = ' Penalty+' + (sh.penalty_strokes || 0);
-      txt.appendChild(obTag);
-    }
-    if (sh.sg !== null && sh.sg !== undefined) {
-      var sgTag = document.createElement('span');
-      sgTag.style.cssText = 'color:' + _lrSGColor(sh.sg) + ';font-size:.6rem';
-      sgTag.textContent = ' \u00B7 SG: ' + _lrFmtSG(sh.sg);
-      txt.appendChild(sgTag);
-    }
-    var editBtn = document.createElement('button');
-    editBtn.className = 'btn sec';
-    editBtn.style.cssText = 'font-size:.55rem;padding:1px 5px;margin-left:4px';
-    editBtn.textContent = 'Edit';
-    editBtn.dataset.action = 'edit-shot';
-    editBtn.dataset.idx = i;
-    var delBtn = document.createElement('button');
-    delBtn.className = 'btn sec';
-    delBtn.style.cssText = 'font-size:.55rem;padding:1px 5px;margin-left:2px;color:var(--danger)';
-    delBtn.textContent = '\u2715';
-    delBtn.dataset.action = 'delete-shot';
-    delBtn.dataset.idx = i;
-    main.appendChild(txt);
-    main.appendChild(editBtn);
-    main.appendChild(delBtn);
-    row.appendChild(main);
-    /* Delete confirm row */
-    if (_lrDeleteConfirmIdx === i) {
-      var confirm = document.createElement('div');
-      confirm.style.cssText = 'margin-top:4px;font-size:.6rem;display:flex;gap:6px;align-items:center';
-      var confirmLbl = document.createElement('span');
-      confirmLbl.style.color = 'var(--danger)';
-      confirmLbl.textContent = 'Delete this shot?';
-      var yesBtn = document.createElement('button');
-      yesBtn.className = 'btn';
-      yesBtn.style.cssText = 'background:var(--danger);color:#fff;border-color:var(--danger);font-size:.55rem;padding:1px 6px';
-      yesBtn.textContent = 'Yes';
-      yesBtn.dataset.action = 'delete-shot-confirm';
-      yesBtn.dataset.idx = i;
-      var noBtn = document.createElement('button');
-      noBtn.className = 'btn sec';
-      noBtn.style.cssText = 'font-size:.55rem;padding:1px 6px';
-      noBtn.textContent = 'No';
-      noBtn.dataset.action = 'delete-shot-cancel';
-      confirm.appendChild(confirmLbl);
-      confirm.appendChild(yesBtn);
-      confirm.appendChild(noBtn);
-      row.appendChild(confirm);
-    }
-    rowsEl.appendChild(row);
-  });
-}
-
-/* Keep _lrShotLogHtml as a no-op shim — callers in _lrAdvancedHtml now use _lrRenderShotLog directly */
-function _lrShotLogHtml(shots) { return ''; }
-
-function _lrRenderShotForm(d, shots, hole) {
-  var formEl = document.getElementById('lrShotFormInner');
-  if (!formEl) return;
-  formEl.style.display = '';
-
-  var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
-  var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
-
-  /* Shot label */
-  var labelEl = document.getElementById('lrShotLabel');
-  if (labelEl) labelEl.textContent = shotLabel;
-
-  /* SG line */
-  var sgEl = document.getElementById('lrShotSgLine');
-  if (sgEl) {
-    var sgTxt = '';
-    if (d.lie && d.distanceToHole !== null && d.distanceToHole !== undefined) {
-      var exp = sgExpected(d.lie, d.distanceToHole);
-      if (exp !== null) sgTxt = 'Exp: ' + exp.toFixed(2) + ' strokes from here';
-    }
-    sgEl.textContent = sgTxt;
-    sgEl.style.display = sgTxt ? '' : 'none';
-  }
-
-  /* Mode buttons */
-  ['standard','approach','on_green'].forEach(function(m) {
-    var btn = document.getElementById('lrModeBtn' + m.charAt(0).toUpperCase() + m.slice(1).replace('_g','G').replace('reen','reen'));
-    // ID map: standard->lrModeBtnStandard, approach->lrModeBtnApproach, on_green->lrModeBtnOnGreen
-  });
-  var modeIds = { standard: 'lrModeBtnStandard', approach: 'lrModeBtnApproach', on_green: 'lrModeBtnOnGreen' };
-  Object.keys(modeIds).forEach(function(m) {
-    var btn = document.getElementById(modeIds[m]);
-    if (btn) btn.className = 'implied-tog' + (d.shot_mode === m ? ' on' : '');
-  });
-
-  /* Distance input */
-  var distEl = document.getElementById('lrShotDistInput');
-  if (distEl) {
-    if (document.activeElement !== distEl) {
-      distEl.value = d.distanceToHole !== null ? d.distanceToHole : '';
-    }
-    distEl.onblur = function() { lrSetDist(this.value); };
-  }
-
-  /* Club select */
-  var selEl = document.getElementById('lrShotClubSelect');
-  if (selEl) {
-    selEl.textContent = '';
-    var none = document.createElement('option');
-    none.value = ''; none.textContent = '-- Club --';
-    selEl.appendChild(none);
-    if (typeof bag !== 'undefined' && bag && bag.length) {
-      bag.forEach(function(c) {
-        var opt = document.createElement('option');
-        opt.value = c.id;
-        opt.selected = c.id === d.clubId;
-        opt.textContent = c.identifier || c.type;
-        selEl.appendChild(opt);
-      });
-    }
-    selEl.onchange = function() { lrSetClub(this.value); };
-  }
-
-  /* Radial SVG — replace content with fresh DOM node */
-  var svgWrap = document.getElementById('lrRadialSvgWrap');
-  if (svgWrap) {
-    svgWrap.textContent = '';
-    svgWrap.appendChild(_buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach'));
-  }
-  var zoneLblEl = document.getElementById('lrZoneLabel');
-  if (zoneLblEl) zoneLblEl.textContent = _lrZoneLabel(d.radial_ring, d.radial_segment);
-
-  /* Lie buttons — rebuild since set varies by mode */
-  var lies = d.shot_mode === 'approach'
-    ? ['green','fairway','rough','sand','recovery']
-    : ['fairway','rough','sand','recovery'];
-  var lieWrap = document.getElementById('lrLieBtns');
-  if (lieWrap) {
-    lieWrap.textContent = '';
-    lies.forEach(function(lie) {
-      var btn = document.createElement('button');
-      btn.className = 'implied-tog' + (d.lie === lie ? ' on' : '');
-      btn.textContent = lie.charAt(0).toUpperCase() + lie.slice(1);
-      btn.dataset.action = 'set-shot-lie';
-      btn.dataset.lie = lie;
-      lieWrap.appendChild(btn);
-    });
-  }
-
-  /* Flight path buttons */
-  var fpMap = { straight: 'lrFpStraight', 'left-to-right': 'lrFpLtr', 'right-to-left': 'lrFpRtl' };
-  Object.keys(fpMap).forEach(function(fp) {
-    var btn = document.getElementById(fpMap[fp]);
-    if (btn) btn.className = 'implied-tog' + (d.flight_path === fp ? ' on' : '');
-  });
-
-  /* Record Shot button label */
-  var recBtn = document.getElementById('lrRecordShotBtn');
-  if (recBtn) recBtn.textContent = _lrEditingIndex !== null ? 'Update Shot' : 'Record Shot';
+    return '<div style="font-size:.65rem;font-family:\'DM Mono\',monospace;padding:5px 0;border-bottom:1px solid var(--br)">'
+      + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">'
+      + '<span>' + parts.join(' \u00B7 ') + obTag + sgTag + '</span>' + editBtn + delBtn
+      + '</div>' + confirmHtml + '</div>';
+  }).join('');
+  return '<div style="margin-bottom:10px">'
+    + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:4px">Shot Log</div>'
+    + rows + '</div>';
 }
 
 function _lrGirFirToggles(s, hole) {
-  var block = document.getElementById('lrGirFirBlock');
-  if (!block) return;
-  block.style.display = 'grid';
-  var girYes = document.getElementById('lrAdvGirYes');
-  var girNo  = document.getElementById('lrAdvGirNo');
-  girYes.className = 'lr-tog' + (s.gir === true  ? ' on-y' : '');
-  girNo.className  = 'lr-tog' + (s.gir === false ? ' on-n' : '');
-  var firCard = document.getElementById('lrFirCard');
-  firCard.style.display = hole.par > 3 ? '' : 'none';
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">';
+  html += '<div class="card" style="margin-bottom:0"><div class="card-title">GIR</div>'
+    + '<div style="display:flex;gap:6px;margin-top:4px">'
+    + '<button class="lr-tog' + (s.gir === true  ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleGir(true)">\u2713</button>'
+    + '<button class="lr-tog' + (s.gir === false ? ' on-n' : '') + '" style="flex:1" onclick="lrToggleGir(false)">\u2717</button>'
+    + '</div></div>';
   if (hole.par > 3) {
-    var firYes = document.getElementById('lrAdvFirYes');
-    var firNo  = document.getElementById('lrAdvFirNo');
-    firYes.className = 'lr-tog' + (s.fir === true  ? ' on-y' : '');
-    firNo.className  = 'lr-tog' + (s.fir === false ? ' on-n' : '');
+    html += '<div class="card" style="margin-bottom:0"><div class="card-title">FIR</div>'
+      + '<div style="display:flex;gap:6px;margin-top:4px">'
+      + '<button class="lr-tog' + (s.fir === true  ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleFir(true)">\u2713</button>'
+      + '<button class="lr-tog' + (s.fir === false ? ' on-n' : '') + '" style="flex:1" onclick="lrToggleFir(false)">\u2717</button>'
+      + '</div></div>';
   }
+  return html + '</div>';
 }
 
 function _lrAdvancedHtml(holeIdx, pi, shared) {
   if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(holeIdx);
-  var d     = _lrShotDraft;
-  var s     = lrState.players[pi].scores[holeIdx];
+  var d    = _lrShotDraft;
+  var s    = lrState.players[pi].scores[holeIdx];
   var shots = s.shots || [];
   var hole  = lrState.holes[holeIdx];
+  var arrow = _lrAdvancedOpen ? '\u25B2' : '\u25BC';
+  var hdr   = '<div class="collapsible-hdr" onclick="lrToggleAdvanced()" id="lrAdvancedHdr"'
+    + ' style="cursor:pointer;padding:10px 0;font-size:.72rem;font-family:\'DM Mono\',monospace;'
+    + 'color:var(--tx3);display:flex;justify-content:space-between;border-top:1px solid var(--br);margin-top:10px">'
+    + '<span>Advanced Mode</span><span>' + arrow + '</span></div>';
+  if (!_lrAdvancedOpen) return hdr + '<div id="lrAdvancedBody" style="display:none"></div>';
 
-  /* Collapsible header arrow */
-  var arrowEl = document.getElementById('lrAdvancedArrow');
-  if (arrowEl) arrowEl.textContent = _lrAdvancedOpen ? '\u25B2' : '\u25BC';
+  var html = '<div id="lrAdvancedBody" style="padding-bottom:12px">';
+  html += _lrShotLogHtml(shots);
 
-  /* Body visibility */
-  var body = document.getElementById('lrAdvancedBody');
-  if (!body) return;
-  body.style.display = _lrAdvancedOpen ? '' : 'none';
-  if (!_lrAdvancedOpen) return;
-
-  /* GIR prompt branch — shows prompt, hides inner content */
-  var girPrompt  = document.getElementById('lrGirPromptBlock');
-  var innerBlock = document.getElementById('lrAdvancedInner');
-  var girFirBlock    = document.getElementById('lrGirFirBlock');
-  var obBlock        = document.getElementById('lrObBlock');
-  var completeRow    = document.getElementById('lrCompleteHoleRow');
-
+  /* GIR prompt when Hole Complete pressed without on_green mode */
   if (_lrGirPromptPending) {
-    girPrompt.style.display  = '';
-    innerBlock.style.display = 'none';
-    if (girFirBlock) girFirBlock.style.display = 'none';
-    if (obBlock)     obBlock.style.display     = 'none';
-    if (completeRow) completeRow.style.display = 'none';
-    return;
+    html += '<div class="card" style="margin-bottom:8px">'
+      + '<div style="font-size:.68rem;margin-bottom:10px">Did you reach the green?</div>'
+      + '<div style="display:flex;gap:8px">'
+      + '<button class="lr-tog" style="flex:1" onclick="lrGirPromptAnswer(true)">\u2713 Yes</button>'
+      + '<button class="lr-tog" style="flex:1" onclick="lrGirPromptAnswer(false)">\u2717 No</button>'
+      + '<button class="btn sec" style="flex:1;font-size:.65rem" onclick="lrGirPromptAnswer(null)">Skip</button>'
+      + '</div></div></div>';
+    return hdr + html;
   }
-  girPrompt.style.display = 'none';
-  innerBlock.style.display = '';
 
   if (d.shot_mode === 'on_green') {
-    /* On Green: show static block, hide shot form */
-    document.getElementById('lrShotFormInner').style.display = 'none';
-    var ogBlock = document.getElementById('lrOnGreenBlock');
-    if (ogBlock) {
-      ogBlock.style.display = '';
-      var ogDistEl = document.getElementById('lrOgDistInput');
-      if (ogDistEl && document.activeElement !== ogDistEl) {
-        ogDistEl.value = (s.on_green_distance !== undefined && s.on_green_distance !== null) ? s.on_green_distance : '';
-      }
-      if (ogDistEl) ogDistEl.oninput = function() { lrSetOnGreenDist(this.value); };
-      document.getElementById('lrOgCpcNum').textContent = s.chip_putt_count || 0;
-      var holedBtn = document.getElementById('lrOgHoledBtn');
-      var holed = s.holed_out || false;
-      holedBtn.className = 'lr-tog' + (holed ? ' on-y' : '');
-      holedBtn.textContent = holed ? '\u2713 Yes' : 'No';
-      var ogModeIds = { standard: 'lrOgModeStandard', approach: 'lrOgModeApproach', on_green: 'lrOgModeOnGreen' };
-      Object.keys(ogModeIds).forEach(function(m) {
-        var btn = document.getElementById(ogModeIds[m]);
-        if (btn) btn.className = 'implied-tog' + (d.shot_mode === m ? ' on' : '');
-      });
-    }
-    _lrGirFirToggles(s, hole);
-    if (completeRow) completeRow.style.display = 'none';
-    if (obBlock)     obBlock.style.display     = 'none';
+    /* On Green body */
+    var ogDist = (s.on_green_distance !== undefined && s.on_green_distance !== null) ? s.on_green_distance : '';
+    var cpc    = s.chip_putt_count || 0;
+    var holed  = s.holed_out || false;
+    html += '<div class="card" style="margin-bottom:8px">'
+      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">On Green</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+      + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
+      + '</div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (ft)</div>'
+      + '<input type="number" inputmode="numeric" class="field"'
+      + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
+      + ' value="' + ogDist + '" oninput="lrSetOnGreenDist(this.value)"></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Strokes on Green</div>'
+      + '<div class="lr-stepper">'
+      + '<button class="lr-step-btn sm" onclick="lrAdjChipPutt(-1)">\u2212</button>'
+      + '<div class="lr-step-val"><div class="lr-step-num sm">' + cpc + '</div></div>'
+      + '<button class="lr-step-btn sm" onclick="lrAdjChipPutt(1)">+</button>'
+      + '</div></div>'
+      + '<div style="margin-bottom:10px"><div class="card-title">Holed Out</div>'
+      + '<div style="display:flex;gap:6px;margin-top:4px">'
+      + '<button class="lr-tog' + (holed ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleHoledOut()">'
+      + (holed ? '\u2713 Yes' : 'No') + '</button>'
+      + '</div></div>'
+      + _lrGirFirToggles(s, hole)
+      + '<button class="rbtn" style="width:100%;margin-top:10px" onclick="lrCompleteHole()">\u2713 Complete Hole</button>'
+      + '</div>';
   } else {
-    _lrRenderShotLog(shots);
-    _lrRenderShotForm(d, shots, hole);
-
-    /* OB block — static DOM */
-    if (obBlock) {
-      obBlock.style.display = '';
-      var obBtn = document.getElementById('lrObBtn');
-      if (_lrObConfirmPending) {
-        if (obBtn) obBtn.parentElement.style.display = 'none';
-        document.getElementById('lrObConfirmBlock').style.display = '';
-      } else {
-        if (obBtn) {
-          obBtn.parentElement.style.display = '';
-          obBtn.className = 'implied-tog' + (d.is_ob ? ' on' : '');
-          obBtn.textContent = 'Penalty: ' + (d.is_ob ? 'Yes' : 'No');
-        }
-        document.getElementById('lrObConfirmBlock').style.display = 'none';
-      }
+    /* Standard / Approach entry form */
+    var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
+    var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
+    var lies = d.shot_mode === 'approach'
+      ? ['green','fairway','rough','sand','recovery']
+      : ['fairway','rough','sand','recovery'];
+    html += '<div class="card" style="margin-bottom:8px">'
+      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
+      + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>'
+      + (function() {
+          /* SG info line: show expected strokes from current lie + distance */
+          if (!d.lie || d.distanceToHole === null || d.distanceToHole === undefined) return '';
+          var exp = sgExpected(d.lie, d.distanceToHole);
+          if (exp === null) return '';
+          return '<span style="font-size:.62rem;color:var(--tx3)">Exp: ' + exp.toFixed(2) + ' strokes from here</span>';
+        })()
+      + '</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+      + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
+      + '</div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (yds)</div>'
+      + '<input type="number" inputmode="numeric" class="field"'
+      + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
+      + ' value="' + (d.distanceToHole !== null ? d.distanceToHole : '') + '" onblur="lrSetDist(this.value)"></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Club</div>'
+      + '<select class="field" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
+      + ' onchange="lrSetClub(this.value)">' + _lrClubOptions(d.clubId) + '</select></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Result Zone</div>'
+      + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach') + '</div>'
+      + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">'
+      + _lrZoneLabel(d.radial_ring, d.radial_segment) + '</div></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Lie</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">';
+    lies.forEach(function(lie) {
+      html += '<button class="implied-tog' + (d.lie === lie ? ' on' : '') + '" onclick="lrSetShotLie(\''
+        + lie + '\')">' + lie.charAt(0).toUpperCase() + lie.slice(1) + '</button>';
+    });
+    html += '</div></div>'
+      + '<div style="margin-bottom:8px"><div class="card-title">Flight Path</div>'
+      + '<div style="display:flex;gap:6px;margin-top:4px">';
+    [['straight','Straight'],['left-to-right','L\u2192R'],['right-to-left','R\u2192L']].forEach(function(fp) {
+      html += '<button class="implied-tog' + (d.flight_path === fp[0] ? ' on' : '') + '" style="flex:1"'
+        + ' onclick="lrSetFlightPath(\'' + fp[0] + '\')">' + fp[1] + '</button>';
+    });
+    html += '</div></div>';
+    /* OB toggle / inline confirm */
+    if (_lrObConfirmPending) {
+      html += '<div style="margin-bottom:10px;padding:8px;background:var(--gr2);border-radius:6px;font-size:.68rem">'
+        + 'Penalty \u2014 add 1 penalty stroke?'
+        + '<button class="btn" style="font-size:.62rem;padding:2px 8px;margin-left:8px;'
+        + 'background:var(--danger);color:#fff;border-color:var(--danger)" onclick="lrObConfirm(true)">Yes</button>'
+        + '<button class="btn sec" style="font-size:.62rem;padding:2px 8px;margin-left:4px" onclick="lrObConfirm(false)">No</button>'
+        + '</div>';
+    } else {
+      html += '<div style="margin-bottom:10px">'
+        + '<button class="implied-tog' + (d.is_ob ? ' on' : '') + '" onclick="lrToggleOb()">Penalty: '
+        + (d.is_ob ? 'Yes' : 'No') + '</button></div>';
     }
-
-    /* GIR/FIR and Hole Complete once shots logged */
+    html += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
+      + (_lrEditingIndex !== null ? 'Update Shot' : 'Record Shot') + '</button></div>';
+    /* GIR / FIR and Hole Complete once at least one shot is logged */
     if (shots.length > 0) {
-      _lrGirFirToggles(s, hole);
-      if (completeRow) completeRow.style.display = '';
-    } else {
-      if (girFirBlock) girFirBlock.style.display = 'none';
-      if (completeRow) completeRow.style.display = 'none';
+      html += _lrGirFirToggles(s, hole);
+      html += '<button class="btn sec" style="width:100%;margin-top:8px" onclick="lrCompleteHole()">\u2713 Hole Complete</button>';
     }
   }
+  return hdr + html + '</div>';
 }
 
-/* Delegated listener for #lrAdvancedWrapper — attached once */
-var _lrAdvancedListenerAttached = false;
-function _lrAttachAdvancedListener() {
-  if (_lrAdvancedListenerAttached) return;
-  var wrapper = document.getElementById('lrAdvancedWrapper');
-  if (!wrapper) return;
-  _lrAdvancedListenerAttached = true;
-  wrapper.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    var action = btn.dataset.action;
-    if      (action === 'toggle-advanced') { lrToggleAdvanced(); }
-    else if (action === 'gir-prompt')      { lrGirPromptAnswer(btn.dataset.val === 'null' ? null : btn.dataset.val === 'true'); }
-    else if (action === 'gir-adv')         { lrToggleGir(btn.dataset.val === 'true'); }
-    else if (action === 'fir-adv')         { lrToggleFir(btn.dataset.val === 'true'); }
-    else if (action === 'ob-toggle')       { lrToggleOb(); }
-    else if (action === 'ob-confirm')      { lrObConfirm(btn.dataset.val === 'true'); }
-    else if (action === 'edit-shot')           { lrEditShot(parseInt(btn.dataset.idx, 10)); }
-    else if (action === 'delete-shot')         { lrDeleteShot(parseInt(btn.dataset.idx, 10)); }
-    else if (action === 'delete-shot-confirm') { lrDeleteShotConfirm(parseInt(btn.dataset.idx, 10)); }
-    else if (action === 'delete-shot-cancel')  { lrDeleteShotCancel(); }
-    else if (action === 'toggle-session-bag')  { lrToggleSessionBag(); }
-    else if (action === 'set-shot-mode')       { lrSetShotMode(btn.dataset.mode); }
-    else if (action === 'set-shot-lie')        { lrSetShotLie(btn.dataset.lie); }
-    else if (action === 'set-flight-path')     { lrSetFlightPath(btn.dataset.fp); }
-    else if (action === 'record-shot')         { lrRecordShot(); }
-    else if (action === 'adj-chip-putt')       { lrAdjChipPutt(parseInt(btn.dataset.delta, 10)); }
-    else if (action === 'holed-out')           { lrToggleHoledOut(); }
-  });
-}
-
-/* Caddie companion: populates static #lrCaddieWrapper nodes */
-function _lrCaddieCompanionRender() {
-  _lrAttachAdvancedListener();
-  if (!lrState) return;
-  var sid = lrState.linkedSessionId;
-  var matches = _lrMatchingSessions(lrState.courseName || '');
-  var tee = lrState.tee || '';
-
-  /* Session picker */
-  var pickerEl = document.getElementById('lrCaddieSessionPicker');
-  if (pickerEl) {
-    pickerEl.textContent = '';
-    if (matches.length) {
-      var sel = document.createElement('select');
-      sel.style.cssText = 'flex:1;min-width:0;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.65rem;padding:3px 6px;outline:none';
-      sel.onchange = function() { lrLinkSession(this.value); };
-      var none = document.createElement('option');
-      none.value = ''; none.textContent = '\u2014 None \u2014';
-      sel.appendChild(none);
-      matches.forEach(function(h) {
-        var opt = document.createElement('option');
-        opt.value = h.id;
-        opt.selected = h.id === sid;
-        var warn = tee && h.tee && h.tee !== tee ? ' (\u26A0 ' + h.tee + ' tee)' : '';
-        opt.textContent = h.date + ' \u00B7 ' + (h.course || '') + warn;
-        sel.appendChild(opt);
-      });
-      pickerEl.appendChild(sel);
-    } else if (sid) {
-      var unlinkBtn = document.createElement('button');
-      unlinkBtn.className = 'btn sec';
-      unlinkBtn.style.cssText = 'font-size:.58rem;padding:2px 8px';
-      unlinkBtn.textContent = 'Unlink';
-      unlinkBtn.onclick = function() { lrLinkSession(''); };
-      pickerEl.appendChild(unlinkBtn);
-    } else {
-      var noSess = document.createElement('span');
-      noSess.style.cssText = 'font-size:.6rem;color:var(--tx3)';
-      noSess.textContent = 'No matching sessions for this course';
-      pickerEl.appendChild(noSess);
-    }
-  }
-
-  if (!sid) {
-    _lrCaddieHideLinkedBlocks();
-    return;
-  }
-  var data = _lrParseSession(sid);
-  if (!data) { _lrCaddieHideLinkedBlocks(); return; }
-
-  /* Tee mismatch warning */
-  var warnEl = document.getElementById('lrCaddieTeeWarning');
-  if (warnEl) {
-    if (data.sessionTee && lrState.tee && data.sessionTee !== lrState.tee) {
-      warnEl.textContent = '\u26A0 Session is for ' + data.sessionTee + ' tees \u2014 you are playing ' + lrState.tee;
-      warnEl.style.display = '';
-    } else {
-      warnEl.style.display = 'none';
-    }
-  }
-
-  /* Optimised Bag */
-  var bagBlock = document.getElementById('lrCaddieBagBlock');
-  var bagRows  = document.getElementById('lrCaddieBagRows');
-  var bagArrow = document.getElementById('lrCaddieBagArrow');
-  if (bagBlock) {
-    if (data.bagLines.length) {
-      bagBlock.style.display = '';
-      var bagOpen = lrState._sessionBagOpen;
-      if (bagArrow) bagArrow.textContent = bagOpen ? '\u25B2' : '\u25BC';
-      if (bagRows) {
-        bagRows.style.display = bagOpen ? '' : 'none';
-        if (bagOpen) {
-          bagRows.textContent = '';
-          data.bagLines.forEach(function(l) {
-            var m = l.match(/^(\d+)\.\s+(.+?)\s+\u2014\s+([0-9\u2013\-]+ yds)\s+(.+)/);
-            var row = document.createElement('div');
-            row.style.cssText = 'display:flex;gap:6px;font-size:.62rem;padding:2px 0;border-bottom:1px solid var(--br)';
-            if (m) {
-              var n = document.createElement('span'); n.style.cssText = 'color:var(--tx3);width:16px'; n.textContent = m[1] + '.';
-              var name = document.createElement('span'); name.style.cssText = 'flex:1;color:var(--tx)'; name.textContent = m[2];
-              var yds = document.createElement('span'); yds.style.cssText = 'color:var(--ac2);white-space:nowrap'; yds.textContent = m[3];
-              var note = document.createElement('span'); note.style.cssText = 'color:var(--tx3);font-size:.58rem;text-align:right;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'; note.textContent = m[4];
-              row.appendChild(n); row.appendChild(name); row.appendChild(yds); row.appendChild(note);
-            } else {
-              row.style.cssText = 'font-size:.62rem;color:var(--tx2);padding:2px 0';
-              row.textContent = l;
-            }
-            bagRows.appendChild(row);
-          });
-        }
-      }
-    } else {
-      bagBlock.style.display = 'none';
-    }
-  }
-
-  /* Hole Advice */
-  var adviceBlock   = document.getElementById('lrCaddieAdviceBlock');
-  var adviceMeta    = document.getElementById('lrCaddieAdviceMeta');
-  var adviceStrokes = document.getElementById('lrCaddieAdviceStrokes');
-  var adviceText    = document.getElementById('lrCaddieAdviceText');
-  var holeNum = lrState.holes[lrState.curHole] ? lrState.holes[lrState.curHole].n : null;
-  var advice  = holeNum ? data.holeMap[holeNum] : null;
-  if (adviceBlock) {
-    if (advice) {
-      adviceBlock.style.display = '';
-      if (adviceMeta) adviceMeta.textContent = 'Hole ' + advice.num
-        + (advice.par ? ' \u00B7 Par ' + advice.par : '')
-        + (advice.yds ? ' \u00B7 ' + advice.yds + ' yds' : '');
-      if (adviceStrokes) { adviceStrokes.textContent = advice.strokes || ''; adviceStrokes.style.display = advice.strokes ? '' : 'none'; }
-      if (adviceText)    { adviceText.textContent    = advice.advice  || ''; adviceText.style.display    = advice.advice  ? '' : 'none'; }
-    } else {
-      adviceBlock.style.display = 'none';
-    }
-  }
-}
-
-function _lrCaddieHideLinkedBlocks() {
-  var ids = ['lrCaddieTeeWarning','lrCaddieBagBlock','lrCaddieAdviceBlock'];
-  ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
-}
-
-
+/* ── Exported advanced-mode interaction functions ────────────────────────── */
 
 function lrToggleAdvanced() {
   _lrAdvancedOpen = !_lrAdvancedOpen;
@@ -4095,5 +3757,5 @@ Object.assign(window, {
   lrxInit, lrxHydrate,
   lrxStartHoleTimer, lrxStopHoleTimer, lrxTogglePause,
   lrxIncDrink, lrxDecDrink,
-  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxBannerHtml, lrxTick
+  lrxFetchWeather, lrxToggleUnits, lrxRenderBanner, lrxBannerHtml, lrxTick,
 });
