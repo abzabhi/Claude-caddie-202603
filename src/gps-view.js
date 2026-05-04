@@ -955,15 +955,18 @@ function _renderYards() {
   //   + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">yds to green</div>'
   //   + '</div>';
   */
-  el.innerHTML = '<div style="text-align:center;padding:14px 8px 10px">'
-    + '<div style="font-family:\'DM Mono\',monospace;font-size:2.4rem;font-weight:700;color:var(--tx);line-height:1">'
-    + (y != null ? Math.round(y) : '\u2014') + '</div>'
-    + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">ball to pin</div>'
-    + (walkY != null
-        ? '<div style="font-size:.7rem;color:var(--tx2);margin-top:5px;font-family:\'DM Mono\',monospace">'
-          + walkY + '<span style="font-size:.55rem;color:var(--tx3);margin-left:3px">yds walking</span></div>'
-        : '')
-    + '</div>';
+  var distEl = document.getElementById('gpsDistVal');
+  var walkRow = document.getElementById('gpsWalkRow');
+  var walkEl  = document.getElementById('gpsWalkVal');
+  if (distEl) distEl.textContent = y != null ? Math.round(y) : '\u2014';
+  if (walkRow && walkEl) {
+    if (walkY != null) {
+      walkEl.textContent = walkY;
+      walkRow.style.display = '';
+    } else {
+      walkRow.style.display = 'none';
+    }
+  }
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -997,10 +1000,12 @@ function _gvCorridorCheck(startLL, endLL, hazardCentroid) {
 function _renderHazards() {
   var el = document.getElementById('gpsHazards');
   if (!el) return;
+  var col1 = document.getElementById('gpsHazColToAim');
+  var col2 = document.getElementById('gpsHazColAimGreen');
   var lr = window.lrState;
-  if (!lr || !lr._mapInstance) { el.innerHTML = ''; return; }
+  if (!lr || !lr._mapInstance) { if (col1) col1.textContent = ''; if (col2) col2.textContent = ''; return; }
   var geo = _gvGetGeo();
-  if (!geo || !geo.polygons || !geo.polygons.features) { el.innerHTML = ''; return; }
+  if (!geo || !geo.polygons || !geo.polygons.features) { if (col1) col1.textContent = ''; if (col2) col2.textContent = ''; return; }
   var holeEntry = _gvHoleEntry(geo);
   /* PHASE-B5: Corridor 1 baseline = ball position (last shot end / tee), NOT
      phone GPS. Mirrors _calcYardsToGreen and _gvRefreshLineStart so the strategic
@@ -1025,7 +1030,7 @@ function _renderHazards() {
     ? lr._mapAim
     : (holeEntry && Array.isArray(holeEntry.green) ? holeEntry.green : null);
   var greenC = (holeEntry && Array.isArray(holeEntry.green)) ? holeEntry.green : null;
-  if (!ballPt || !aim) { el.innerHTML = ''; return; }
+  if (!ballPt || !aim) { if (col1) col1.textContent = ''; if (col2) col2.textContent = ''; return; }
   var allFeats = geo.polygons.features;
   /* PHASE-B5: build TWO row lists, one per corridor. Same hazard can appear in
      both if its centroid is in both corridors — informative, not duplication.
@@ -1061,35 +1066,42 @@ function _renderHazards() {
   /* Cap each column at 4 rows. */
   var capped1 = rowsToAim.slice(0, 4);
   var capped2 = rowsAimToGreen.slice(0, 4);
-  var renderRows = function(rows) {
+
+  var fillCol = function(colEl, rows) {
+    if (!colEl) return;
+    colEl.textContent = '';
     if (!rows.length) {
-      return '<div style="font-size:.62rem;color:var(--tx3);padding:6px 0">None</div>';
+      var none = document.createElement('div');
+      none.style.cssText = 'font-size:.62rem;color:var(--tx3);padding:6px 0';
+      none.textContent = 'None';
+      colEl.appendChild(none);
+      return;
     }
-    return rows.map(function(rw) {
+    rows.forEach(function(rw) {
       var meta = GPS_HAZARDS[rw.typ];
-      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--br);font-size:.65rem">'
-        +   '<span style="color:' + meta.color + '">' + meta.icon + '</span>'
-        +   '<span style="color:var(--tx);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + meta.label + '</span>'
-        +   '<span style="font-family:\'DM Mono\',monospace;color:var(--tx2);flex:0 0 auto">'
-        +     rw.dist + 'y' + (rw.lr ? ' ' + rw.lr : '')
-        +   '</span>'
-        + '</div>';
-    }).join('');
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--br);font-size:.65rem';
+      var icon = document.createElement('span');
+      icon.style.color = meta.color;
+      icon.textContent = meta.icon;
+      var label = document.createElement('span');
+      label.style.cssText = 'color:var(--tx);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      label.textContent = meta.label;
+      var dist = document.createElement('span');
+      dist.style.cssText = 'font-family:\'DM Mono\',monospace;color:var(--tx2);flex:0 0 auto';
+      dist.textContent = rw.dist + 'y' + (rw.lr ? ' ' + rw.lr : '');
+      row.appendChild(icon);
+      row.appendChild(label);
+      row.appendChild(dist);
+      colEl.appendChild(row);
+    });
   };
+
   /* PHASE-B5: Always render both columns. Empty column shows "None" rather
      than collapsing -- the structure must stay constant so the user always
      knows where to look. */
-  var html = '<div style="padding:6px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    + '<div>'
-    +   '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">To Aim</div>'
-    +   renderRows(capped1)
-    + '</div>'
-    + '<div>'
-    +   '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Aim → Green</div>'
-    +   renderRows(capped2)
-    + '</div>'
-    + '</div>';
-  el.innerHTML = html;
+  fillCol(col1, capped1);
+  fillCol(col2, capped2);
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -1440,17 +1452,13 @@ function _renderShotChip() {
 function _renderPuttBar() {
   var el = document.getElementById('gpsPuttBar');
   if (!el) return;
-  if (!_puttMode) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!_puttMode) { el.style.display = 'none'; return; }
   var lr = window.lrState;
   var s = lr.players[lr.curPlayer].scores[lr.curHole];
   var cnt = s.chip_putt_count || 0;
   el.style.display = '';
-  el.innerHTML = '<div style="padding:8px 12px;background:var(--sf);border-top:1px solid var(--br);display:flex;align-items:center;gap:10px">'
-    + '<span style="font-size:.7rem;color:var(--tx)">Putts</span>'
-    + '<button class="lr-step-btn sm" onclick="gpsViewLogPutt(-1)">\u2212</button>'
-    + '<span style="font-family:\'DM Mono\',monospace;font-weight:700;color:var(--tx);min-width:18px;text-align:center">' + cnt + '</span>'
-    + '<button class="lr-step-btn sm" onclick="gpsViewLogPutt(1)">+</button>'
-    + '</div>';
+  var countEl = document.getElementById('gpsPuttCount');
+  if (countEl) countEl.textContent = cnt;
 }
 
 function gpsViewLogPutt(delta) {
