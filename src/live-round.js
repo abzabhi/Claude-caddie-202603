@@ -1599,48 +1599,71 @@ function _lrArcPath(cx, cy, r1, r2, startDeg, endDeg) {
 /* Radial SVG builder -- matches range.js _buildRadialSVG (interactive mode only, onclick wired to lrSelectZone)
    isApproach=true: inner+bull get muted green base fill to indicate proximity to hole; flag icon on bull */
 function _buildLrRadialSVG(selRing, selSeg, isApproach) {
+  var ns = 'http://www.w3.org/2000/svg';
   var cx = 150, cy = 150;
   var rB = ZONE_RING_RADII.bull, rI = ZONE_RING_RADII.inner, rO = ZONE_RING_RADII.outer;
-  var bg = '<rect width="300" height="300" fill="#6a9a50"/>'
-    + '<rect x="90" y="0" width="120" height="300" fill="#9ec880"/>';
-  var paths = '';
+  var svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 300 300');
+  svg.style.cssText = 'width:100%;max-width:300px;display:block;margin:0 auto';
+
+  /* Background */
+  var bg1 = document.createElementNS(ns, 'rect');
+  bg1.setAttribute('width','300'); bg1.setAttribute('height','300'); bg1.setAttribute('fill','#6a9a50');
+  var bg2 = document.createElementNS(ns, 'rect');
+  bg2.setAttribute('x','90'); bg2.setAttribute('y','0'); bg2.setAttribute('width','120'); bg2.setAttribute('height','300'); bg2.setAttribute('fill','#9ec880');
+  svg.appendChild(bg1); svg.appendChild(bg2);
+
+  function makePath(d, fill, strk, sw, ring, seg) {
+    var el = document.createElementNS(ns, 'path');
+    el.setAttribute('d', d); el.setAttribute('fill', fill);
+    el.setAttribute('stroke', strk); el.setAttribute('stroke-width', sw);
+    el.style.cssText = 'cursor:pointer;touch-action:manipulation';
+    el.addEventListener('click', function() { lrSelectZone(ring, seg); });
+    return el;
+  }
+
   /* 8 inner segments */
   for (var i = 0; i < 8; i++) {
     var isSel    = selRing === 'inner' && selSeg === i;
     var baseFill = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
-    var fill     = isSel ? 'rgba(180,30,30,0.45)' : baseFill;
-    var strk     = isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
-    var sw       = isSel ? '2.5' : '1.5';
-    var d        = _lrArcPath(cx, cy, rB, rI, (i * 45) - 22.5, (i * 45) + 22.5);
-    paths += '<path d="' + d + '" fill="' + fill + '" stroke="' + strk + '" stroke-width="' + sw
-      + '" onclick="lrSelectZone(\'inner\',' + i + ')" style="cursor:pointer;touch-action:manipulation"></path>';
+    svg.appendChild(makePath(
+      _lrArcPath(cx, cy, rB, rI, (i * 45) - 22.5, (i * 45) + 22.5),
+      isSel ? 'rgba(180,30,30,0.45)' : baseFill,
+      isSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)',
+      isSel ? '2.5' : '1.5', 'inner', i
+    ));
   }
-  /* 8 outer segments -- neutral regardless of mode */
+  /* 8 outer segments */
   for (var j = 0; j < 8; j++) {
     var isSel2 = selRing === 'outer' && selSeg === j;
-    var fill2  = isSel2 ? 'rgba(180,30,30,0.25)' : 'rgba(255,255,255,0.18)';
-    var strk2  = isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
-    var sw2    = isSel2 ? '2.5' : '1.5';
-    var d2     = _lrArcPath(cx, cy, rI, rO, (j * 45) - 22.5, (j * 45) + 22.5);
-    paths += '<path d="' + d2 + '" fill="' + fill2 + '" stroke="' + strk2 + '" stroke-width="' + sw2
-      + '" onclick="lrSelectZone(\'outer\',' + j + ')" style="cursor:pointer;touch-action:manipulation"></path>';
+    svg.appendChild(makePath(
+      _lrArcPath(cx, cy, rI, rO, (j * 45) - 22.5, (j * 45) + 22.5),
+      isSel2 ? 'rgba(180,30,30,0.25)' : 'rgba(255,255,255,0.18)',
+      isSel2 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)',
+      isSel2 ? '2.5' : '1.5', 'outer', j
+    ));
   }
   /* Bullseye */
-  var bullSel      = selRing === 'bull';
-  var bullBaseFill = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
-  var bullFill     = bullSel ? 'rgba(180,30,30,0.85)' : bullBaseFill;
-  var bullStrk     = bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)';
-  var bullSW       = bullSel ? '2.5' : '1.5';
-  paths += '<circle cx="150" cy="150" r="' + rB + '" fill="' + bullFill + '" stroke="' + bullStrk
-    + '" stroke-width="' + bullSW + '" onclick="lrSelectZone(\'bull\',null)" style="cursor:pointer;touch-action:manipulation"></circle>';
-  /* Flag icon on bull for approach mode */
+  var bullSel  = selRing === 'bull';
+  var bullBase = isApproach ? 'rgba(80,160,80,0.5)' : 'rgba(255,255,255,0.18)';
+  var bull = document.createElementNS(ns, 'circle');
+  bull.setAttribute('cx','150'); bull.setAttribute('cy','150'); bull.setAttribute('r', rB);
+  bull.setAttribute('fill', bullSel ? 'rgba(180,30,30,0.85)' : bullBase);
+  bull.setAttribute('stroke', bullSel ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.40)');
+  bull.setAttribute('stroke-width', bullSel ? '2.5' : '1.5');
+  bull.style.cssText = 'cursor:pointer;touch-action:manipulation';
+  bull.addEventListener('click', function() { lrSelectZone('bull', null); });
+  svg.appendChild(bull);
+  /* Flag for approach mode */
   if (isApproach) {
-    paths += '<line x1="150" y1="132" x2="150" y2="168" stroke="rgba(255,255,255,0.85)" stroke-width="2" pointer-events="none"/>'
-      + '<polygon points="150,132 164,139 150,146" fill="rgba(255,255,255,0.85)" pointer-events="none"/>';
+    var line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1','150'); line.setAttribute('y1','132'); line.setAttribute('x2','150'); line.setAttribute('y2','168');
+    line.setAttribute('stroke','rgba(255,255,255,0.85)'); line.setAttribute('stroke-width','2'); line.setAttribute('pointer-events','none');
+    var poly = document.createElementNS(ns, 'polygon');
+    poly.setAttribute('points','150,132 164,139 150,146'); poly.setAttribute('fill','rgba(255,255,255,0.85)'); poly.setAttribute('pointer-events','none');
+    svg.appendChild(line); svg.appendChild(poly);
   }
-  return '<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"'
-    + ' style="width:100%;max-width:300px;display:block;margin:0 auto">'
-    + bg + paths + '</svg>';
+  return svg;
 }
 
 function _lrZoneLabel(ring, seg) {
@@ -1765,6 +1788,107 @@ function _lrRenderShotLog(shots) {
 /* Keep _lrShotLogHtml as a no-op shim — callers in _lrAdvancedHtml now use _lrRenderShotLog directly */
 function _lrShotLogHtml(shots) { return ''; }
 
+function _lrRenderShotForm(d, shots, hole) {
+  var formEl = document.getElementById('lrShotFormInner');
+  if (!formEl) return;
+  formEl.style.display = '';
+
+  var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
+  var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
+
+  /* Shot label */
+  var labelEl = document.getElementById('lrShotLabel');
+  if (labelEl) labelEl.textContent = shotLabel;
+
+  /* SG line */
+  var sgEl = document.getElementById('lrShotSgLine');
+  if (sgEl) {
+    var sgTxt = '';
+    if (d.lie && d.distanceToHole !== null && d.distanceToHole !== undefined) {
+      var exp = sgExpected(d.lie, d.distanceToHole);
+      if (exp !== null) sgTxt = 'Exp: ' + exp.toFixed(2) + ' strokes from here';
+    }
+    sgEl.textContent = sgTxt;
+    sgEl.style.display = sgTxt ? '' : 'none';
+  }
+
+  /* Mode buttons */
+  ['standard','approach','on_green'].forEach(function(m) {
+    var btn = document.getElementById('lrModeBtn' + m.charAt(0).toUpperCase() + m.slice(1).replace('_g','G').replace('reen','reen'));
+    // ID map: standard->lrModeBtnStandard, approach->lrModeBtnApproach, on_green->lrModeBtnOnGreen
+  });
+  var modeIds = { standard: 'lrModeBtnStandard', approach: 'lrModeBtnApproach', on_green: 'lrModeBtnOnGreen' };
+  Object.keys(modeIds).forEach(function(m) {
+    var btn = document.getElementById(modeIds[m]);
+    if (btn) btn.className = 'implied-tog' + (d.shot_mode === m ? ' on' : '');
+  });
+
+  /* Distance input */
+  var distEl = document.getElementById('lrShotDistInput');
+  if (distEl) {
+    if (document.activeElement !== distEl) {
+      distEl.value = d.distanceToHole !== null ? d.distanceToHole : '';
+    }
+    distEl.onblur = function() { lrSetDist(this.value); };
+  }
+
+  /* Club select */
+  var selEl = document.getElementById('lrShotClubSelect');
+  if (selEl) {
+    selEl.textContent = '';
+    var none = document.createElement('option');
+    none.value = ''; none.textContent = '-- Club --';
+    selEl.appendChild(none);
+    if (typeof bag !== 'undefined' && bag && bag.length) {
+      bag.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.selected = c.id === d.clubId;
+        opt.textContent = c.identifier || c.type;
+        selEl.appendChild(opt);
+      });
+    }
+    selEl.onchange = function() { lrSetClub(this.value); };
+  }
+
+  /* Radial SVG — replace content with fresh DOM node */
+  var svgWrap = document.getElementById('lrRadialSvgWrap');
+  if (svgWrap) {
+    svgWrap.textContent = '';
+    svgWrap.appendChild(_buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach'));
+  }
+  var zoneLblEl = document.getElementById('lrZoneLabel');
+  if (zoneLblEl) zoneLblEl.textContent = _lrZoneLabel(d.radial_ring, d.radial_segment);
+
+  /* Lie buttons — rebuild since set varies by mode */
+  var lies = d.shot_mode === 'approach'
+    ? ['green','fairway','rough','sand','recovery']
+    : ['fairway','rough','sand','recovery'];
+  var lieWrap = document.getElementById('lrLieBtns');
+  if (lieWrap) {
+    lieWrap.textContent = '';
+    lies.forEach(function(lie) {
+      var btn = document.createElement('button');
+      btn.className = 'implied-tog' + (d.lie === lie ? ' on' : '');
+      btn.textContent = lie.charAt(0).toUpperCase() + lie.slice(1);
+      btn.dataset.action = 'set-shot-lie';
+      btn.dataset.lie = lie;
+      lieWrap.appendChild(btn);
+    });
+  }
+
+  /* Flight path buttons */
+  var fpMap = { straight: 'lrFpStraight', 'left-to-right': 'lrFpLtr', 'right-to-left': 'lrFpRtl' };
+  Object.keys(fpMap).forEach(function(fp) {
+    var btn = document.getElementById(fpMap[fp]);
+    if (btn) btn.className = 'implied-tog' + (d.flight_path === fp ? ' on' : '');
+  });
+
+  /* Record Shot button label */
+  var recBtn = document.getElementById('lrRecordShotBtn');
+  if (recBtn) recBtn.textContent = _lrEditingIndex !== null ? 'Update Shot' : 'Record Shot';
+}
+
 function _lrGirFirToggles(s, hole) {
   var block = document.getElementById('lrGirFirBlock');
   if (!block) return;
@@ -1850,54 +1974,10 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
     if (completeRow) completeRow.style.display = '';
     if (obBlock)     obBlock.style.display     = 'none';
   } else {
-    /* Standard / Approach: build shot form inner string — deferred to 4c-ii */
-    var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
-    var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
-    var lies = d.shot_mode === 'approach'
-      ? ['green','fairway','rough','sand','recovery']
-      : ['fairway','rough','sand','recovery'];
-    var sgLine = '';
-    if (d.lie && d.distanceToHole !== null && d.distanceToHole !== undefined) {
-      var exp = sgExpected(d.lie, d.distanceToHole);
-      if (exp !== null) sgLine = '<span style="font-size:.62rem;color:var(--tx3)">Exp: ' + exp.toFixed(2) + ' strokes from here</span>';
-    }
-    var lieHtml = '';
-    lies.forEach(function(lie) {
-      lieHtml += '<button class="implied-tog' + (d.lie === lie ? ' on' : '') + '" onclick="lrSetShotLie(\'' + lie + '\')">' + lie.charAt(0).toUpperCase() + lie.slice(1) + '</button>';
-    });
-    var fpHtml = '';
-    [['straight','Straight'],['left-to-right','L\u2192R'],['right-to-left','R\u2192L']].forEach(function(fp) {
-      fpHtml += '<button class="implied-tog' + (d.flight_path === fp[0] ? ' on' : '') + '" style="flex:1" onclick="lrSetFlightPath(\'' + fp[0] + '\')">' + fp[1] + '</button>';
-    });
-    /* Render shot log into static container */
     _lrRenderShotLog(shots);
-    /* Shot form — still string-built (radial SVG, lie, club — deferred) */
-    var shotFormEl = document.getElementById('lrShotFormInner');
-    var shotInner = '<div class="card" style="margin-bottom:8px">'
-      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
-      + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>' + sgLine
-      + '</div>'
-      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
-      + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
-      + '</div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (yds)</div>'
-      + '<input type="number" inputmode="numeric" class="field"'
-      + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
-      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
-      + ' value="' + (d.distanceToHole !== null ? d.distanceToHole : '') + '" onblur="lrSetDist(this.value)"></div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Club</div>'
-      + '<select class="field" style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
-      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
-      + ' onchange="lrSetClub(this.value)">' + _lrClubOptions(d.clubId) + '</select></div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Result Zone</div>'
-      + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach') + '</div>'
-      + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">' + _lrZoneLabel(d.radial_ring, d.radial_segment) + '</div></div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Lie</div>'
-      + '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">' + lieHtml + '</div></div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Flight Path</div>'
-      + '<div style="display:flex;gap:6px;margin-top:4px">' + fpHtml + '</div></div>';
+    _lrRenderShotForm(d, shots, hole);
 
-    /* OB block — now static DOM */
+    /* OB block — static DOM */
     if (obBlock) {
       obBlock.style.display = '';
       var obBtn = document.getElementById('lrObBtn');
@@ -1913,10 +1993,6 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
         document.getElementById('lrObConfirmBlock').style.display = 'none';
       }
     }
-
-    shotInner += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
-      + (_lrEditingIndex !== null ? 'Update Shot' : 'Record Shot') + '</button></div>';
-    if (shotFormEl) shotFormEl.innerHTML = shotInner;
 
     /* GIR/FIR and Hole Complete once shots logged */
     if (shots.length > 0) {
@@ -1951,6 +2027,10 @@ function _lrAttachAdvancedListener() {
     else if (action === 'delete-shot-confirm') { lrDeleteShotConfirm(parseInt(btn.dataset.idx, 10)); }
     else if (action === 'delete-shot-cancel')  { lrDeleteShotCancel(); }
     else if (action === 'toggle-session-bag')  { lrToggleSessionBag(); }
+    else if (action === 'set-shot-mode')       { lrSetShotMode(btn.dataset.mode); }
+    else if (action === 'set-shot-lie')        { lrSetShotLie(btn.dataset.lie); }
+    else if (action === 'set-flight-path')     { lrSetFlightPath(btn.dataset.fp); }
+    else if (action === 'record-shot')         { lrRecordShot(); }
   });
 }
 
