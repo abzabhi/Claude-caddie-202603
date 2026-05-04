@@ -1459,7 +1459,47 @@
     <template id="lrPlayerTabTpl"><button class="lr-player-tab"></button></template>
     <div id="lrPlayerTabs" style="display:flex;border-bottom:1px solid var(--br);background:var(--sf);flex-shrink:0;overflow-x:auto;"></div>
     <div class="lr-scroll" id="lrScroll">
-      <div id="lrScoreBlockWrapper"></div>
+      <div id="lrScoreBlockWrapper">
+        <!-- Context node: data-pi, data-hole, data-shared written by lrScoreBlock() each render -->
+        <div id="lrScoreCtx" data-pi="0" data-hole="0" data-shared="false"></div>
+        <!-- Score card -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title" id="lrScoreLabel">Score</div>
+          <div class="lr-stepper" style="border-radius:8px;overflow:hidden">
+            <button class="lr-step-btn" data-action="adj" data-field="score" data-delta="-1">−</button>
+            <div class="lr-step-val">
+              <div class="lr-step-num" id="lrScoreNum">—</div>
+              <div class="lr-step-rel" id="lrScoreRel">tap to set</div>
+              <div id="lrScoreExtra" style="font-size:.54rem;color:var(--tx3);margin-top:2px;display:none"></div>
+            </div>
+            <button class="lr-step-btn" data-action="adj" data-field="score" data-delta="1">+</button>
+          </div>
+        </div>
+        <!-- Putts + GIR grid -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-title">Putts</div>
+            <div class="lr-stepper">
+              <button class="lr-step-btn sm" data-action="adj" data-field="putts" data-delta="-1">−</button>
+              <div class="lr-step-val"><div class="lr-step-num sm" id="lrPuttNum">—</div></div>
+              <button class="lr-step-btn sm" data-action="adj" data-field="putts" data-delta="1">+</button>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0" id="lrGirCard">
+            <div class="card-title">GIR</div>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <button class="lr-tog" id="lrGirYesBtn" style="flex:1" data-action="gir" data-val="true">✓ Yes</button>
+              <button class="lr-tog" id="lrGirNoBtn" style="flex:1" data-action="gir" data-val="false">✗ No</button>
+            </div>
+            <div style="font-size:.54rem;color:var(--tx3);margin-top:6px" id="lrGirReach"></div>
+          </div>
+        </div>
+        <!-- Note card -->
+        <div class="card" style="margin-bottom:0" id="lrNoteCard">
+          <button class="notes-toggle" id="lrNoteToggle" data-action="note">📝 Add a note…</button>
+          <textarea id="lrNoteInput" data-action="note-input" style="display:none;width:100%;background:var(--bg);border:1px solid var(--gr2);border-radius:6px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:10px;outline:none;resize:none;margin-top:8px;min-height:70px"></textarea>
+        </div>
+      </div>
       <div id="lrAdvancedWrapper"></div>
       <div id="lrTallyStripWrapper"></div>
     </div>
