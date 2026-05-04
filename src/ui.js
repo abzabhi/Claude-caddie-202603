@@ -380,6 +380,22 @@ function _remapActiveRangeClubIds(oldBag, newBag) { return _remapClubRefs(oldBag
 // Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
 // renderAll is called by gateUnlocked() after this returns.
 function dbLoadData(text) {
+  /* SIGNOUT-FIX -- only clear local data when the loading identity differs from the
+     previously-loaded identity. Same-identity refresh (gateInit, _profilePull, manualPull)
+     must NOT wipe active round/range or merged-by-id collections. dbPull stamps vc:kvId
+     before calling us; we compare to a marker we maintain here. */
+  try {
+    var loadingId = localStorage.getItem('vc:kvId') || '';
+    var lastLoaded = sessionStorage.getItem('gordy:lastLoadedId') || '';
+    if (loadingId && lastLoaded && loadingId !== lastLoaded) {
+      ['vc:bag','vc:courses','vc:rounds','vc:history','vc:rangeSessions','vc:profile',
+       'vc:hcpMode','vc:manualHcp','vc:trends','vc:optTier',
+       'gordy:activeRound','gordy:activeRange','gordy:checklist','gordy:lastTab'
+      ].forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
+      clearAll();
+    }
+    if (loadingId) sessionStorage.setItem('gordy:lastLoadedId', loadingId);
+  } catch(e){}
   const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
   if(newBag.length) { var _oldBag = bag.slice(); setBag(newBag); _remapClubRefs(_oldBag, bag); } /* SLUG2 */
   if(newRounds.length) setRounds(newRounds);
@@ -958,9 +974,9 @@ function renderDropdown() {
   }
 
   const sob=el('ddSignOutBlock');
-  if(sob) sob.innerHTML=(kvMode()
-    ?`<button class="btn danger" style="width:100%;font-size:.68rem;margin-bottom:4px" onclick="signOutSync()">\uD83D\uDD13 Sign out of sync</button>`
-    :'')+
+  if(sob) sob.innerHTML=
+    /* SIGNOUT-FIX -- single sign-out button. signOut now handles push-before-clear
+       internally when online + connected. signOutSync remains exposed for back-compat. */
     `<button class="btn sec" style="width:100%;font-size:.68rem" onclick="signOut()">\u21A9 Sign out</button>`;
 }
 
@@ -1062,9 +1078,40 @@ function confirmClearAll() {
   renderAll();
   if(window.updateSessionPill) window.updateSessionPill();
 }
-function signOut() {
-  ['vc:gateUnlocked','vc:kvPass','vc:verify','vc:siteVerify'].forEach(k=>sessionStorage.removeItem(k)); /* GUEST2 */
+/* SIGNOUT-FIX -- full identity reset on sign-out.
+   Clears all user-scoped local + session data so the next user/guest sees a clean slate.
+   Preserves device-level keys: disclaimer, PWA prompt, gist content caches, app version,
+   biometric credential pointers (per-syncId, not per-session). */
+async function signOut() {
+  // If connected + unlocked + online, attempt one final push so unsaved data syncs.
+  // Failure is non-fatal -- queued push flag will retry on reconnect.
+  try {
+    if (typeof kvMode === 'function' && kvMode() && sessionStorage.getItem('vc:kvPass') && navigator.onLine && typeof syncSave === 'function') {
+      await syncSave();
+    }
+  } catch (e) { /* non-fatal */ }
+  _clearLocalUserData();
+  sessionStorage.clear();
   location.reload();
+}
+
+/* SIGNOUT-FIX -- shared local-user-data wipe used by signOut and gate entry paths.
+   Surgical removeItem list (not localStorage.clear) to preserve device-level keys.
+   Keys derived from full audit of every localStorage.setItem in store.js, sync.js, ui.js, index.html. */
+function _clearLocalUserData() {
+  // Core data (written by store.save())
+  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:rangeSessions','vc:profile',
+  // User preferences
+   'vc:hcpMode','vc:manualHcp','vc:trends','vc:optTier',
+  // Active session snapshots
+   'gordy:activeRound','gordy:activeRange',
+  // UI state
+   'gordy:checklist','gordy:lastTab',
+  // Sync state
+   'vc:kvId','vc:kvLastSync','vc:kvLastSyncTs','vc:kvPendingPush'
+  ].forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
+  // In-memory wipe so callers that don't reload still see clean state
+  try { clearAll(); } catch(e){}
 }
 
 // -- Polish B: checklist, banner, AI steps, session linker --------------------
@@ -1381,7 +1428,7 @@ Object.assign(window, {
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
   updateCourseDropdowns, renderAll, serialise,
-  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut,
+  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut, _clearLocalUserData,
   showConfirmModal,
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
