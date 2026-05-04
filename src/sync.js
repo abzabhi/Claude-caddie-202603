@@ -63,17 +63,9 @@ async function kvPush() {
   _syncDispatch('Syncing\u2026');
   try {
     const payload = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '{}';
-    const blob=await _encrypt(payload, pass);
-    const blobRecovery=sessionStorage.getItem('vc:blobRecovery')||'';
-    const version=(parseInt(sessionStorage.getItem('vc:version')||'0',10)||0)+1;
-    const r=await fetch(_D1_BASE+'/sync/push/'+id, {
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({blob, blob_recovery:blobRecovery, version})
-    });
-    if(r.status===409){ _syncDispatch('\u26A0 Version conflict \u2014 sign out and back in to resync.', true); return; }
-    if(r.status===429){ _syncDispatch('\u26A0 Rate limited \u2014 will retry.', true); _kvQueuePush(); return; }
+    const blob = await _encrypt(payload, pass);
+    const r = await fetch(GORDY_SYNC_URL + id, { method: 'PUT', body: blob });
     if(!r.ok){ _syncDispatch('\u26A0 Push failed ('+r.status+')', true); _kvQueuePush(); return; }
-    sessionStorage.setItem('vc:version', String(version));
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
