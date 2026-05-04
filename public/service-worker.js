@@ -1,5 +1,5 @@
-// gordy-v2 — increment this string on every index.html or src/ update to bust cache for installed PWA users
-var CACHE = 'gordy-v2';
+// gordy-v3 — increment this string on every index.html or src/ update to bust cache for installed PWA users
+var CACHE = 'gordy-v3';
 
 var SHELL = [
   '/',
@@ -9,6 +9,7 @@ var SHELL = [
   '/icon-512.png',
   '/main.png',
   '/icon.png',
+  '/styles.css',
   '/src/geo.js',
   '/src/constants.js',
   '/src/dispersion.js',
@@ -68,21 +69,45 @@ self.addEventListener('fetch', function(e) {
     if (url.indexOf(NETWORK_ONLY[i]) !== -1) return;
   }
 
-  // Cache-first, network fallback
-  e.respondWith(
-    caches.match(e.request).then(function(cached) {
-      return cached || fetch(e.request).then(function(response) {
-        // Dynamically cache any new valid GET responses (e.g. font files)
+  // Determine strategy: Network-First for HTML and JS, Cache-First for everything else
+  var isHtmlOrJs = url.endsWith('/') ||
+                   url.endsWith('/index.html') ||
+                   url.endsWith('.js');
+
+  if (isHtmlOrJs) {
+    // Network-First: always try network, fall back to cache
+    e.respondWith(
+      fetch(e.request).then(function(response) {
+        // Write fresh response back to cache for offline resilience
         if (response && response.status === 200 && response.type === 'basic') {
           var clone = response.clone();
           caches.open(CACHE).then(function(c) { c.put(e.request, clone); });
         }
         return response;
       }).catch(function() {
-        return new Response('', { status: 503, statusText: 'Offline' });
-      });
-    })
-  );
+        // Network failed — serve cached version if available
+        return caches.match(e.request).then(function(cached) {
+          return cached || new Response('', { status: 503, statusText: 'Offline' });
+        });
+      })
+    );
+  } else {
+    // Cache-First: serve from cache, fall back to network
+    e.respondWith(
+      caches.match(e.request).then(function(cached) {
+        return cached || fetch(e.request).then(function(response) {
+          // Dynamically cache any new valid GET responses (e.g. font files)
+          if (response && response.status === 200 && response.type === 'basic') {
+            var clone = response.clone();
+            caches.open(CACHE).then(function(c) { c.put(e.request, clone); });
+          }
+          return response;
+        }).catch(function() {
+          return new Response('', { status: 503, statusText: 'Offline' });
+        });
+      })
+    );
+  }
 });
 
 // Background sync — fires when connection returns after offline push was queued
