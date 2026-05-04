@@ -455,10 +455,10 @@ if(shared) {
 }
 
 /* Phase 4: advanced mode collapsible */
-advWrapper.innerHTML = _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
+_lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
 
 /* Caddie session companion */
-advWrapper.innerHTML += _lrCaddieCompanionHtml();
+_lrCaddieCompanionRender();
 
 // Tally strip
 tallyWrapper.innerHTML = lrTallyStrip();
@@ -1730,56 +1730,64 @@ function _lrShotLogHtml(shots) {
 }
 
 function _lrGirFirToggles(s, hole) {
-  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">';
-  html += '<div class="card" style="margin-bottom:0"><div class="card-title">GIR</div>'
-    + '<div style="display:flex;gap:6px;margin-top:4px">'
-    + '<button class="lr-tog' + (s.gir === true  ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleGir(true)">\u2713</button>'
-    + '<button class="lr-tog' + (s.gir === false ? ' on-n' : '') + '" style="flex:1" onclick="lrToggleGir(false)">\u2717</button>'
-    + '</div></div>';
+  var block = document.getElementById('lrGirFirBlock');
+  if (!block) return;
+  block.style.display = 'grid';
+  var girYes = document.getElementById('lrAdvGirYes');
+  var girNo  = document.getElementById('lrAdvGirNo');
+  girYes.className = 'lr-tog' + (s.gir === true  ? ' on-y' : '');
+  girNo.className  = 'lr-tog' + (s.gir === false ? ' on-n' : '');
+  var firCard = document.getElementById('lrFirCard');
+  firCard.style.display = hole.par > 3 ? '' : 'none';
   if (hole.par > 3) {
-    html += '<div class="card" style="margin-bottom:0"><div class="card-title">FIR</div>'
-      + '<div style="display:flex;gap:6px;margin-top:4px">'
-      + '<button class="lr-tog' + (s.fir === true  ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleFir(true)">\u2713</button>'
-      + '<button class="lr-tog' + (s.fir === false ? ' on-n' : '') + '" style="flex:1" onclick="lrToggleFir(false)">\u2717</button>'
-      + '</div></div>';
+    var firYes = document.getElementById('lrAdvFirYes');
+    var firNo  = document.getElementById('lrAdvFirNo');
+    firYes.className = 'lr-tog' + (s.fir === true  ? ' on-y' : '');
+    firNo.className  = 'lr-tog' + (s.fir === false ? ' on-n' : '');
   }
-  return html + '</div>';
 }
 
 function _lrAdvancedHtml(holeIdx, pi, shared) {
   if (!_lrShotDraft) _lrShotDraft = _lrDefaultDraft(holeIdx);
-  var d    = _lrShotDraft;
-  var s    = lrState.players[pi].scores[holeIdx];
+  var d     = _lrShotDraft;
+  var s     = lrState.players[pi].scores[holeIdx];
   var shots = s.shots || [];
   var hole  = lrState.holes[holeIdx];
-  var arrow = _lrAdvancedOpen ? '\u25B2' : '\u25BC';
-  var hdr   = '<div class="collapsible-hdr" onclick="lrToggleAdvanced()" id="lrAdvancedHdr"'
-    + ' style="cursor:pointer;padding:10px 0;font-size:.72rem;font-family:\'DM Mono\',monospace;'
-    + 'color:var(--tx3);display:flex;justify-content:space-between;border-top:1px solid var(--br);margin-top:10px">'
-    + '<span>Advanced Mode</span><span>' + arrow + '</span></div>';
-  if (!_lrAdvancedOpen) return hdr + '<div id="lrAdvancedBody" style="display:none"></div>';
 
-  var html = '<div id="lrAdvancedBody" style="padding-bottom:12px">';
-  html += _lrShotLogHtml(shots);
+  /* Collapsible header arrow */
+  var arrowEl = document.getElementById('lrAdvancedArrow');
+  if (arrowEl) arrowEl.textContent = _lrAdvancedOpen ? '\u25B2' : '\u25BC';
 
-  /* GIR prompt when Hole Complete pressed without on_green mode */
+  /* Body visibility */
+  var body = document.getElementById('lrAdvancedBody');
+  if (!body) return;
+  body.style.display = _lrAdvancedOpen ? '' : 'none';
+  if (!_lrAdvancedOpen) return;
+
+  /* GIR prompt branch — shows prompt, hides inner content */
+  var girPrompt  = document.getElementById('lrGirPromptBlock');
+  var innerBlock = document.getElementById('lrAdvancedInner');
+  var girFirBlock    = document.getElementById('lrGirFirBlock');
+  var obBlock        = document.getElementById('lrObBlock');
+  var completeRow    = document.getElementById('lrCompleteHoleRow');
+
   if (_lrGirPromptPending) {
-    html += '<div class="card" style="margin-bottom:8px">'
-      + '<div style="font-size:.68rem;margin-bottom:10px">Did you reach the green?</div>'
-      + '<div style="display:flex;gap:8px">'
-      + '<button class="lr-tog" style="flex:1" onclick="lrGirPromptAnswer(true)">\u2713 Yes</button>'
-      + '<button class="lr-tog" style="flex:1" onclick="lrGirPromptAnswer(false)">\u2717 No</button>'
-      + '<button class="btn sec" style="flex:1;font-size:.65rem" onclick="lrGirPromptAnswer(null)">Skip</button>'
-      + '</div></div></div>';
-    return hdr + html;
+    girPrompt.style.display  = '';
+    innerBlock.style.display = 'none';
+    if (girFirBlock) girFirBlock.style.display = 'none';
+    if (obBlock)     obBlock.style.display     = 'none';
+    if (completeRow) completeRow.style.display = 'none';
+    return;
   }
+  girPrompt.style.display = 'none';
+  innerBlock.style.display = '';
 
   if (d.shot_mode === 'on_green') {
-    /* On Green body */
+    /* On Green: build inner string (shot form) — deferred to 4c-ii */
     var ogDist = (s.on_green_distance !== undefined && s.on_green_distance !== null) ? s.on_green_distance : '';
     var cpc    = s.chip_putt_count || 0;
     var holed  = s.holed_out || false;
-    html += '<div class="card" style="margin-bottom:8px">'
+    var innerHtml = '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">On Green</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:10px">'
       + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
@@ -1800,26 +1808,35 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
       + '<button class="lr-tog' + (holed ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleHoledOut()">'
       + (holed ? '\u2713 Yes' : 'No') + '</button>'
       + '</div></div>'
-      + _lrGirFirToggles(s, hole)
-      + '<button class="rbtn" style="width:100%;margin-top:10px" onclick="lrCompleteHole()">\u2713 Complete Hole</button>'
       + '</div>';
+    innerBlock.innerHTML = innerHtml;
+    _lrGirFirToggles(s, hole);
+    if (completeRow) completeRow.style.display = '';
+    if (obBlock)     obBlock.style.display     = 'none';
   } else {
-    /* Standard / Approach entry form */
+    /* Standard / Approach: build shot form inner string — deferred to 4c-ii */
     var shotNum   = _lrEditingIndex !== null ? (_lrEditingIndex + 1) : (shots.length + 1);
     var shotLabel = _lrEditingIndex !== null ? 'Editing Shot ' + shotNum : 'Shot ' + shotNum;
     var lies = d.shot_mode === 'approach'
       ? ['green','fairway','rough','sand','recovery']
       : ['fairway','rough','sand','recovery'];
-    html += '<div class="card" style="margin-bottom:8px">'
+    var sgLine = '';
+    if (d.lie && d.distanceToHole !== null && d.distanceToHole !== undefined) {
+      var exp = sgExpected(d.lie, d.distanceToHole);
+      if (exp !== null) sgLine = '<span style="font-size:.62rem;color:var(--tx3)">Exp: ' + exp.toFixed(2) + ' strokes from here</span>';
+    }
+    var lieHtml = '';
+    lies.forEach(function(lie) {
+      lieHtml += '<button class="implied-tog' + (d.lie === lie ? ' on' : '') + '" onclick="lrSetShotLie(\'' + lie + '\')">' + lie.charAt(0).toUpperCase() + lie.slice(1) + '</button>';
+    });
+    var fpHtml = '';
+    [['straight','Straight'],['left-to-right','L\u2192R'],['right-to-left','R\u2192L']].forEach(function(fp) {
+      fpHtml += '<button class="implied-tog' + (d.flight_path === fp[0] ? ' on' : '') + '" style="flex:1" onclick="lrSetFlightPath(\'' + fp[0] + '\')">' + fp[1] + '</button>';
+    });
+    var shotInner = _lrShotLogHtml(shots)
+      + '<div class="card" style="margin-bottom:8px">'
       + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">'
-      + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>'
-      + (function() {
-          /* SG info line: show expected strokes from current lie + distance */
-          if (!d.lie || d.distanceToHole === null || d.distanceToHole === undefined) return '';
-          var exp = sgExpected(d.lie, d.distanceToHole);
-          if (exp === null) return '';
-          return '<span style="font-size:.62rem;color:var(--tx3)">Exp: ' + exp.toFixed(2) + ' strokes from here</span>';
-        })()
+      + '<span style="font-size:1.1rem;font-weight:700;color:var(--tx);letter-spacing:0;text-transform:none;margin-right:6px">' + shotLabel + '</span>' + sgLine
       + '</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:10px">'
       + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
@@ -1835,47 +1852,74 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
       + ' onchange="lrSetClub(this.value)">' + _lrClubOptions(d.clubId) + '</select></div>'
       + '<div style="margin-bottom:8px"><div class="card-title">Result Zone</div>'
       + '<div style="display:flex;justify-content:center">' + _buildLrRadialSVG(d.radial_ring, d.radial_segment, d.shot_mode === 'approach') + '</div>'
-      + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">'
-      + _lrZoneLabel(d.radial_ring, d.radial_segment) + '</div></div>'
+      + '<div style="text-align:center;font-size:.62rem;color:var(--tx3);margin-top:4px">' + _lrZoneLabel(d.radial_ring, d.radial_segment) + '</div></div>'
       + '<div style="margin-bottom:8px"><div class="card-title">Lie</div>'
-      + '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">';
-    lies.forEach(function(lie) {
-      html += '<button class="implied-tog' + (d.lie === lie ? ' on' : '') + '" onclick="lrSetShotLie(\''
-        + lie + '\')">' + lie.charAt(0).toUpperCase() + lie.slice(1) + '</button>';
-    });
-    html += '</div></div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">' + lieHtml + '</div></div>'
       + '<div style="margin-bottom:8px"><div class="card-title">Flight Path</div>'
-      + '<div style="display:flex;gap:6px;margin-top:4px">';
-    [['straight','Straight'],['left-to-right','L\u2192R'],['right-to-left','R\u2192L']].forEach(function(fp) {
-      html += '<button class="implied-tog' + (d.flight_path === fp[0] ? ' on' : '') + '" style="flex:1"'
-        + ' onclick="lrSetFlightPath(\'' + fp[0] + '\')">' + fp[1] + '</button>';
-    });
-    html += '</div></div>';
-    /* OB toggle / inline confirm */
-    if (_lrObConfirmPending) {
-      html += '<div style="margin-bottom:10px;padding:8px;background:var(--gr2);border-radius:6px;font-size:.68rem">'
-        + 'Penalty \u2014 add 1 penalty stroke?'
-        + '<button class="btn" style="font-size:.62rem;padding:2px 8px;margin-left:8px;'
-        + 'background:var(--danger);color:#fff;border-color:var(--danger)" onclick="lrObConfirm(true)">Yes</button>'
-        + '<button class="btn sec" style="font-size:.62rem;padding:2px 8px;margin-left:4px" onclick="lrObConfirm(false)">No</button>'
-        + '</div>';
-    } else {
-      html += '<div style="margin-bottom:10px">'
-        + '<button class="implied-tog' + (d.is_ob ? ' on' : '') + '" onclick="lrToggleOb()">Penalty: '
-        + (d.is_ob ? 'Yes' : 'No') + '</button></div>';
+      + '<div style="display:flex;gap:6px;margin-top:4px">' + fpHtml + '</div></div>';
+
+    /* OB block — now static DOM */
+    if (obBlock) {
+      obBlock.style.display = '';
+      var obBtn = document.getElementById('lrObBtn');
+      if (_lrObConfirmPending) {
+        if (obBtn) obBtn.parentElement.style.display = 'none';
+        document.getElementById('lrObConfirmBlock').style.display = '';
+      } else {
+        if (obBtn) {
+          obBtn.parentElement.style.display = '';
+          obBtn.className = 'implied-tog' + (d.is_ob ? ' on' : '');
+          obBtn.textContent = 'Penalty: ' + (d.is_ob ? 'Yes' : 'No');
+        }
+        document.getElementById('lrObConfirmBlock').style.display = 'none';
+      }
     }
-    html += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
+
+    shotInner += '<button class="rbtn" style="width:100%" onclick="lrRecordShot()">'
       + (_lrEditingIndex !== null ? 'Update Shot' : 'Record Shot') + '</button></div>';
-    /* GIR / FIR and Hole Complete once at least one shot is logged */
+    innerBlock.innerHTML = shotInner;
+
+    /* GIR/FIR and Hole Complete once shots logged */
     if (shots.length > 0) {
-      html += _lrGirFirToggles(s, hole);
-      html += '<button class="btn sec" style="width:100%;margin-top:8px" onclick="lrCompleteHole()">\u2713 Hole Complete</button>';
+      _lrGirFirToggles(s, hole);
+      if (completeRow) completeRow.style.display = '';
+    } else {
+      if (girFirBlock) girFirBlock.style.display = 'none';
+      if (completeRow) completeRow.style.display = 'none';
     }
   }
-  return hdr + html + '</div>';
 }
 
-/* ── Exported advanced-mode interaction functions ────────────────────────── */
+/* Delegated listener for #lrAdvancedWrapper — attached once */
+var _lrAdvancedListenerAttached = false;
+function _lrAttachAdvancedListener() {
+  if (_lrAdvancedListenerAttached) return;
+  var wrapper = document.getElementById('lrAdvancedWrapper');
+  if (!wrapper) return;
+  _lrAdvancedListenerAttached = true;
+  wrapper.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+    if      (action === 'toggle-advanced') { lrToggleAdvanced(); }
+    else if (action === 'gir-prompt')      { lrGirPromptAnswer(btn.dataset.val === 'null' ? null : btn.dataset.val === 'true'); }
+    else if (action === 'gir-adv')         { lrToggleGir(btn.dataset.val === 'true'); }
+    else if (action === 'fir-adv')         { lrToggleFir(btn.dataset.val === 'true'); }
+    else if (action === 'ob-toggle')       { lrToggleOb(); }
+    else if (action === 'ob-confirm')      { lrObConfirm(btn.dataset.val === 'true'); }
+    else if (action === 'complete-hole')   { lrCompleteHole(); }
+  });
+}
+
+/* Caddie companion: renders into static #lrCaddieWrapper using existing string builder */
+function _lrCaddieCompanionRender() {
+  _lrAttachAdvancedListener();
+  var el = document.getElementById('lrCaddieWrapper');
+  if (!el) return;
+  el.innerHTML = _lrCaddieCompanionHtml();
+}
+
+
 
 function lrToggleAdvanced() {
   _lrAdvancedOpen = !_lrAdvancedOpen;
