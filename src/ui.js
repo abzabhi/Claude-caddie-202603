@@ -3,29 +3,21 @@
 // Orchestrates all render functions -- last module loaded.
 
 import { bag, courses, rounds, history, profile, rangeSessions,
-         save, today, uid,
-         setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs,
-         wipeEnvironment, getJsonState } from './store.js'; /* SLUG1c */
+         save, today, uid, serialise,
+         setBag, setRounds, setProfile, replaceCourse, clearAll, reconcileSlugs } from './store.js'; /* SLUG1c */
 import { calcDiff, clubSlug, BUCKET_NAMES, tagLookup, dominantMiss, shotTag, calcHandicap } from './geo.js'; /* ASKB-1, TRENDS-1 */
 import { setVizInitDone } from './viz.js';
 import { renderClubs } from './clubs.js';
 import { renderCourseList } from './courses.js';
 import { renderHandicap } from './rounds.js';
 
-// -- Sync status listener (sync.js dispatches 'sync-update' CustomEvents) -----
-window.addEventListener('sync-update', function(e) {
-  var st = document.getElementById('kvSyncStatus');
-  if (st) { st.textContent = e.detail.message; st.style.color = e.detail.isError ? 'var(--danger)' : ''; }
-});
-
 // -- Save / Import ------------------------------------------------------------
-async function saveData() {
-  const state = await getJsonState();
-  const txt = JSON.stringify(state, null, 2);
-  const blob = new Blob([txt], {type:'application/json'});
+function saveData() {
+  const txt = serialise();
+  const blob = new Blob([txt], {type:'text/plain'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'gordy-data-'+today()+'.json';
+  a.download = 'virtual-caddie-data-'+today()+'.txt';
   a.click();
   URL.revokeObjectURL(a.href);
   const st = document.getElementById('saveStatus');
@@ -388,46 +380,23 @@ function _remapActiveRangeClubIds(oldBag, newBag) { return _remapClubRefs(oldBag
 // Silent sync loader -- called by dbPull on login/refresh. No confirm, no alert, no renderAll.
 // renderAll is called by gateUnlocked() after this returns.
 function dbLoadData(text) {
-  // Detect JSON payload (new format) vs legacy pipe-delimited text
-  var parsed = null;
-  try { parsed = JSON.parse(text); } catch {}
-  if (parsed && typeof parsed === 'object' && (parsed.bag || parsed.courses || parsed.profile)) {
-    // JSON path
-    if (Array.isArray(parsed.bag) && parsed.bag.length) { var _oldBag=bag.slice(); setBag(parsed.bag); _remapClubRefs(_oldBag, bag); }
-    if (Array.isArray(parsed.rounds) && parsed.rounds.length) setRounds(parsed.rounds);
-    if (parsed.profile && Object.keys(parsed.profile).length) setProfile(parsed.profile);
-    if (parsed.hcpMode) localStorage.setItem('vc:hcpMode', parsed.hcpMode);
-    if (parsed.manualHcp) localStorage.setItem('vc:manualHcp', parsed.manualHcp);
-    if (Array.isArray(parsed.courses) && parsed.courses.length) {
-      parsed.courses.forEach(function(ic) {
-        var selTee=ic.tees&&ic.tees.find(function(t){return t.id===ic.selectedTee;}); if(selTee) ic.holes=selTee.holes;
-        var existing=courses.find(function(c){return c.id===ic.id;});
-        if(!existing) courses.push(ic);
-        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
-      });
-    }
-    if (Array.isArray(parsed.history) && parsed.history.length) { var ids=new Set(history.map(function(h){return h.id;})); parsed.history.forEach(function(h){if(!ids.has(h.id)) history.unshift(h);}); }
-    if (Array.isArray(parsed.rangeSessions) && parsed.rangeSessions.length) { var rsIds=new Set(rangeSessions.map(function(s){return s.sessionId;})); parsed.rangeSessions.forEach(function(s){if(!rsIds.has(s.sessionId)) rangeSessions.push(s);}); }
-  } else {
-    // Legacy txt path
-    const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
-    if(newBag.length) { var _oldBag2=bag.slice(); setBag(newBag); _remapClubRefs(_oldBag2, bag); }
-    if(newRounds.length) setRounds(newRounds);
-    if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
-    if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
-    if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
-    if(newCourses.length){
-      newCourses.forEach(function(ic){
-        var selTee=ic.tees.find(function(t){return t.id===ic.selectedTee;}); if(selTee) ic.holes=selTee.holes;
-        var existing=courses.find(function(c){return c.id===ic.id;});
-        if(!existing) courses.push(ic);
-        else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
-      });
-    }
-    if(newHistory.length){var hids=new Set(history.map(function(h){return h.id;})); newHistory.forEach(function(h){if(!hids.has(h.id)) history.unshift(h);});}
-    if(newRangeSessions.length){var rsids=new Set(rangeSessions.map(function(s){return s.sessionId;})); newRangeSessions.forEach(function(s){if(!rsids.has(s.sessionId)) rangeSessions.push(s);});}
+  const {newBag,newRounds,newCourses,newHistory,newRangeSessions,newProfile,newHcpMode,newManualHcp,newNoteLines}=_parseDataText(text);
+  if(newBag.length) { var _oldBag = bag.slice(); setBag(newBag); _remapClubRefs(_oldBag, bag); } /* SLUG2 */
+  if(newRounds.length) setRounds(newRounds);
+  if(Object.keys(newProfile).length){if(newNoteLines.length) newProfile.notes=newNoteLines.join('\n'); setProfile(newProfile);}
+  if(newHcpMode) localStorage.setItem('vc:hcpMode',newHcpMode);
+  if(newManualHcp) localStorage.setItem('vc:manualHcp',newManualHcp);
+  if(newCourses.length){
+    newCourses.forEach(ic=>{
+      const selTee=ic.tees.find(t=>t.id===ic.selectedTee); if(selTee) ic.holes=selTee.holes;
+      const existing=courses.find(c=>c.id===ic.id);
+      if(!existing) courses.push(ic);
+      else if(!existing.updatedAt||(ic.updatedAt&&ic.updatedAt>=existing.updatedAt)) replaceCourse(ic);
+    });
   }
-  reconcileSlugs(); /* SLUG1c */
+  if(newHistory.length){const ids=new Set(history.map(h=>h.id)); newHistory.forEach(h=>{if(!ids.has(h.id)) history.unshift(h);});}
+  if(newRangeSessions.length){const ids=new Set(rangeSessions.map(s=>s.sessionId)); newRangeSessions.forEach(s=>{if(!ids.has(s.sessionId)) rangeSessions.push(s);});}
+  reconcileSlugs(); /* SLUG1c -- reconcile after sync pull rebuilds bag from blob */
   save();
 }
 
@@ -976,9 +945,12 @@ function renderDropdown() {
   if(kvMode()) {
     const dotColor=offline?'var(--gold)':pending?'var(--gold)':'var(--gr)';
     if(dot) dot.style.background=dotColor;
-    const label=offline?'\uD83D\uDCF5 Offline':pending?'\u23F3 Sync pending':ts?`\uD83D\uDFE2 Synced ${_fmtAgo(tsMs)}`:'\u26AA Connected \u2014 not synced';
+    const label=offline?'\uD83D\uDCF5 Offline':pending?'\u23F3 Push pending':ts?`\uD83D\uDFE2 Synced ${_fmtAgo(tsMs)}`:'\u26AA Connected \u2014 not synced';
     if(syncSt) syncSt.textContent=label;
-    if(syncBtns) syncBtns.innerHTML='';
+    if(syncBtns) syncBtns.innerHTML=hasPass
+      ?`<button class="btn" style="font-size:.6rem;padding:3px 8px" onclick="kvPush('kvSyncStatus')">\u2191 Push</button>
+         <button class="btn sec" style="font-size:.6rem;padding:3px 8px" onclick="kvPull('kvSyncStatus')" ${offline?'disabled':''}>\u2193 Pull</button>`
+      :`<button class="btn sec" style="font-size:.6rem;padding:3px 8px" onclick="closeProfileDropdown();showTabFromProfile('profile')">Unlock sync \u2192</button>`;
   } else {
     if(dot) dot.style.background='#888';
     if(syncSt) syncSt.textContent='\u26AA No sync profile';
@@ -1090,9 +1062,8 @@ function confirmClearAll() {
   renderAll();
   if(window.updateSessionPill) window.updateSessionPill();
 }
-async function signOut() {
+function signOut() {
   ['vc:gateUnlocked','vc:kvPass','vc:verify','vc:siteVerify'].forEach(k=>sessionStorage.removeItem(k)); /* GUEST2 */
-  await wipeEnvironment();
   location.reload();
 }
 
@@ -1409,8 +1380,8 @@ Object.assign(window, {
   showTabFromProfile,
   toggleProfileDropdown, closeProfileDropdown, ddNav, renderDropdown,
   onHomeClubSelect, onHomeClubInput,
-  updateCourseDropdowns, renderAll, 
-  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut, wipeEnvironment, getJsonState,
+  updateCourseDropdowns, renderAll, serialise,
+  showDisclaimer, acceptDisclaimer, confirmClearAll, signOut,
   showConfirmModal,
   updateChecklist, dismissChecklist, showFirstRunCard,
   renderBanner, dismissBanner, manualPull,
