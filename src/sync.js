@@ -55,41 +55,45 @@ function _syncDispatch(message, isError) {
 }
 
 async function kvPush() {
-  const id=kvId(); if(!id) return;
-  const pass=sessionStorage.getItem('vc:kvPass');
-  if(!pass){ renderProfileSync(); return; }
-  if(!navigator.onLine){ _kvQueuePush(); _syncDispatch('\uD83D\uDCF5 Offline \u2014 push queued.'); return; }
+  const id = kvId(); if (!id) return;
+  const pass = sessionStorage.getItem('vc:kvPass');
+  if (!pass) { renderProfileSync(); return; }
+  if (!navigator.onLine) { _kvQueuePush(); _syncDispatch('\uD83D\uDCF5 Offline \u2014 push queued.'); return; }
   localStorage.removeItem('vc:kvPendingPush');
   _syncDispatch('Syncing\u2026');
   try {
-    const payload = window.getJsonState ? await window.getJsonState() : {};
-    const plaintext = JSON.stringify(payload);
-    const blobRecovery = sessionStorage.getItem('vc:blobRecovery') || '';
-    const r = await dbPushFull(id, pass, plaintext, blobRecovery);
-    if(r.error==='conflict'){ _syncDispatch('\u26A0 Version conflict \u2014 sign out and back in to resync.', true); return; }
-    if(r.error==='rate_limit'){ _syncDispatch('\u26A0 Rate limited \u2014 will retry.', true); _kvQueuePush(); return; }
-    if(!r.ok){ _syncDispatch('\u26A0 Push failed', true); _kvQueuePush(); return; }
-    const now=Date.now();
+    const payload = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '{}';
+    const blob = await _encrypt(payload, pass);
+    const r = await fetch(GORDY_SYNC_URL + id, { method: 'PUT', body: blob });
+    if (!r.ok) { _syncDispatch('\u26A0 Push failed (' + r.status + ')', true); _kvQueuePush(); return; }
+    const now = Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
     localStorage.removeItem('vc:kvPendingPush');
-    _syncDispatch('\u2713 Synced: '+new Date(now).toLocaleTimeString());
-  } catch(e){ _kvQueuePush(); _syncDispatch('\u26A0 Network error \u2014 push queued.', true); }
+    _syncDispatch('\u2713 Synced: ' + new Date(now).toLocaleTimeString());
+  } catch(e) { _kvQueuePush(); _syncDispatch('\u26A0 Network error \u2014 push queued.', true); }
 }
 
 // Pull and decrypt data from Worker KV
 async function kvPull() {
-  const id=kvId(); if(!id) return;
-  const pass=sessionStorage.getItem('vc:kvPass');
-  if(!pass){ renderProfileSync(); return; }
+  const id = kvId(); if (!id) return;
+  const pass = sessionStorage.getItem('vc:kvPass');
+  if (!pass) { renderProfileSync(); return; }
   _syncDispatch('Fetching\u2026');
   try {
-    const r = await dbPull(id, pass);
-    if(r.error==='not_found'){ _syncDispatch('\u26A0 No data found for this ID.', true); return; }
-    if(r.error==='bad_passphrase'){ _syncDispatch('\u26A0 Wrong passphrase or corrupted data.', true); return; }
-    if(!r.ok){ _syncDispatch('\u26A0 Pull failed', true); return; }
-    _syncDispatch('\u2713 Loaded: '+localStorage.getItem('vc:kvLastSync'));
-  } catch(e){ _syncDispatch('\u26A0 Pull error: '+e.message, true); }
+    const r = await fetch(GORDY_SYNC_URL + id);
+    if (r.status === 404) { _syncDispatch('\u26A0 No data found for this ID.', true); return; }
+    if (!r.ok) { _syncDispatch('\u26A0 Pull failed (' + r.status + ')', true); return; }
+    const envelope = await r.text();
+    _syncDispatch('Decrypting\u2026');
+    let plaintext;
+    try { plaintext = await _decrypt(envelope, pass); }
+    catch { _syncDispatch('\u26A0 Wrong passphrase or corrupted data.', true); return; }
+    if (window.dbLoadData) window.dbLoadData(plaintext);
+    const ts = new Date().toLocaleTimeString();
+    localStorage.setItem('vc:kvLastSync', ts);
+    _syncDispatch('\u2713 Loaded: ' + ts);
+  } catch(e) { _syncDispatch('\u26A0 Pull error: ' + e.message, true); }
 }
 
 // Banner load -- pull if connected, else prompt
