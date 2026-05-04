@@ -232,6 +232,8 @@ function disconnectSync() {
   if(!confirm('Disconnect sync profile?\n\nYour local data is kept. Your encrypted backup stays in the cloud until you overwrite it.')) return;
   localStorage.removeItem('vc:kvId');
   localStorage.removeItem('vc:kvLastSync');
+  localStorage.removeItem('vc:kvLastSyncTs');   /* DISCONNECT-FIX -- was leaking stale "synced X ago" timestamp */
+  localStorage.removeItem('vc:kvPendingPush');  /* DISCONNECT-FIX -- was leaking pending-push flag into next connection */
   sessionStorage.removeItem('vc:kvPass');
   renderProfileSync();
 }
@@ -264,7 +266,7 @@ function renderProfileSync() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="kvPush('kvSyncStatus')" ${!hasPass?'disabled':''}>\u2191 Push</button>
         <button class="btn sec" onclick="_profilePull()" ${!hasPass||offline?'disabled':''}>\u2193 Pull</button>
-        <button class="btn sec" onclick="saveData()">\u2B07 Export backup</button>
+        <button class="btn sec" onclick="saveData()">\u2B07 Save &amp; sync</button>
         <button class="btn danger" onclick="disconnectSync()">Disconnect</button>
         ${window.PublicKeyCredential
           ? (localStorage.getItem('gordy:biometric:' + kvId())
