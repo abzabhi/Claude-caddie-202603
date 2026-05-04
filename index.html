@@ -2007,7 +2007,7 @@ body{
   import { getDispersion, vizGetDisp } from './src/dispersion.js';
   import {
   bag, courses, rounds, history, profile,
-  uid, today, save, load,
+  uid, today, save, load, serialise,
   setBag, setRounds, replaceCourse, removeCourse, removeRound, removeHistory, setProfile, clearAll
 } from './src/store.js';
   import {
@@ -2397,7 +2397,6 @@ _gateNewSitePass = sp;
     sessionStorage.setItem('vc:version', '1');
     dbEncrypt('gordy-verify', _gateNewPass).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
     sessionStorage.setItem('vc:gateUnlocked', '1');
-    if (window.wipeEnvironment) window.wipeEnvironment(); /* Task1 -- clear any prior user's RAM/storage */
     gateUnlocked(null);
   }
 }
@@ -2580,7 +2579,7 @@ async function gateRekeyBlob(newPassphrase) {
   if (!id) return false;
   var oldPass = sessionStorage.getItem('vc:kvPass') || '';
   // Re-push blob with new passphrase
-  var plaintext = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '';
+  var plaintext = window.serialise ? window.serialise() : '';
   // Re-encrypt recovery blob with new passphrase first (required in every push)
   var recov = await dbGetRecovery(id);
   var newBlobRecov = null;
@@ -2752,15 +2751,13 @@ async function savePassphraseChange() {
   }
 }
 
-(async function() {
-  await load();
-  applyRefDataCache(); // use cached ref data if available -- before renderAll
-  /*renderAll();*/ // replaced by gateInit() -- app stays hidden until auth
-  gateInit();
-  // 2.4 -- show upload prompt if no data present (deferred to gateUnlocked path)
-  // 2.5 -- check for app update
-  checkAppUpdate();
-})();
+load();
+applyRefDataCache(); // use cached ref data if available -- before renderAll
+/*renderAll();*/ // replaced by gateInit() -- app stays hidden until auth
+gateInit();
+// 2.4 -- show upload prompt if no data present (deferred to gateUnlocked path)
+// 2.5 -- check for app update
+checkAppUpdate();
 Object.assign(window, {
   showTab, showTabFromProfile, setHcpMode, onManualHcpChange,
   getHandicap, escHtml,
