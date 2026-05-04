@@ -1,5 +1,5 @@
-// gordy-v6 — increment this string on every index.html or src/ update to bust cache for installed PWA users
-var CACHE = 'gordy-v6';
+// gordy-v2 — increment this string on every index.html or src/ update to bust cache for installed PWA users
+var CACHE = 'gordy-v2';
 
 var SHELL = [
   '/',
@@ -9,7 +9,6 @@ var SHELL = [
   '/icon-512.png',
   '/main.png',
   '/icon.png',
-  /*'/styles.css',*/
   '/src/geo.js',
   '/src/constants.js',
   '/src/dispersion.js',
@@ -22,9 +21,12 @@ var SHELL = [
   '/src/sync.js',
   '/src/caddie.js',
   '/src/ui.js',
-  '/src/geomap.js',
-  '/src/gps-view.js',
-  '/src/shot-tracker.js'
+  '/fonts/dm-mono-300.woff2',
+  '/fonts/dm-mono-400.woff2',
+  '/fonts/dm-mono-500.woff2',
+  '/fonts/playfair-400.woff2',
+  '/fonts/playfair-600.woff2',
+  '/fonts/playfair-700.woff2'
 ];
 
 // These URLs always require live network — never serve from cache
@@ -66,46 +68,21 @@ self.addEventListener('fetch', function(e) {
     if (url.indexOf(NETWORK_ONLY[i]) !== -1) return;
   }
 
-  // Determine strategy: Network-First for HTML and JS, Cache-First for everything else
-  var isHtmlOrJs = url.endsWith('/') ||
-                   url.endsWith('/index.html') ||
-                   url.endsWith('.js') ||
-                   url.endsWith('.css');
-
-  if (isHtmlOrJs) {
-    // Network-First: always try network, fall back to cache
-    e.respondWith(
-      fetch(e.request).then(function(response) {
-        // Write fresh response back to cache for offline resilience
+  // Cache-first, network fallback
+  e.respondWith(
+    caches.match(e.request).then(function(cached) {
+      return cached || fetch(e.request).then(function(response) {
+        // Dynamically cache any new valid GET responses (e.g. font files)
         if (response && response.status === 200 && response.type === 'basic') {
           var clone = response.clone();
           caches.open(CACHE).then(function(c) { c.put(e.request, clone); });
         }
         return response;
       }).catch(function() {
-        // Network failed — serve cached version if available
-        return caches.match(e.request).then(function(cached) {
-          return cached || new Response('', { status: 503, statusText: 'Offline' });
-        });
-      })
-    );
-  } else {
-    // Cache-First: serve from cache, fall back to network
-    e.respondWith(
-      caches.match(e.request).then(function(cached) {
-        return cached || fetch(e.request).then(function(response) {
-          // Dynamically cache any new valid GET responses (e.g. font files)
-          if (response && response.status === 200 && response.type === 'basic') {
-            var clone = response.clone();
-            caches.open(CACHE).then(function(c) { c.put(e.request, clone); });
-          }
-          return response;
-        }).catch(function() {
-          return new Response('', { status: 503, statusText: 'Offline' });
-        });
-      })
-    );
-  }
+        return new Response('', { status: 503, statusText: 'Offline' });
+      });
+    })
+  );
 });
 
 // Background sync — fires when connection returns after offline push was queued
