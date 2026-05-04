@@ -1143,32 +1143,58 @@ export function geomOpenLocateModal(opts) {
   const defaultCity = (course && course.city) ? String(course.city).replace(/"/g, '&quot;') : '';
   const courseName = (course && course.name) ? String(course.name).replace(/</g, '&lt;') : '';
 
+  const cityBarHtml = pinned ? '' :
+      '<div style="padding:8px 12px;border-bottom:1px solid var(--br);'
+    +   'display:flex;gap:6px;align-items:center;background:var(--bg2,#1a1a1a)">'
+    +   '<input id="geomLocCityInput" type="text" value="' + defaultCity + '" '
+    +     'placeholder="City (e.g. Verona, NY)" '
+    +     'style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
+    +     'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.7rem;'
+    +     'padding:5px 8px;outline:none">'
+    +   '<button class="btn" style="font-size:.65rem;padding:5px 12px" '
+    +     'onclick="_geomLocateCitySearch()">Find city</button>'
+    + '</div>';
 
   const headerSubtitle = pinned
     ? 'Pan the map or use GPS, then tap Load course here.'
     : 'Find your city, then pan the crosshair to your course.';
   const headerTitle = courseName ? ('Locate: ' + courseName) : 'Locate course';
 
-  const overlay = document.getElementById('geomLocateOverlay');
-  if (!overlay) { console.error('geomLocateOverlay not found in DOM'); return; }
-
-  // Set header text
-  document.getElementById('geomModalTitle').textContent = headerTitle;
-  document.getElementById('geomModalSubtitle').textContent = headerSubtitle;
-
-  // Toggle city bar and empty hint (only shown when !pinned)
-  const cityBar = document.getElementById('geomLocCityBar');
-  cityBar.style.display = pinned ? 'none' : 'flex';
-  const cityInput = document.getElementById('geomLocCityInput');
-  if (cityInput) cityInput.value = defaultCity;
-  const emptyHint = document.getElementById('geomLocEmptyHint');
-  emptyHint.style.display = pinned ? 'none' : 'flex';
-
-  // Toggle crosshair
-  document.getElementById('geomLocCrosshair').style.display = pinned ? 'block' : 'none';
-
-  // Show overlay
-  overlay.style.display = 'flex';
+  const overlay = document.createElement('div');
+  overlay.id = 'geomLocateOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--bg);'
+    + 'display:flex;flex-direction:column;font-family:\'DM Mono\',monospace';
+  overlay.innerHTML =
+      '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;'
+    +   'justify-content:space-between;align-items:center;gap:10px">'
+    +   '<div>'
+    +     '<div style="font-size:.82rem;color:var(--tx);font-weight:600">' + headerTitle + '</div>'
+    +     '<div style="font-size:.58rem;color:var(--tx3);margin-top:2px">' + headerSubtitle + '</div>'
+    +   '</div>'
+    +   '<button class="btn sec" style="font-size:.65rem;padding:5px 12px" '
+    +     'onclick="_geomLocateSkip()">Skip</button>'
+    + '</div>'
+    + cityBarHtml
+    + '<div id="geomLocCanvas" style="flex:1;min-height:0;background:#111;position:relative">'
+    +   '<div id="geomLocCrosshair" style="position:absolute;left:50%;top:50%;'
+    +     'width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;z-index:10;'
+    +     'border:2px solid #f1c40f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.35);'
+    +     (pinned ? '' : 'display:none') + '"></div>'
+    +   '<div id="geomLocStatus" style="position:absolute;left:10px;right:10px;top:10px;'
+    +     'z-index:11;padding:8px 10px;background:rgba(0,0,0,.55);border-radius:6px;'
+    +     'color:#fff;font-size:.62rem;display:none"></div>'
+    +   (pinned ? '' :
+        '<div id="geomLocEmptyHint" style="position:absolute;inset:0;display:flex;'
+      +   'align-items:center;justify-content:center;color:var(--tx3);font-size:.7rem;'
+      +   'text-align:center;padding:20px">Enter a city above to begin.</div>')
+    + '</div>'
+    + '<div style="padding:10px 12px;border-top:1px solid var(--br);display:flex;gap:8px">'
+    +   '<button class="btn" style="flex:1;font-size:.68rem;padding:9px 10px" '
+    +     'onclick="_geomLocatePanLoad()">\uD83D\uDCCD Load course here</button>'
+    +   '<button class="btn sec" style="flex:1;font-size:.68rem;padding:9px 10px" '
+    +     'onclick="_geomLocateGpsLoad()">\uD83D\uDCE1 Use my GPS</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
 
   if (pinned) {
     setTimeout(function(){
@@ -1199,7 +1225,7 @@ function _geomLocateSetStatus(msg, isErr) {
 
 function _geomLocateClose(silent) {
   const o = document.getElementById('geomLocateOverlay');
-  if (o) o.style.display = 'none';
+  if (o) o.remove();
   if (_geomLocateMap) { try { _geomLocateMap.remove(); } catch(e) {} _geomLocateMap = null; }
   if (_geomLocateCityMarker) { try { _geomLocateCityMarker.remove(); } catch(e) {} _geomLocateCityMarker = null; }
   _geomLocateResults = [];
