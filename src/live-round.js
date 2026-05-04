@@ -351,6 +351,7 @@ return lrState.players.some(p=>p.handicap!==null);
 
 // -- Render hole view --------------------------------------------------------
 function lrRenderHole() {
+document.getElementById('lrOverlay').style.display = 'flex';
 if(!lrState) return;
 const h   = lrState.holes[lrState.curHole];
 const pc  = lrParClass(h.par);
