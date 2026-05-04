@@ -1087,20 +1087,27 @@ function confirmClearAll() {
 function signOut() {
   showConfirmModal(
     'Sign out?',
-    'Sign out and clear data from this device? Your data is safe in the cloud if synced. Local-only data will be lost.',
+    'Sign out and clear data from this device? A backup file will download automatically. Your data is also safe in the cloud if synced.',
     function() { _doSignOut(); },
     true
   );
 }
 
 async function _doSignOut() {
+  // SIGNOUT-EXPORT -- always download a local backup file before clearing.
+  // Runs first so even if push fails, user has a local copy.
+  try { saveData(); } catch (e) { /* non-fatal */ }
   // If connected + unlocked + online, attempt one final push so unsaved data syncs.
   // Failure is non-fatal -- queued push flag will retry on reconnect.
+  // Note: saveData() above already calls syncSave() internally, but we keep this as
+  // explicit belt-and-suspenders in case saveData's internal push is skipped.
   try {
     if (typeof kvMode === 'function' && kvMode() && sessionStorage.getItem('vc:kvPass') && navigator.onLine && typeof syncSave === 'function') {
       await syncSave();
     }
   } catch (e) { /* non-fatal */ }
+  // Give the browser a moment to flush the download before we wipe state.
+  await new Promise(function(r){ setTimeout(r, 300); });
   _clearLocalUserData();
   sessionStorage.clear();
   location.reload();
