@@ -58,6 +58,7 @@ async function kvPush() {
   const pass=sessionStorage.getItem('vc:kvPass');
   if(!pass){ renderProfileSync(); return; }
   if(!navigator.onLine){ _kvQueuePush(); _syncDispatch('\uD83D\uDCF5 Offline \u2014 push queued.'); return; }
+  localStorage.removeItem('vc:kvPendingPush'); /* clear optimistically -- re-set on failure */
   _syncDispatch('Syncing\u2026');
   try {
     const payload = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '{}';
@@ -125,7 +126,7 @@ let _bgSyncTimer = null;
 function queueBackgroundSync() {
   if(!kvMode()||!sessionStorage.getItem('vc:kvPass')) return;
   clearTimeout(_bgSyncTimer);
-  _bgSyncTimer = setTimeout(function() { kvPush(); }, 3000);
+  _bgSyncTimer = setTimeout(async function() { await kvPush(); }, 3000);
 }
 
 // -- Offline resilience
