@@ -2396,5 +2396,33 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
 -->
+<!-- GEOMAP LOCATE OVERLAY — static shell; shown/hidden by geomOpenLocateModal in geomap.js -->
+<div id="geomLocateOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);flex-direction:column;font-family:'DM Mono',monospace">
+  <!-- Header -->
+  <div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div>
+      <div id="geomModalTitle" style="font-size:.82rem;color:var(--tx);font-weight:600">Locate course</div>
+      <div id="geomModalSubtitle" style="font-size:.58rem;color:var(--tx3);margin-top:2px"></div>
+    </div>
+    <button class="btn sec" style="font-size:.65rem;padding:5px 12px" onclick="_geomLocateSkip()">Skip</button>
+  </div>
+  <!-- City search bar — shown when !pinned -->
+  <div id="geomLocCityBar" style="display:none;padding:8px 12px;border-bottom:1px solid var(--br);gap:6px;align-items:center;background:var(--bg2,#1a1a1a)">
+    <input id="geomLocCityInput" type="text" placeholder="City (e.g. Verona, NY)"
+      style="flex:1;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.7rem;padding:5px 8px;outline:none">
+    <button class="btn" style="font-size:.65rem;padding:5px 12px" onclick="_geomLocateCitySearch()">Find city</button>
+  </div>
+  <!-- Map canvas -->
+  <div id="geomLocCanvas" style="flex:1;min-height:0;background:#111;position:relative">
+    <div id="geomLocCrosshair" style="display:none;position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;z-index:10;border:2px solid #f1c40f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.35)"></div>
+    <div id="geomLocStatus" style="display:none;position:absolute;left:10px;right:10px;top:10px;z-index:11;padding:8px 10px;background:rgba(0,0,0,.55);border-radius:6px;color:#fff;font-size:.62rem"></div>
+    <div id="geomLocEmptyHint" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;color:var(--tx3);font-size:.7rem;text-align:center;padding:20px">Enter a city above to begin.</div>
+  </div>
+  <!-- Footer -->
+  <div style="padding:10px 12px;border-top:1px solid var(--br);display:flex;gap:8px">
+    <button class="btn" style="flex:1;font-size:.68rem;padding:9px 10px" onclick="_geomLocatePanLoad()">📍 Load course here</button>
+    <button class="btn sec" style="flex:1;font-size:.68rem;padding:9px 10px" onclick="_geomLocateGpsLoad()">📡 Use my GPS</button>
+  </div>
+</div>
 </body>
 </html>
