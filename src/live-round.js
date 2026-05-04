@@ -449,9 +449,9 @@ const advWrapper   = document.getElementById('lrAdvancedWrapper');
 const tallyWrapper = document.getElementById('lrTallyStripWrapper');
 
 if(shared) {
-  scoreWrapper.innerHTML = lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
+  lrScoreBlock(lrState.players[0], lrState.curHole, h, 0, true);
 } else {
-  scoreWrapper.innerHTML = lrScoreBlock(player, lrState.curHole, h, pi, false);
+  lrScoreBlock(player, lrState.curHole, h, pi, false);
 }
 
 /* Phase 4: advanced mode collapsible */
@@ -474,55 +474,100 @@ document.getElementById('lrNextBtn').className    =
 if (typeof lrxRenderBanner === 'function') lrxRenderBanner();
 }
 
+/* Attach delegated listener once to #lrScoreBlockWrapper */
+var _lrScoreBlockListenerAttached = false;
+function _lrAttachScoreBlockListener() {
+  if (_lrScoreBlockListenerAttached) return;
+  var wrapper = document.getElementById('lrScoreBlockWrapper');
+  if (!wrapper) return;
+  _lrScoreBlockListenerAttached = true;
+  wrapper.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var ctx = document.getElementById('lrScoreCtx');
+    var pi     = parseInt(ctx.dataset.pi, 10);
+    var hole   = parseInt(ctx.dataset.hole, 10);
+    var shared = ctx.dataset.shared === 'true';
+    var action = btn.dataset.action;
+    if (action === 'adj') {
+      lrAdj(pi, hole, btn.dataset.field, parseInt(btn.dataset.delta, 10), shared);
+    } else if (action === 'gir') {
+      lrSetGir(pi, hole, btn.dataset.val === 'true', shared);
+    } else if (action === 'note') {
+      lrToggleNote(pi, hole);
+    }
+  });
+  /* Textarea input delegation */
+  wrapper.addEventListener('input', function(e) {
+    var el = e.target.closest('[data-action="note-input"]');
+    if (!el) return;
+    var ctx = document.getElementById('lrScoreCtx');
+    var pi     = parseInt(ctx.dataset.pi, 10);
+    var hole   = parseInt(ctx.dataset.hole, 10);
+    var shared = ctx.dataset.shared === 'true';
+    lrSaveNote(pi, hole, el.value, shared);
+  });
+}
+
 function lrScoreBlock(player, holeIdx, hole, pi, shared) {
-const s    = player.scores[holeIdx];
-const diff = lrRelTopar(s.score, hole.par);
-const netS = lrHasAnyHandicap() ? lrNetScore(player, holeIdx) : null;
-const pts  = lrState.mode==='stableford' ? lrStablefordPts(player, holeIdx) : null;
-const displayScore = (lrState.netView && netS!==null) ? netS : s.score;
-const displayDiff  = (lrState.netView && netS!==null) ? lrRelTopar(netS, hole.par) : diff;
-const label = shared ? 'Team Score' : 'Score';
+  _lrAttachScoreBlockListener();
+  const s    = player.scores[holeIdx];
+  const diff = lrRelTopar(s.score, hole.par);
+  const netS = lrHasAnyHandicap() ? lrNetScore(player, holeIdx) : null;
+  const pts  = lrState.mode==='stableford' ? lrStablefordPts(player, holeIdx) : null;
+  const displayScore = (lrState.netView && netS!==null) ? netS : s.score;
+  const displayDiff  = (lrState.netView && netS!==null) ? lrRelTopar(netS, hole.par) : diff;
 
-const extraInfo = [
-  netS!==null && !lrState.netView ? `Net: ${netS}` : '',
-  pts!==null  ? `${pts} pt${pts!==1?'s':''}` : '',
-].filter(Boolean).join(' \u00B7 ');
+  /* Update context node so delegated listener reads correct pi/hole/shared */
+  const ctx = document.getElementById('lrScoreCtx');
+  ctx.dataset.pi     = pi;
+  ctx.dataset.hole   = holeIdx;
+  ctx.dataset.shared = shared ? 'true' : 'false';
 
-return `<div class="card" style="margin-bottom:0">
-  <div class="card-title">${label}</div>
-  <div class="lr-stepper" style="border-radius:8px;overflow:hidden">
-    <button class="lr-step-btn" onclick="lrAdj(${pi},${holeIdx},'score',-1,${shared})">\u2212</button>
-    <div class="lr-step-val">
-      <div class="lr-step-num ${displayScore!==null?lrRelCls(displayDiff):''}">${displayScore!==null?displayScore:'\u2014'}</div>
-      <div class="lr-step-rel ${displayScore!==null?lrRelCls(displayDiff):''}">${displayScore!==null?lrRelLabel(displayDiff):'tap to set'}</div>
-      ${extraInfo?`<div style="font-size:.54rem;color:var(--tx3);margin-top:2px">${extraInfo}</div>`:''}
-    </div>
-    <button class="lr-step-btn" onclick="lrAdj(${pi},${holeIdx},'score',1,${shared})">+</button>
-  </div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-  <div class="card" style="margin-bottom:0">
-    <div class="card-title">Putts</div>
-    <div class="lr-stepper">
-      <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',-1,${shared})">\u2212</button>
-      <div class="lr-step-val"><div class="lr-step-num sm">${s.putts!==null?s.putts:'\u2014'}</div></div>
-      <button class="lr-step-btn sm" onclick="lrAdj(${pi},${holeIdx},'putts',1,${shared})">+</button>
-    </div>
-  </div>
-  ${(()=>{ const _shots = s.shots||[]; const _hide = _lrAdvancedOpen && _shots.length > 0; return _hide ? '' : `
-  <div class="card" style="margin-bottom:0">
-    <div class="card-title">GIR</div>
-    <div style="display:flex;gap:6px;margin-top:4px">
-      <button class="lr-tog ${s.gir===true?'on-y':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},true,${shared})">\u2713 Yes</button>
-      <button class="lr-tog ${s.gir===false?'on-n':''}" style="flex:1" onclick="lrSetGir(${pi},${holeIdx},false,${shared})">\u2717 No</button>
-    </div>
-    <div style="font-size:.54rem;color:var(--tx3);margin-top:6px">Reach in ${hole.par-2} stroke${hole.par-2!==1?'s':''}</div>
-  </div>`; })()}
-</div>
-<div class="card" style="margin-bottom:0" id="lrNoteCard">
-  <button class="notes-toggle" id="lrNoteToggle" onclick="lrToggleNote(${pi},${holeIdx})">\uD83D\uDCDD ${s.notes?s.notes.slice(0,40)+(s.notes.length>40?'\u2026':''):'Add a note\u2026'}</button>
-  <textarea id="lrNoteInput" style="display:${s.notes||lrState._noteOpen?'block':'none'};width:100%;background:var(--bg);border:1px solid var(--gr2);border-radius:6px;color:var(--tx);font-family:'DM Mono',monospace;font-size:.72rem;padding:10px;outline:none;resize:none;margin-top:8px;min-height:70px" oninput="lrSaveNote(${pi},${holeIdx},this.value,${shared})">${s.notes||''}</textarea>
-</div>`;
+  /* Score card */
+  document.getElementById('lrScoreLabel').textContent = shared ? 'Team Score' : 'Score';
+  const scoreNum = document.getElementById('lrScoreNum');
+  const scoreRel = document.getElementById('lrScoreRel');
+  const relCls = displayScore !== null ? lrRelCls(displayDiff) : '';
+  scoreNum.textContent  = displayScore !== null ? displayScore : '\u2014';
+  scoreNum.className    = 'lr-step-num ' + relCls;
+  scoreRel.textContent  = displayScore !== null ? lrRelLabel(displayDiff) : 'tap to set';
+  scoreRel.className    = 'lr-step-rel ' + relCls;
+  const extraEl = document.getElementById('lrScoreExtra');
+  const extraInfo = [
+    netS !== null && !lrState.netView ? 'Net: ' + netS : '',
+    pts  !== null ? pts + ' pt' + (pts !== 1 ? 's' : '') : '',
+  ].filter(Boolean).join(' \u00B7 ');
+  if (extraInfo) { extraEl.textContent = extraInfo; extraEl.style.display = ''; }
+  else           { extraEl.textContent = '';         extraEl.style.display = 'none'; }
+
+  /* Putts */
+  document.getElementById('lrPuttNum').textContent = s.putts !== null ? s.putts : '\u2014';
+
+  /* GIR card — hide when advanced mode is open and shots exist */
+  const shots = s.shots || [];
+  const hideGir = _lrAdvancedOpen && shots.length > 0;
+  const girCard = document.getElementById('lrGirCard');
+  girCard.style.display = hideGir ? 'none' : '';
+  if (!hideGir) {
+    const girYes = document.getElementById('lrGirYesBtn');
+    const girNo  = document.getElementById('lrGirNoBtn');
+    girYes.className = 'lr-tog' + (s.gir === true  ? ' on-y' : '');
+    girNo.className  = 'lr-tog' + (s.gir === false ? ' on-n' : '');
+    const par2 = hole.par - 2;
+    document.getElementById('lrGirReach').textContent =
+      'Reach in ' + par2 + ' stroke' + (par2 !== 1 ? 's' : '');
+  }
+
+  /* Note card */
+  const noteToggle = document.getElementById('lrNoteToggle');
+  noteToggle.textContent = '\uD83D\uDCDD ' + (s.notes
+    ? s.notes.slice(0, 40) + (s.notes.length > 40 ? '\u2026' : '')
+    : 'Add a note\u2026');
+  const noteInput = document.getElementById('lrNoteInput');
+  noteInput.style.display = (s.notes || lrState._noteOpen) ? 'block' : 'none';
+  /* Only reset value when not focused to avoid clobbering active typing */
+  if (document.activeElement !== noteInput) noteInput.value = s.notes || '';
 }
 
 function lrTallyStrip() {
