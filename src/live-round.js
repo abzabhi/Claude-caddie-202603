@@ -461,7 +461,7 @@ _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
 _lrCaddieCompanionRender();
 
 // Tally strip
-tallyWrapper.innerHTML = lrTallyStrip();
+lrTallyStrip();
 
 // Nav
 document.getElementById('lrPrevBtn').disabled = lrState.curHole === 0;
@@ -571,20 +571,30 @@ function lrScoreBlock(player, holeIdx, hole, pi, shared) {
 }
 
 function lrTallyStrip() {
-if(lrState.players.length < 2) return '';
-const mode = lrState.mode;
-const shared = LR_MODES[mode]?.shared;
-const rows = shared
-  ? lrState.teams.map(t=>{
-      const p0 = lrState.players.find(p=>t.playerIds.includes(p.id));
-      const rt = p0 ? lrRunningTotal(lrState.players.indexOf(p0)) : null;
-      return `<div class="lr-tally-row"><span class="lr-tally-name">${escHtml(t.name)}</span><span class="lr-tally-score ${rt!==null?lrRelCls(rt):''}">${rt!==null?lrRelLabel(rt):'\u2014'}</span></div>`;
-    })
-  : lrState.players.map((p,i)=>{
-      const rt = lrRunningTotal(i);
-      return `<div class="lr-tally-row"><span class="lr-tally-name">${escHtml(p.name)}${p.isMe?' \u2605':''}</span><span class="lr-tally-score ${rt!==null?lrRelCls(rt):''}">${rt!==null?lrRelLabel(rt):'\u2014'}</span></div>`;
-    });
-return `<div class="lr-tally">${rows.join('')}</div>`;
+  var inner = document.getElementById('lrTallyStripInner');
+  if (!inner) return;
+  if (!lrState || lrState.players.length < 2) { inner.textContent = ''; return; }
+  var tpl = document.getElementById('lrTallyRowTpl');
+  var mode = lrState.mode;
+  var shared = LR_MODES[mode] && LR_MODES[mode].shared;
+  inner.textContent = '';
+  var entries = shared
+    ? lrState.teams.map(function(t) {
+        var p0 = lrState.players.find(function(p) { return t.playerIds.includes(p.id); });
+        var rt = p0 ? lrRunningTotal(lrState.players.indexOf(p0)) : null;
+        return { name: t.name, rt: rt, isMe: false };
+      })
+    : lrState.players.map(function(p, i) {
+        return { name: p.name + (p.isMe ? ' \u2605' : ''), rt: lrRunningTotal(i), isMe: p.isMe };
+      });
+  entries.forEach(function(e) {
+    var row = tpl.content.cloneNode(true).querySelector('.lr-tally-row');
+    row.querySelector('.lr-tally-name').textContent = e.name;
+    var scoreEl = row.querySelector('.lr-tally-score');
+    scoreEl.textContent = e.rt !== null ? lrRelLabel(e.rt) : '\u2014';
+    scoreEl.className = 'lr-tally-score' + (e.rt !== null ? ' ' + lrRelCls(e.rt) : '');
+    inner.appendChild(row);
+  });
 }
 
 // -- Interaction ------------------------------------------------------------
@@ -902,91 +912,93 @@ document.getElementById('lrSumScore').className   = 'lrSumScore '+(played?lrRelC
 document.getElementById('lrSumMeta').textContent  =
   [lrState.courseName, lrState.tee?lrState.tee+' tees':'', played+' holes'].filter(Boolean).join(' \u00B7 ');
 
-document.getElementById('lrSumStats').innerHTML = [
-  {lbl:'vs Par', val:diff!==null?lrRelLabel(diff):'\u2014', cls:diff!==null?lrRelCls(diff):''},
-  {lbl:'Putts',  val:totalPutts||'\u2014', cls:''},
-  {lbl:'GIR',    val:girOf?`${girCount}/${girOf}`:'\u2014', cls:''},
-].map(x=>`<div style="text-align:center">
-  <div style="font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:600;color:var(--ac2)" class="${x.cls}">${x.val}</div>
-  <div style="font-size:.52rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-top:2px">${x.lbl}</div>
-</div>`).join('<div style="width:1px;background:var(--br);margin:0 6px"></div>');
+var vsParEl = document.getElementById('lrSumVsParVal');
+if (vsParEl) {
+  vsParEl.textContent = diff !== null ? lrRelLabel(diff) : '\u2014';
+  vsParEl.className = 'lr-step-num sm' + (diff !== null ? ' ' + lrRelCls(diff) : '');
+}
+var puttsEl = document.getElementById('lrSumPuttsVal');
+if (puttsEl) puttsEl.textContent = totalPutts || '\u2014';
+var girEl = document.getElementById('lrSumGirVal');
+if (girEl) girEl.textContent = girOf ? girCount + '/' + girOf : '\u2014';
 
 // Leaderboard
-const sorted = [...lrState.players].sort((a,b)=>{
-  const as=a.scores.reduce((t,s)=>t+(s.score||0),0);
-  const bs=b.scores.reduce((t,s)=>t+(s.score||0),0);
-  return as-bs;
-});
-document.getElementById('lrSumLeaderboard').innerHTML = lrState.players.length>1
-  ? `<div class="card" style="margin-bottom:0"><div class="card-title">Leaderboard</div>
-  ${sorted.map((p,pos)=>{
-    const sc=p.scores.reduce((t,s)=>t+(s.score||0),0);
-    const par=lrState.holes.reduce((t,h)=>t+h.par,0);
-    const d=sc?sc-par:null;
-    return `<div class="lr-tally-row">
-      <span style="font-size:.6rem;color:var(--tx3);width:18px">${pos+1}.</span>
-      <span class="lr-tally-name">${escHtml(p.name)}${p.isMe?' \u2605':''}</span>
-      <span class="lr-tally-score ${d!==null?lrRelCls(d):''}">${sc||'\u2014'}</span>
-      <span style="font-size:.6rem;color:var(--tx3);min-width:28px;text-align:right">${d!==null?lrRelLabel(d):''}</span>
-    </div>`;
-  }).join('')}</div>` : '';
+var lbCard = document.getElementById('lrSumLbCard');
+var lbRows = document.getElementById('lrSumLbRows');
+var lbTpl  = document.getElementById('lrSumLbRowTpl');
+if (lbCard && lbRows && lbTpl) {
+  if (lrState.players.length > 1) {
+    lbCard.style.display = '';
+    lbRows.textContent = '';
+    var sorted = lrState.players.slice().sort(function(a,b) {
+      return a.scores.reduce(function(t,s){return t+(s.score||0);},0)
+           - b.scores.reduce(function(t,s){return t+(s.score||0);},0);
+    });
+    sorted.forEach(function(p, pos) {
+      var sc  = p.scores.reduce(function(t,s){return t+(s.score||0);},0);
+      var par = lrState.holes.reduce(function(t,h){return t+h.par;},0);
+      var d   = sc ? sc - par : null;
+      var row = lbTpl.content.cloneNode(true).querySelector('.lr-tally-row');
+      row.querySelector('.lb-pos').textContent = (pos+1) + '.';
+      row.querySelector('.lr-tally-name').textContent = p.name + (p.isMe ? ' \u2605' : '');
+      var scEl = row.querySelector('.lr-tally-score');
+      scEl.textContent = sc || '\u2014';
+      scEl.className = 'lr-tally-score' + (d !== null ? ' ' + lrRelCls(d) : '');
+      row.querySelector('.lb-diff').textContent = d !== null ? lrRelLabel(d) : '';
+      lbRows.appendChild(row);
+    });
+  } else {
+    lbCard.style.display = 'none';
+  }
+}
 
 /* SG summary card */
 (function() {
   var _sgMe = meIdx >= 0 ? lrState.players[meIdx] : null;
-  if (!_sgMe) return;
+  var sgCard = document.getElementById('lrSgCard');
+  if (!_sgMe || !sgCard) return;
   var _sgData = _lrRoundSG(_sgMe.scores, lrState.holes);
   var _sgHasData = _sgMe.scores.some(function(s) {
     return s.shots && s.shots.some(function(sh) { return sh.sg !== null && sh.sg !== undefined; });
   });
-  if (!_sgHasData) return;
-  function _sgFmt(v) {
-    return '<span style="color:' + _lrSGColor(v) + '">'
-      + (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2) + '</span>';
+  if (!_sgHasData) { sgCard.style.display = 'none'; return; }
+  sgCard.style.display = '';
+  function _sgFmtEl(v) {
+    var span = document.createElement('span');
+    span.style.color = _lrSGColor(v);
+    span.textContent = (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2);
+    return span;
   }
+  var totalEl = document.getElementById('lrSgTotal');
+  if (totalEl) { totalEl.textContent = ''; totalEl.appendChild(_sgFmtEl(_sgData.total)); totalEl.style.color = _lrSGColor(_sgData.total); }
+  [['lrSgOtt','OTT'],['lrSgApp','APP'],['lrSgArg','ARG'],['lrSgPutt','PUTT']].forEach(function(pair) {
+    var el = document.getElementById(pair[0]);
+    if (el) { el.textContent = ''; el.appendChild(_sgFmtEl(_sgData[pair[1]])); }
+  });
   var _firData = _lrRoundFIR(_sgMe.scores, lrState.holes);
-  var _girHit = _sgMe.scores.filter(function(s) { return s.gir === true; }).length;
+  var _girHit  = _sgMe.scores.filter(function(s) { return s.gir === true; }).length;
   var _girElig = _sgMe.scores.filter(function(s) { return s.gir !== null && s.gir !== undefined; }).length;
-  var _firGirLine = '';
-  if (_firData.eligible > 0 || _girElig > 0) {
-    var _firStr = _firData.eligible > 0
-      ? 'FIR: ' + _firData.hit + '/' + _firData.eligible
-        + ' (' + Math.round((_firData.pct || 0) * 100) + '%)'
-      : '';
-    var _girStr = _girElig > 0
-      ? 'GIR: ' + _girHit + '/' + _girElig
-        + ' (' + Math.round(_girHit / _girElig * 100) + '%)'
-      : '';
-    _firGirLine = [_firStr, _girStr].filter(Boolean).join(' \u00B7 ');
-  }
-  var _sgCard = '<details style="margin-top:10px"><summary style="cursor:pointer;'
-    + 'color:var(--tx3);padding:8px 0;'
-    + 'border-top:1px solid var(--br);list-style:none;display:flex;justify-content:space-between;align-items:center">'
-    + '<span style="font-size:.8rem;font-weight:600">Strokes Gained</span>'
-    + '<span style="color:' + _lrSGColor(_sgData.total) + ';font-size:.8rem;font-weight:700">'
-    + (_sgData.total >= 0 ? '+' : '\u2212') + Math.abs(_sgData.total).toFixed(2) + '</span>'
-    + '</summary>'
-    + '<div class="card" style="margin-top:6px;margin-bottom:0">'
-    + '<table style="width:100%;border-collapse:collapse;font-size:.65rem">'
-    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Off the Tee</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.OTT) + '</td></tr>'
-    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Approach</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.APP) + '</td></tr>'
-    + '<tr style="border-bottom:1px solid var(--br)"><td style="padding:5px 2px;color:var(--tx2)">Around the Green</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.ARG) + '</td></tr>'
-    + '<tr><td style="padding:5px 2px;color:var(--tx2)">Putting</td><td style="text-align:right;padding:5px 2px">' + _sgFmt(_sgData.PUTT) + '</td></tr>'
-    + '</table>'
-    + (_firGirLine ? '<div style="margin-top:8px;font-size:.6rem;color:var(--tx3)">' + _firGirLine + '</div>' : '')
-    + '</div></details>';
-  document.getElementById('lrSumLeaderboard').innerHTML += _sgCard;
+  var _firStr  = _firData.eligible > 0 ? 'FIR: ' + _firData.hit + '/' + _firData.eligible + ' (' + Math.round((_firData.pct||0)*100) + '%)' : '';
+  var _girStr  = _girElig > 0 ? 'GIR: ' + _girHit + '/' + _girElig + ' (' + Math.round(_girHit/_girElig*100) + '%)' : '';
+  var fgLine = [_firStr, _girStr].filter(Boolean).join(' \u00B7 ');
+  var fgEl = document.getElementById('lrSgFirGir');
+  if (fgEl) { fgEl.textContent = fgLine; fgEl.style.display = fgLine ? '' : 'none'; }
 })();
 
 // Save note
-const noteEl = document.getElementById('lrSaveNote');
+var warningEl = document.getElementById('lrSaveNoteWarning');
+var noteTextEl = document.getElementById('lrSaveNoteText');
+var backLink = document.getElementById('lrSaveNoteBackLink');
 if(meIdx<0) {
-  noteEl.innerHTML = '\u26A0 No player marked as you \u2014 round will be saved without handicap eligibility. <a href="#" onclick="event.preventDefault();lrShowScreen(\'lrHoleScreen\');lrRenderHole()">Go back to mark yourself.</a>';
+  if (warningEl) warningEl.style.display = '';
+  if (noteTextEl) noteTextEl.textContent = '';
+  if (backLink) backLink.onclick = function(e) { e.preventDefault(); lrShowScreen('lrHoleScreen'); lrRenderHole(); };
 } else {
+  if (warningEl) warningEl.style.display = 'none';
   const hasSI = lrState.holes.every(h=>h.handicap>0);
   const capNote = lrState.countForHandicap && me?.handicap && hasSI
     ? ' Net double bogey cap applied per hole for differential.' : '';
-  noteEl.textContent = lrState.countForHandicap
+  if (noteTextEl) noteTextEl.textContent = lrState.countForHandicap
     ? 'Your score will be saved and counted toward your handicap.'+capNote
     : 'Your score will be saved but excluded from handicap calculation.';
 }
@@ -1389,17 +1401,19 @@ if(w){ w.document.open(); w.document.write(html); w.document.close(); }
 // Uses inline confirm strip (not banner) matching range discard pattern.
 // Hole screen discard is accessible via lrEndBanner Discard button (index.html).
 function lrDiscardRound() {
-if(document.getElementById('lrDiscardConfirm')) return;
-var btn = document.querySelector('[onclick="lrDiscardRound()"]');
-if(!btn) return;
-var wrap = document.createElement('div');
-wrap.id = 'lrDiscardConfirm';
-wrap.style.cssText = 'margin-top:8px;font-size:.68rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
-wrap.innerHTML = '<span style="color:var(--danger)">Discard this round? All scores will be lost.</span>' +
-  '<button class="btn" style="background:var(--danger);color:white;border-color:var(--danger);font-size:.62rem;padding:2px 8px" onclick="lrConfirmDiscard()">' +
-  'Discard</button>' +
-  '<button class="btn sec" style="font-size:.62rem;padding:2px 8px" onclick="document.getElementById(\'lrDiscardConfirm\').remove()">Cancel</button>';
-btn.parentNode.insertBefore(wrap, btn.nextSibling);
+var el = document.getElementById('lrDiscardConfirm');
+if (!el) return;
+el.style.display = 'flex';
+/* Attach delegated listener once */
+if (!el.dataset.listenerAttached) {
+  el.dataset.listenerAttached = '1';
+  el.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'confirm-discard') { lrConfirmDiscard(); }
+    else if (btn.dataset.action === 'cancel-discard') { el.style.display = 'none'; }
+  });
+}
 }
 function lrConfirmDiscard() {
 const banner = document.getElementById('lrEndBanner');
@@ -1943,35 +1957,29 @@ function _lrAdvancedHtml(holeIdx, pi, shared) {
   innerBlock.style.display = '';
 
   if (d.shot_mode === 'on_green') {
-    /* On Green: build inner string (shot form) — deferred to 4c-ii */
-    var ogDist = (s.on_green_distance !== undefined && s.on_green_distance !== null) ? s.on_green_distance : '';
-    var cpc    = s.chip_putt_count || 0;
-    var holed  = s.holed_out || false;
-    var innerHtml = '<div class="card" style="margin-bottom:8px">'
-      + '<div style="font-size:.54rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:8px">On Green</div>'
-      + '<div style="display:flex;gap:6px;margin-bottom:10px">'
-      + _lrModeBtn('standard', d.shot_mode) + _lrModeBtn('approach', d.shot_mode) + _lrModeBtn('on_green', d.shot_mode)
-      + '</div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Distance to Hole (ft)</div>'
-      + '<input type="number" inputmode="numeric" class="field"'
-      + ' style="width:100%;background:var(--bg);border:1px solid var(--br);border-radius:4px;'
-      + 'color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.72rem;padding:5px 8px;outline:none"'
-      + ' value="' + ogDist + '" oninput="lrSetOnGreenDist(this.value)"></div>'
-      + '<div style="margin-bottom:8px"><div class="card-title">Strokes on Green</div>'
-      + '<div class="lr-stepper">'
-      + '<button class="lr-step-btn sm" onclick="lrAdjChipPutt(-1)">\u2212</button>'
-      + '<div class="lr-step-val"><div class="lr-step-num sm">' + cpc + '</div></div>'
-      + '<button class="lr-step-btn sm" onclick="lrAdjChipPutt(1)">+</button>'
-      + '</div></div>'
-      + '<div style="margin-bottom:10px"><div class="card-title">Holed Out</div>'
-      + '<div style="display:flex;gap:6px;margin-top:4px">'
-      + '<button class="lr-tog' + (holed ? ' on-y' : '') + '" style="flex:1" onclick="lrToggleHoledOut()">'
-      + (holed ? '\u2713 Yes' : 'No') + '</button>'
-      + '</div></div>'
-      + '</div>';
-    innerBlock.innerHTML = innerHtml;
+    /* On Green: show static block, hide shot form */
+    document.getElementById('lrShotFormInner').style.display = 'none';
+    var ogBlock = document.getElementById('lrOnGreenBlock');
+    if (ogBlock) {
+      ogBlock.style.display = '';
+      var ogDistEl = document.getElementById('lrOgDistInput');
+      if (ogDistEl && document.activeElement !== ogDistEl) {
+        ogDistEl.value = (s.on_green_distance !== undefined && s.on_green_distance !== null) ? s.on_green_distance : '';
+      }
+      if (ogDistEl) ogDistEl.oninput = function() { lrSetOnGreenDist(this.value); };
+      document.getElementById('lrOgCpcNum').textContent = s.chip_putt_count || 0;
+      var holedBtn = document.getElementById('lrOgHoledBtn');
+      var holed = s.holed_out || false;
+      holedBtn.className = 'lr-tog' + (holed ? ' on-y' : '');
+      holedBtn.textContent = holed ? '\u2713 Yes' : 'No';
+      var ogModeIds = { standard: 'lrOgModeStandard', approach: 'lrOgModeApproach', on_green: 'lrOgModeOnGreen' };
+      Object.keys(ogModeIds).forEach(function(m) {
+        var btn = document.getElementById(ogModeIds[m]);
+        if (btn) btn.className = 'implied-tog' + (d.shot_mode === m ? ' on' : '');
+      });
+    }
     _lrGirFirToggles(s, hole);
-    if (completeRow) completeRow.style.display = '';
+    if (completeRow) completeRow.style.display = 'none';
     if (obBlock)     obBlock.style.display     = 'none';
   } else {
     _lrRenderShotLog(shots);
@@ -2031,6 +2039,8 @@ function _lrAttachAdvancedListener() {
     else if (action === 'set-shot-lie')        { lrSetShotLie(btn.dataset.lie); }
     else if (action === 'set-flight-path')     { lrSetFlightPath(btn.dataset.fp); }
     else if (action === 'record-shot')         { lrRecordShot(); }
+    else if (action === 'adj-chip-putt')       { lrAdjChipPutt(parseInt(btn.dataset.delta, 10)); }
+    else if (action === 'holed-out')           { lrToggleHoledOut(); }
   });
 }
 
