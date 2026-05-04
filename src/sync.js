@@ -59,14 +59,16 @@ async function kvPush() {
   const pass=sessionStorage.getItem('vc:kvPass');
   if(!pass){ renderProfileSync(); return; }
   if(!navigator.onLine){ _kvQueuePush(); _syncDispatch('\uD83D\uDCF5 Offline \u2014 push queued.'); return; }
-  localStorage.removeItem('vc:kvPendingPush'); /* clear optimistically -- re-set on failure */
+  localStorage.removeItem('vc:kvPendingPush');
   _syncDispatch('Syncing\u2026');
   try {
-    const normId = /^GRD-/i.test(id) ? id : 'GRD-' + id;
-    const payload = window.getJsonState ? JSON.stringify(await window.getJsonState()) : '{}';
-    const blob = await _encrypt(payload, pass);
-    const r = await fetch(_D1_BASE + '/sync/push/' + normId, { method: 'PUT', body: blob });
-    if(!r.ok){ _syncDispatch('\u26A0 Push failed ('+r.status+')', true); _kvQueuePush(); return; }
+    const payload = window.getJsonState ? await window.getJsonState() : {};
+    const plaintext = JSON.stringify(payload);
+    const blobRecovery = sessionStorage.getItem('vc:blobRecovery') || '';
+    const r = await dbPushFull(id, pass, plaintext, blobRecovery);
+    if(r.error==='conflict'){ _syncDispatch('\u26A0 Version conflict \u2014 sign out and back in to resync.', true); return; }
+    if(r.error==='rate_limit'){ _syncDispatch('\u26A0 Rate limited \u2014 will retry.', true); _kvQueuePush(); return; }
+    if(!r.ok){ _syncDispatch('\u26A0 Push failed', true); _kvQueuePush(); return; }
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
@@ -82,21 +84,11 @@ async function kvPull() {
   if(!pass){ renderProfileSync(); return; }
   _syncDispatch('Fetching\u2026');
   try {
-    const normId = /^GRD-/i.test(id) ? id : 'GRD-' + id;
-    const r=await fetch(_D1_BASE + '/sync/pull/' + normId);
-    if(r.status===404){ _syncDispatch('\u26A0 No data found for this ID.', true); return; }
-    if(!r.ok){ _syncDispatch('\u26A0 Pull failed ('+r.status+')', true); return; }
-    const j = await r.json().catch(() => ({}));
-    const envelope = j.blob || await r.text();
-    if (j.version != null) sessionStorage.setItem('vc:version', String(j.version));
-    _syncDispatch('Decrypting\u2026');
-    let plaintext;
-    try { plaintext=await _decrypt(envelope, pass); }
-    catch { _syncDispatch('\u26A0 Wrong passphrase or corrupted data.', true); return; }
-    if (window.dbLoadData) window.dbLoadData(plaintext);
-    const ts=new Date().toLocaleTimeString();
-    localStorage.setItem('vc:kvLastSync', ts);
-    _syncDispatch('\u2713 Loaded: '+ts);
+    const r = await dbPull(id, pass);
+    if(r.error==='not_found'){ _syncDispatch('\u26A0 No data found for this ID.', true); return; }
+    if(r.error==='bad_passphrase'){ _syncDispatch('\u26A0 Wrong passphrase or corrupted data.', true); return; }
+    if(!r.ok){ _syncDispatch('\u26A0 Pull failed', true); return; }
+    _syncDispatch('\u2713 Loaded: '+localStorage.getItem('vc:kvLastSync'));
   } catch(e){ _syncDispatch('\u26A0 Pull error: '+e.message, true); }
 }
 
