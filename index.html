@@ -1673,7 +1673,7 @@ body{
     <div class="card">
       <div class="card-title">Data &amp; Privacy</div>
       <div style="font-size:.71rem;color:var(--tx2);line-height:1.9">
-        All personal data is stored exclusively in your browser's <code>localStorage</code>. Nothing is transmitted to any server operated by this app. Use <strong>Save Data</strong> to download a backup file — this is the only way to transfer data between devices or browsers. Clearing browser data will erase all app data; always save first.
+        All personal data is stored exclusively in your browser's <code>localStorage</code>. Nothing is transmitted to any server operated by this app unless cross-device sync is enabled (see below). Use <strong>Save Data</strong> to download a backup file — this is the only way to transfer data between devices or browsers without sync. Clearing browser data will erase all app data; always save first.
         <br><br>
         <strong>Cross-device sync</strong> (optional): if configured, your data is encrypted in-browser using AES-GCM before transmission and stored on Cloudflare's infrastructure under your chosen sync ID and passphrase. Anthropic has no access to your data. The skill and reference files the app fetches on first load are hosted on GitHub Gist (read-only, no personal data).
         <br><br>
@@ -2813,6 +2813,13 @@ window.addEventListener('offline', _updateOnlineStatus);
 _updateOnlineStatus();
 
 // --- PWA: Background sync registration ---
+/* DEAD-2026 -- Background sync pipeline is broken end-to-end:
+   (1) _queueBackgroundSync() is never called from any uploaded module.
+   (2) Even if registered, the BACKGROUND_SYNC handler below calls dbPushFull()
+       with zero args, but dbPushFull requires (syncId, passphrase, plaintext, blobRecovery).
+   service-worker.js sync listener becomes a harmless no-op since no client registers
+   the 'gordy-sync' tag. Commented out (not deleted) for safe revival later. */
+/*
 function _queueBackgroundSync() {
   if ('serviceWorker' in navigator && 'SyncManager' in window) {
     navigator.serviceWorker.ready.then(function(reg) {
@@ -2825,12 +2832,13 @@ window._queueBackgroundSync = _queueBackgroundSync;
 // --- PWA: Receive background sync trigger from service worker ---
 navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'BACKGROUND_SYNC') {
-    /* CLEAN2 -- dbPush never existed; alias to dbPushFull which is the live export */
+    // CLEAN2 -- dbPush never existed; alias to dbPushFull which is the live export
     if (typeof window.dbPushFull === 'function' && sessionStorage.getItem('vc:kvId')) {
       window.dbPushFull();
     }
   }
 });
+*/
 
 // --- PWA: Update available banner ---
 navigator.serviceWorker && navigator.serviceWorker.ready.then(function(reg) {
