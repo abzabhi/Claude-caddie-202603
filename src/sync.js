@@ -61,9 +61,7 @@ async function kvPush() {
   localStorage.removeItem('vc:kvPendingPush');
   _syncDispatch('Syncing\u2026');
   try {
-    const payload = JSON.stringify({ bag, courses, rounds, history, profile });
-
-    
+    const payload = JSON.stringify(await getJsonState());
     const blob = await _encrypt(payload, pass);
     const r = await fetch(GORDY_SYNC_URL + id, { method: 'PUT', body: blob });
     if (!r.ok) { _syncDispatch('\u26A0 Push failed (' + r.status + ')', true); _kvQueuePush(); return; }
