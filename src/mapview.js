@@ -208,6 +208,13 @@ export class MapView {
         this._map.getSource('hole-axis').setData({ type: 'FeatureCollection', features: [] });
       }
     } catch(e) {}
+    /* PHASE-FIX 3.2: explicit listener detach before map.remove() to prevent
+       potential reference leaks. Handlers are bound on construction (lines 86-87)
+       so .off() with same reference works. */
+    if (this._map) {
+      try { this._map.off('click', this._handleMapClick); } catch(e) {}
+      try { this._map.off('move',  this._handleMapMove);  } catch(e) {}
+    }
     if (this._map)          { try { this._map.remove();          } catch(e) {} this._map          = null; }
     this._userLonLat = null;
   }
@@ -700,8 +707,20 @@ export class MapView {
     if (pill && aim) {
       var teePt  = this._teeOverride || hole.tee || (hole.line && hole.line[0]) || null;
       var teeToAim = (teePt && aim) ? geomDistanceYds(teePt, aim) : null;
-      var gpsToAim = (this._gpsOn && this._userLonLat)
-        ? geomDistanceYds(this._userLonLat, aim) : null;
+      /* PHASE-FIX 3.1: When _lineStartOverride is active (ball position from
+         last shot), use it for the distance and label as "Ball". Otherwise
+         use raw GPS and label as "GPS". Aligns the pill value with the
+         dispersion line drawn from _lineStartOverride. */
+      var distFromPt = null;
+      var distLabel = '';
+      if (this._lineStartOverride) {
+        distFromPt = this._lineStartOverride;
+        distLabel = 'Ball';
+      } else if (this._gpsOn && this._userLonLat) {
+        distFromPt = this._userLonLat;
+        distLabel = 'GPS';
+      }
+      var gpsToAim = distFromPt ? geomDistanceYds(distFromPt, aim) : null;
       pill.innerHTML = ''
         + '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">'
         +   '<span style="background:#111;color:#fff;border-radius:999px;padding:2px 8px;font-size:.67rem;font-weight:700">'
@@ -712,7 +731,7 @@ export class MapView {
           ? '<div style="display:flex;align-items:center;gap:6px;margin-top:3px;white-space:nowrap">'
           +   '<span style="background:#1a7f4b;color:#fff;border-radius:999px;padding:2px 8px;font-size:.67rem;font-weight:700">'
           +     gpsToAim + 'y</span>'
-          +   '<span style="font-size:.55rem;color:#555">GPS</span>'
+          +   '<span style="font-size:.55rem;color:#555">' + distLabel + '</span>'
           + '</div>'
           : '');
       /* Position below reticle — clear bottom/left anchoring from live-round template. */
