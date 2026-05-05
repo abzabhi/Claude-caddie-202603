@@ -1071,7 +1071,9 @@ function acceptDisclaimer() {
   document.getElementById('discModal').style.display = 'none';
 }
 function confirmClearAll() {
-  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:version',
+  /* VERSION-FIX -- vc:version is the APP_VERSION schema watermark; clearing it would
+     trigger the version-bump cleanup loop. The sync watermark is now vc:syncVersion. */
+  ['vc:bag','vc:courses','vc:rounds','vc:history','vc:profile','vc:hcpMode','vc:manualHcp','vc:syncVersion',
    'gordy:activeRound','gordy:activeRange','vc:rangeSessions'].forEach(k=>localStorage.removeItem(k));
   clearAll();
   document.getElementById('clearModal').style.display='none';
@@ -1126,7 +1128,7 @@ function _clearLocalUserData() {
   // UI state
    'gordy:checklist','gordy:lastTab',
   // Sync state
-   'vc:kvId','vc:kvLastSync','vc:kvLastSyncTs','vc:kvPendingPush'
+   'vc:kvId','vc:kvLastSync','vc:kvLastSyncTs','vc:kvPendingPush','vc:syncVersion'  /* VERSION-FIX -- per-identity watermark, must clear on sign-out */
   ].forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
   // In-memory wipe so callers that don't reload still see clean state
   try { clearAll(); } catch(e){}
@@ -1141,7 +1143,9 @@ function updateChecklist() {
   var state = raw ? JSON.parse(raw) : null;
   if (state && state.dismissed) { card.style.display = 'none'; return; }
   var b = bag; var c = courses; var h = history;
-  var s1done = b.filter(function(cl){ return cl.active && cl.sessions && cl.sessions.length > 0; }).length >= 1;
+  /* BANNER-FIX -- step 1 was over-strict (required active club + sessions.length > 0).
+     Now: any active club marks step 1 done. Sessions are dispersion data, not gating data. */
+  var s1done = b.filter(function(cl){ return cl.active; }).length >= 1;
   var s2done = c.length >= 1;
   var s3done = h.length >= 1;
   function setStep(id, done) {
