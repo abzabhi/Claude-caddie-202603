@@ -2401,7 +2401,7 @@ _gateNewSitePass = sp;
       return;
     }
     sessionStorage.setItem('vc:kvPass', _gateNewPass);
-    sessionStorage.setItem('vc:version', '1');
+    localStorage.setItem('vc:syncVersion', '1');  /* VERSION-FIX -- match server initial version=1 from dbRegister; was sessionStorage and overloaded vc:version key */
     dbEncrypt('gordy-verify', _gateNewPass).then(function(vt) { sessionStorage.setItem('vc:verify', vt); });
     sessionStorage.setItem('vc:gateUnlocked', '1');
     gateUnlocked(null);
