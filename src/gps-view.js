@@ -203,9 +203,40 @@ function gpsViewOpen() {
     _gvOriginalAimCb = lr._mapInstance._onAimChange || null;
     lr._mapInstance._onAimChange = function(lngLat) {
       if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
-      /* PHASE-FIX 1.1: Aim drag no longer logs shots. Logging moved to onMapClick
-         wrap below so it only fires on intentional map taps in tracker mode.
-         Original passthrough above persists lrState._mapAim for Fix 2.1 to consume. */
+      /* Tracker behaviour: only if explicitly enabled. */
+      if (!lr._trackerOn) return;
+      /* PHASE-SPRINT Task 4: One-tap flow. A single tap on the map immediately
+         records the shot at the tapped location. No arming step needed.
+         stRecordLocation handles start=lastShot/tee, end=lngLat, GPS-agnostic. */
+      var rec = null;
+      if (typeof window.stRecordLocation === 'function') {
+        try { rec = window.stRecordLocation(lngLat); } catch(e) {}
+      }
+      if (rec) {
+        /* Draw dispersion line: start → end (aim = end in one-tap flow, so
+           green line and red line overlap — both drawn for API consistency). */
+        if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
+          try {
+            lr._mapInstance.setDispersionLines({
+              startLL: rec.gps_flight.startLngLat,
+              aimLL:   rec.gps_flight.endLngLat,
+              endLL:   rec.gps_flight.endLngLat
+            });
+          } catch(e2) {}
+        }
+        /* Refresh line baseline so next shot starts from this end point. */
+        _gvRefreshLineStart();
+        var sNow = lr.players[lr.curPlayer].scores[lr.curHole];
+        var nNow = (sNow && Array.isArray(sNow.shots)) ? sNow.shots.length : 1;
+        _gvShowToast(
+          'Shot ' + nNow + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown'),
+          'success'
+        );
+        if (rec.lie === 'green' && !_puttMode) _puttMode = true;
+      } else {
+        _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
+      }
+      if (typeof gpsViewRender === 'function') gpsViewRender();
 
       /* PHASE-SPRINT: Old two-tap arm flow deprecated below — preserved as comment.
       // var armedAlready = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
@@ -278,40 +309,6 @@ function gpsViewOpen() {
         }
         if (typeof lr._mapInstance.setLineStartOverride === 'function') {
           try { lr._mapInstance.setLineStartOverride(null); } catch(err) {}
-        }
-      }
-      /* PHASE-FIX 1.1: One-tap shot logging on map clicks (moved from _onAimChange).
-         Only fires when tracker is on. stRecordLocation reads lr._mapAim (set by the
-         original aim cb) for intended aim, and uses the tap location as the landing. */
-      if (lr._trackerOn) {
-        var clickLngLat = e && e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null;
-        if (clickLngLat) {
-          var rec = null;
-          if (typeof window.stRecordLocation === 'function') {
-            try { rec = window.stRecordLocation(clickLngLat); } catch(e2) {}
-          }
-          if (rec) {
-            if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
-              try {
-                lr._mapInstance.setDispersionLines({
-                  startLL: rec.gps_flight.startLngLat,
-                  aimLL:   rec.gps_flight.aimLngLat,
-                  endLL:   rec.gps_flight.endLngLat
-                });
-              } catch(e3) {}
-            }
-            _gvRefreshLineStart();
-            var sNow = lr.players[lr.curPlayer].scores[lr.curHole];
-            var nNow = (sNow && Array.isArray(sNow.shots)) ? sNow.shots.length : 1;
-            _gvShowToast(
-              'Shot ' + nNow + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown'),
-              'success'
-            );
-            if (rec.lie === 'green' && !_puttMode) _puttMode = true;
-          } else {
-            _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
-          }
-          if (typeof gpsViewRender === 'function') gpsViewRender();
         }
       }
       /* OLD two-tap landing logic — preserved per "comment, don't delete" rule:
@@ -639,12 +636,6 @@ function gpsViewGpsToggle() {
       function(/*pos*/) {
         if (lr._mapInstance && typeof lr._mapInstance.startGps === 'function') {
           try { lr._mapInstance.startGps(); } catch(e) {}
-          /* PHASE-FIX 1.5: defensive — if a fallback watch was running before
-             MapView mounted, kill it now to prevent concurrent GPS subscriptions. */
-          if (_gpsWatchId != null) {
-            try { geomStopGpsWatch(_gpsWatchId); } catch(e) {}
-            _gpsWatchId = null;
-          }
         } else if (_gpsWatchId == null) {
           _gpsWatchId = geomStartGpsWatch(_gpsViewOnTick, _gpsViewOnGpsError);
         }
@@ -847,9 +838,29 @@ function _renderMinimap() {
     if (typeof window._lrMapMount === 'function') {
       try { window._lrMapMount(); } catch(e) { /* surfaced on next tick if it failed */ }
     }
-    /* PHASE-FIX 1.4: ResizeObserver removed. It fired prematurely with stale bounds
-       and caused offset/loop issues. Manual map.resize() is now triggered from
-       live-round.js _lrMapToggleSheet (Fix 4.1) when the UI changes size. */
+    /* PHASE-SPRINT Task 3: ResizeObserver replaces the 50ms setTimeout in gpsViewOpen.
+       We attach here because this is the first moment #gpsMapCanvas exists in the DOM.
+       Fires once when the canvas gains real dimensions, calls map.resize(), then
+       disconnects immediately so it never runs again. */
+    (function() {
+      var canvas = document.getElementById('gpsMapCanvas');
+      if (!canvas || typeof ResizeObserver === 'undefined') return;
+      var ro = new ResizeObserver(function(entries) {
+        var entry = entries[0];
+        if (!entry) return;
+        var w = entry.contentRect ? entry.contentRect.width  : canvas.offsetWidth;
+        var h = entry.contentRect ? entry.contentRect.height : canvas.offsetHeight;
+        if (w > 0 && h > 0) {
+          ro.disconnect();
+          var lrInner = window.lrState;
+          if (lrInner && lrInner._mapInstance && lrInner._mapInstance._map
+              && typeof lrInner._mapInstance._map.resize === 'function') {
+            try { lrInner._mapInstance._map.resize(); } catch(e) {}
+          }
+        }
+      });
+      ro.observe(canvas);
+    }());
   }
   /* Snap to current hole on first render and on hole changes. */
   var holeN = lr.curHole + 1;
@@ -911,11 +922,7 @@ function _calcYardsToGreen() {
       }
     }
   }
-  /* PHASE-FIX 1.2: Priority 2 — user tee override (lrState._mapTeeLonLat). */
-  if (!fromPt && lr && Array.isArray(lr._mapTeeLonLat) && lr._mapTeeLonLat.length >= 2) {
-    fromPt = lr._mapTeeLonLat;
-  }
-  /* Priority 3: tee. */
+  /* Priority 2: tee. */
   if (!fromPt && Array.isArray(holeEntry.tee)) fromPt = holeEntry.tee;
   /* Priority 3: hole line start. */
   if (!fromPt && Array.isArray(holeEntry.line) && holeEntry.line.length) fromPt = holeEntry.line[0];
@@ -981,7 +988,7 @@ function _gvCorridorCheck(startLL, endLL, hazardCentroid) {
   var t = (hx * ux + hy * uy) / aLen;
   var perp = Math.abs(hx * rx + hy * ry);
   var perpYds = perp * M_TO_YDS;
-  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 40);
+  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 60);
   var cross = ux * hy - uy * hx;
   var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
   return { inCorridor: inCorridor, lr: lr_label };
@@ -1011,8 +1018,6 @@ function _renderHazards() {
       }
     }
   }
-  /* PHASE-FIX 1.3: user tee override before geometry tee. */
-  if (!ballPt && Array.isArray(lr._mapTeeLonLat) && lr._mapTeeLonLat.length >= 2) ballPt = lr._mapTeeLonLat;
   if (!ballPt && holeEntry && Array.isArray(holeEntry.tee)) ballPt = holeEntry.tee;
   if (!ballPt && holeEntry && Array.isArray(holeEntry.line) && holeEntry.line.length) ballPt = holeEntry.line[0];
   if (!ballPt && _gpsLast) ballPt = [_gpsLast[0], _gpsLast[1]];
