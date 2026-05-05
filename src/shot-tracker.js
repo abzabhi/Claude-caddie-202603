@@ -322,11 +322,8 @@ function stRecordLocation(endLngLat) {
   if (!startLngLat) startLngLat = _stCurrentTeeLngLat();
   if (!startLngLat) return null;  /* no tee data available */
 
-  /* PHASE-FIX 2.1: Aim = lrState._mapAim (set by MapView aim cb) when present,
-     else fallback to end (single-tap = aim is end). */
-  var aimLngLat = (Array.isArray(lr._mapAim) && lr._mapAim.length >= 2)
-    ? lr._mapAim
-    : endLngLat;
+  /* Aim = end (single-tap: where you tapped is both aim and landing). */
+  var aimLngLat = endLngLat;
 
   /* Geometry. */
   var distanceYds = 0;
@@ -387,8 +384,6 @@ function stRecordLocation(endLngLat) {
 
   /* Ensure no stale armed state left over. */
   lr._shotArmed = null;
-  /* PHASE-FIX 2.1: reset aim so next shot doesn't inherit stale intended-aim. */
-  lr._mapAim = null;
   if (typeof window._lrPersist === 'function') window._lrPersist();
   return rec;
 }
