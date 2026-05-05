@@ -3190,14 +3190,6 @@ function _lrZoomGreen() {
 function _lrMapToggleSheet() {
   if (!lrState) return;
   lrState._mapSheetOpen = !lrState._mapSheetOpen;
-  /* PHASE-FIX 4.1: manually trigger MapLibre resize on sheet toggle so it
-     recalculates bounds when the UI changes size. Replaces the dead ResizeObserver. */
-  try {
-    if (lrState._mapInstance && lrState._mapInstance._map
-        && typeof lrState._mapInstance._map.resize === 'function') {
-      lrState._mapInstance._map.resize();
-    }
-  } catch(e) {}
   _lrPersist();
   lrRenderHole();
 }
