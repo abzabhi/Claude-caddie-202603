@@ -63,7 +63,9 @@ async function kvPush(statusElId) {
   try {
     const blob=await _encrypt(serialise(), pass);
     const blobRecovery=sessionStorage.getItem('vc:blobRecovery')||'';
-    const version=(parseInt(sessionStorage.getItem('vc:version')||'0',10)||0)+1;
+    /* VERSION-FIX -- version is a persistent watermark, not session state.
+       Was sessionStorage which wiped on reload, causing false "newer data" banner. */
+    const version=(parseInt(localStorage.getItem('vc:syncVersion')||'0',10)||0)+1;
     const r=await fetch(_D1_BASE+'/sync/push/'+id, {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({blob, blob_recovery:blobRecovery, version})
@@ -71,7 +73,7 @@ async function kvPush(statusElId) {
     if(r.status===409){if(st) st.textContent='\u26A0 Version conflict \u2014 pull first to get latest data.'; return;}
     if(r.status===429){if(st) st.textContent='\u26A0 Rate limited \u2014 wait 30s and try again.'; return;}
     if(!r.ok){if(st) st.textContent='\u26A0 Push failed ('+r.status+')'; _kvQueuePush(); return;}
-    sessionStorage.setItem('vc:version', String(version));
+    localStorage.setItem('vc:syncVersion', String(version));  /* VERSION-FIX -- localStorage */
     const now=Date.now();
     localStorage.setItem('vc:kvLastSyncTs', String(now));
     localStorage.setItem('vc:kvLastSync', new Date(now).toLocaleTimeString());
@@ -234,6 +236,7 @@ function disconnectSync() {
   localStorage.removeItem('vc:kvLastSync');
   localStorage.removeItem('vc:kvLastSyncTs');   /* DISCONNECT-FIX -- was leaking stale "synced X ago" timestamp */
   localStorage.removeItem('vc:kvPendingPush');  /* DISCONNECT-FIX -- was leaking pending-push flag into next connection */
+  localStorage.removeItem('vc:syncVersion');    /* VERSION-FIX -- per-identity watermark */
   sessionStorage.removeItem('vc:kvPass');
   renderProfileSync();
 }
@@ -373,10 +376,10 @@ async function dbPull(syncId, passphrase) {
     localStorage.setItem('vc:kvId', id);
     sessionStorage.setItem('vc:kvPass', passphrase);
     if (version != null) {
-      const localVersion = parseInt(sessionStorage.getItem('vc:version') || '0', 10) || 0;
+      const localVersion = parseInt(localStorage.getItem('vc:syncVersion') || '0', 10) || 0;  /* VERSION-FIX */
       if (version > localVersion) sessionStorage.setItem('gordy:cloudNewer', '1');
       else sessionStorage.removeItem('gordy:cloudNewer');
-      sessionStorage.setItem('vc:version', String(version));
+      localStorage.setItem('vc:syncVersion', String(version));  /* VERSION-FIX */
     }
     localStorage.setItem('vc:kvLastSync', new Date().toLocaleTimeString());
     localStorage.setItem('vc:kvLastSyncTs', String(Date.now()));
@@ -487,7 +490,7 @@ async function dbRegister(syncId, sitePassword, blob, blobRecovery, recoveryQues
 // Push a blob with version tracking. blobRecovery required by Worker on every push.
 async function dbPushFull(syncId, passphrase, plaintext, blobRecovery) {
   const id = _normId(syncId);
-  const version = (parseInt(sessionStorage.getItem('vc:version') || '0', 10) || 0) + 1;
+  const version = (parseInt(localStorage.getItem('vc:syncVersion') || '0', 10) || 0) + 1;  /* VERSION-FIX */
   try {
     const blob = await _encrypt(plaintext, passphrase);
     const r = await fetch(_D1_BASE + '/sync/push/' + id, {
@@ -497,7 +500,7 @@ async function dbPushFull(syncId, passphrase, plaintext, blobRecovery) {
     if (r.status === 409) return { ok: false, error: 'conflict' };
     if (r.status === 429) return { ok: false, error: 'rate_limit' };
     if (!r.ok)            return { ok: false, error: 'server_' + r.status };
-    sessionStorage.setItem('vc:version', String(version));
+    localStorage.setItem('vc:syncVersion', String(version));  /* VERSION-FIX */
     return { ok: true };
   } catch { return { ok: false, error: 'network' }; }
 }
