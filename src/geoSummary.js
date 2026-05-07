@@ -399,9 +399,134 @@ function geoLineForHole(geo, holeNumber) {
 }
 
 // ---------------------------------------------------------------------------
-// Expose on window (same pattern as geomap.js)
+// Parser: GEO line string  ->  structured object
 // ---------------------------------------------------------------------------
-if (typeof window !== 'undefined') {
-  window.buildGeoSummaries = buildGeoSummaries;
-  window.geoLineForHole    = geoLineForHole;
+
+/**
+ * Parse a GEO summary string back into structured data for UI rendering.
+ *
+ * Accepts a raw string in the format produced by buildGeoSummaries:
+ *   "GEO | dogleg-left@210 | hazard=bunker-left@195,water-right@240 | green=bunker-right"
+ *   "GEO | straight | clear | green=open"
+ *
+ * Returns:
+ *   {
+ *     shape:   { type: 'straight' } | { type: 'dogleg', dir: 'left'|'right', yds: number },
+ *     hazards: [ { label: string, side: 'left'|'right', yds: number }, ... ],
+ *     green:   [ { label: string, side: 'left'|'right' }, ... ]   // empty if open
+ *   }
+ *
+ * Defensive: returns the empty shape ({type:'straight'}, [], []) on any parse
+ * failure or non-string / empty input. Never throws.
+ *
+ * @param {string} str
+ * @returns {object}
+ */
+function parseGeoSummary(str) {
+  var result = { shape: { type: 'straight' }, hazards: [], green: [] };
+  if (!str || typeof str !== 'string') return result;
+
+  var parts = str.split('|').map(function (s) { return s.trim(); });
+  // Expected: ['GEO', '<shape>', '<hazards>', '<green>']
+  if (parts.length < 4 || parts[0] !== 'GEO') return result;
+
+  // --- shape ---
+  var shapeStr = parts[1];
+  if (shapeStr && shapeStr.indexOf('dogleg-') === 0) {
+    var atIdx = shapeStr.indexOf('@');
+    var dir   = shapeStr.substring(7, atIdx > 0 ? atIdx : shapeStr.length);
+    var yds   = atIdx > 0 ? parseInt(shapeStr.substring(atIdx + 1), 10) : NaN;
+    if ((dir === 'left' || dir === 'right') && !isNaN(yds)) {
+      result.shape = { type: 'dogleg', dir: dir, yds: yds };
+    }
+  }
+
+  // --- fairway hazards ---
+  var hazStr = parts[2];
+  if (hazStr && hazStr.indexOf('hazard=') === 0) {
+    var hazList = hazStr.substring(7).split(',');
+    for (var i = 0; i < hazList.length; i++) {
+      var entry = hazList[i].trim(); if (!entry) continue;
+      var atI = entry.indexOf('@');
+      if (atI < 0) continue;
+      var labelSide = entry.substring(0, atI);
+      var yI        = parseInt(entry.substring(atI + 1), 10);
+      var dashI     = labelSide.lastIndexOf('-');
+      if (dashI < 0 || isNaN(yI)) continue;
+      var label = labelSide.substring(0, dashI);
+      var side  = labelSide.substring(dashI + 1);
+      if (side !== 'left' && side !== 'right') continue;
+      result.hazards.push({ label: label, side: side, yds: yI });
+    }
+  }
+
+  // --- green ---
+  var grnStr = parts[3];
+  if (grnStr && grnStr.indexOf('green=') === 0) {
+    var grnVal = grnStr.substring(6);
+    if (grnVal && grnVal !== 'open') {
+      var grnList = grnVal.split(',');
+      for (var g = 0; g < grnList.length; g++) {
+        var ge = grnList[g].trim(); if (!ge) continue;
+        var dI = ge.lastIndexOf('-');
+        if (dI < 0) continue;
+        var gLabel = ge.substring(0, dI);
+        var gSide  = ge.substring(dI + 1);
+        if (gSide !== 'left' && gSide !== 'right') continue;
+        result.green.push({ label: gLabel, side: gSide });
+      }
+    }
+  }
+
+  return result;
 }
+
+// ---------------------------------------------------------------------------
+// Yardage -> LngLat projection along the tee->green axis
+// ---------------------------------------------------------------------------
+
+/**
+ * Project a yardage along the tee->green axis of a hole, with optional perp
+ * offset, into a [lng, lat] coordinate. Useful for map-overlay rendering of
+ * parsed hazards (yds + side -> ground coordinate).
+ *
+ * Mirrors the math used in viz.js _vizFrameToLngLat: turf.destination along
+ * the tee->green bearing, then perpendicular destination for the offset.
+ *
+ * @param {object} geo                Live geo object (return of geomLoadByCourse)
+ * @param {number|string} holeNumber  Hole ref to look up in geo.holes
+ * @param {number} alongYds           Yards from tee along the centreline
+ * @param {number} offsetYds          Perp offset; positive = right, negative = left
+ * @returns {Array<number>|null}      [lng, lat] or null if inputs invalid
+ */
+function geoYdsToLngLat(geo, holeNumber, alongYds, offsetYds) {
+  if (!geo || !geo.holes || !window.turf) return null;
+  if (typeof alongYds !== 'number' || isNaN(alongYds)) return null;
+  var off = (typeof offsetYds === 'number' && !isNaN(offsetYds)) ? offsetYds : 0;
+  var want = String(holeNumber);
+  var hole = null;
+  for (var key in geo.holes) {
+    if (geo.holes[key] && String(geo.holes[key].ref) === want) { hole = geo.holes[key]; break; }
+  }
+  if (!hole) return null;
+  var tee   = (hole.line && hole.line[0]) || null;
+  var green = Array.isArray(hole.green) ? hole.green
+            : (hole.line && hole.line[hole.line.length - 1]) || null;
+  if (!tee || !green) return null;
+  try {
+    var brg     = window.turf.bearing(window.turf.point(tee), window.turf.point(green));
+    var brgN    = ((brg % 360) + 360) % 360;
+    var fwdPt   = window.turf.destination(window.turf.point(tee), alongYds, brgN, { units: 'yards' });
+    if (off === 0) return fwdPt.geometry.coordinates;
+    var perpBrg = (brgN + 90 + 360) % 360;
+    var finalPt = window.turf.destination(fwdPt, off, perpBrg, { units: 'yards' });
+    return finalPt.geometry.coordinates;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ES module exports
+// ---------------------------------------------------------------------------
+export { buildGeoSummaries, geoLineForHole, parseGeoSummary, geoYdsToLngLat };
