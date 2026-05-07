@@ -342,13 +342,20 @@ function selectEditTee(id) {
 function renderHoleTable() {
   if(!editCourseData) return;
   const tbody = document.getElementById('holeTableBody');
-  tbody.innerHTML = editCourseData.holes.map(h=>`
+  tbody.innerHTML = editCourseData.holes.map(h=>{
+    /* GEO-SUM: HTML-escape the value for safe interpolation into a value="" attribute */
+    const gs = String(h.geoSummary||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    return `
     <tr>
       <td style="color:var(--tx3)">${h.number}</td>
       <td><input value="${h.par}" onchange="updateHole(${h.number},'par',this.value)" placeholder="4"></td>
       <td><input value="${h.yards}" onchange="updateHole(${h.number},'yards',this.value)" placeholder="380"></td>
       <td><input value="${h.handicap}" onchange="updateHole(${h.number},'handicap',this.value)" placeholder="9"></td>
-    </tr>`).join('');
+    </tr>
+    <tr>
+      <td colspan="4" style="padding:0 4px 6px"><input value="${gs}" onchange="updateHole(${h.number},'geoSummary',this.value)" placeholder="GEO summary or notes" style="width:100%;font-size:.62rem;color:var(--tx3);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace"></td>
+    </tr>`;
+  }).join('');
   updateHoleTotals();
 }
 
