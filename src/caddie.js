@@ -327,6 +327,7 @@ function exportForAI() {
           L.push(`    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''} |`);
         } else {
           L.push(`    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''} | ${h.note||''}`);
+          if (h.geoSummary) L.push(`    ${h.geoSummary}`); /* GEO-SUM: emit at tier 3+4 only */
         }
       });
     }
@@ -558,7 +559,13 @@ function processSessionResult(text, expectedType) {
       } else if(line.startsWith('HOLE |')&&curTee) {
         const p=line.split('|').map(s=>s.trim());
         curTee.holes=curTee.holes||[];
-        curTee.holes.push({number:parseInt(p[1])||0,par:p[2]||'',yards:p[3]||'',handicap:p[4]||'',note:p[5]||''});
+        /* GEO-SUM: geoSummary defaults to ''. If a GEO | line follows, the next branch attaches it. */
+        curTee.holes.push({number:parseInt(p[1])||0,par:p[2]||'',yards:p[3]||'',handicap:p[4]||'',note:p[5]||'',geoSummary:''});
+      } else if(line.trim().startsWith('GEO |')&&curTee&&curTee.holes&&curTee.holes.length) {
+        /* GEO-SUM: GEO line attaches to the most recent hole on its tee. Used by both
+           AI-export (caddie.js L329) and backup serialise (store.js). Trim because the
+           export indents this line by 4 spaces. */
+        curTee.holes[curTee.holes.length-1].geoSummary = line.trim();
       }
       // Rounds
       else if(line.startsWith('ROUND |')) {
@@ -846,7 +853,10 @@ function exportCourseTask() {
     if(cached) {
       const c = _stripGeometry(JSON.parse(cached));
       const teeLines = (c.tees||[]).map(t=>{
-        const holes = (t.holes||[]).map(h=>`    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''}`).join('\n');
+        const holes = (t.holes||[]).map(h=>{
+          const base = `    HOLE | ${h.number} | ${h.par||''} | ${h.yards||''} | ${h.handicap||''}`;
+          return h.geoSummary ? base + '\n    ' + h.geoSummary : base; /* GEO-SUM */
+        }).join('\n');
         return `  TEE | ${t.id} | ${t.name} | ${t.rating||''} | ${t.slope||''} | ${t.totalYards||t.yardage||''}\n${holes}`;
       }).join('\n');
       preLoadedBlock = `\n\n--- PRE-LOADED COURSE DATA ---\n# Official data from Gordy repo \u2014 use as starting point, skip web search, confirm tees with user\nCOURSE | ${c.courseId||c.id} | ${c.name} | ${c.city||''} | ${c.par||''} | ${c.rating||''} | ${c.slope||''} | ${c.totalYards||c.yardage||''} | ${c.selectedTee||''} | ${c.updated||c.updatedAt||''}\n${teeLines}`;
