@@ -988,7 +988,7 @@ function _gvCorridorCheck(startLL, endLL, hazardCentroid) {
   var t = (hx * ux + hy * uy) / aLen;
   var perp = Math.abs(hx * rx + hy * ry);
   var perpYds = perp * M_TO_YDS;
-  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 60);
+  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 40);
   var cross = ux * hy - uy * hx;
   var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
   return { inCorridor: inCorridor, lr: lr_label };
