@@ -3311,6 +3311,13 @@ function _lrMapUnmount() {
     try { lrState._mapInstance.unmount(); } catch(e) {}
     lrState._mapInstance = null;
   }
+  /* PHASE-FIX: Clear the GPS view's map container so the next gpsViewOpen
+     re-enters the canvas-injection branch in _renderMinimap. Without this,
+     a quick discard->reload-into-GPS-view sequence leaves a stale #gpsMapCanvas
+     in the DOM and module-level _gvCanvasInjected=true, causing _renderMinimap
+     to skip re-mount and the new round to show a blank map. */
+  var gw = document.getElementById('gpsMapWrap');
+  if (gw) gw.innerHTML = '';
 }
 
 /* ─────────────────────────────────────────────────────────
