@@ -1,6 +1,8 @@
 import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse } from './store.js';
 import { setVizInitDone } from './viz.js';
-import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap, geomOpenLocateModal } from './geomap.js'; /* G2, G5 */
+import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap, geomOpenLocateModal,
+         geomLoadByCourse, geomLoadByCenter } from './geomap.js'; /* G2, G5; GEO-SUM: load fns */
+import { buildGeoSummaries } from './geoSummary.js'; /* GEO-SUM */
 
 const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
 const GORDY_COURSES_BASE_URL  = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/courses/';
@@ -9,6 +11,12 @@ let editCourseData = null;
 let currentEditTeeId = null;
 let _deleteConfirmId = null;
 let _deleteConfirmTimer = null;
+/* GEO-SUM: in-modal state for Clear-Geo two-tap confirm + global show/hide toggles.
+   Module-level lets persist across opens within a page session, reset on reload. */
+let _clearGeoConfirm = false;
+let _clearGeoConfirmTimer = null;
+let _showGeoRow   = false;
+let _showNoteRow  = false;
 
 /* G5 -- Module state below superseded by geomOpenLocateModal in geomap.js.
    Commented out per "comment, don't delete" rule.
@@ -248,6 +256,7 @@ function editCourse(id) {
 }
 
 function cancelCourseEdit() {
+  _resetClearGeoConfirm(); /* GEO-SUM */
   editCourseData=null;
   document.getElementById('courseListView').style.display='block';
   document.getElementById('courseEditView').style.display='none';
@@ -342,9 +351,15 @@ function selectEditTee(id) {
 function renderHoleTable() {
   if(!editCourseData) return;
   const tbody = document.getElementById('holeTableBody');
+  /* GEO-SUM: per-hole 3-row layout — primary fields, optional Geo row, optional Notes row.
+     Geo and Notes rows render as <tr style="display:none"> when their global toggle is off,
+     so the table footer/header alignment is unaffected. */
+  const geoVis  = _showGeoRow  ? '' : 'display:none';
+  const noteVis = _showNoteRow ? '' : 'display:none';
+  const esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); };
   tbody.innerHTML = editCourseData.holes.map(h=>{
-    /* GEO-SUM: HTML-escape the value for safe interpolation into a value="" attribute */
-    const gs = String(h.geoSummary||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    const gs = esc(h.geoSummary);
+    const nt = esc(h.note);
     return `
     <tr>
       <td style="color:var(--tx3)">${h.number}</td>
@@ -352,11 +367,171 @@ function renderHoleTable() {
       <td><input value="${h.yards}" onchange="updateHole(${h.number},'yards',this.value)" placeholder="380"></td>
       <td><input value="${h.handicap}" onchange="updateHole(${h.number},'handicap',this.value)" placeholder="9"></td>
     </tr>
-    <tr>
-      <td colspan="4" style="padding:0 4px 6px"><input value="${gs}" onchange="updateHole(${h.number},'geoSummary',this.value)" placeholder="GEO summary or notes" style="width:100%;font-size:.62rem;color:var(--tx3);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace"></td>
+    <tr class="geo-row" style="${geoVis}">
+      <td colspan="4" style="padding:0 4px 6px"><input value="${gs}" onchange="updateHole(${h.number},'geoSummary',this.value)" placeholder="GEO | dogleg-... or freeform" style="width:100%;font-size:.62rem;color:var(--tx3);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace"></td>
+    </tr>
+    <tr class="note-row" style="${noteVis}">
+      <td colspan="4" style="padding:0 4px 6px"><input value="${nt}" onchange="updateHole(${h.number},'note',this.value)" placeholder="Hole notes (e.g. 'Bunker right of approach, water short')" style="width:100%;font-size:.62rem;color:var(--tx2);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace"></td>
     </tr>`;
   }).join('');
   updateHoleTotals();
+  /* GEO-SUM: keep the controls row in sync each time the table re-renders. */
+  _renderGeoSumBtnRow();
+}
+
+/* ============================================================================
+   GEO-SUM: Course Edit modal controls — Show/Hide toggles + Generate + Clear
+   ============================================================================ */
+
+/* Reset Clear-Geo two-tap state. Called by cancelCourseEdit + on second-tap commit. */
+function _resetClearGeoConfirm() {
+  if (_clearGeoConfirmTimer) { clearTimeout(_clearGeoConfirmTimer); _clearGeoConfirmTimer = null; }
+  _clearGeoConfirm = false;
+  const btn = document.getElementById('geoSumClearBtn');
+  if (btn) btn.textContent = 'Clear Geo';
+}
+
+/* Render the controls row at the bottom of the Hole-by-Hole card.
+   Row layout: [☐ Show Geo] [☐ Show Notes]   [Generate] [Clear Geo]   <status>
+   Generate is hidden when the course has neither osmCourseId nor osmCenter. */
+function _renderGeoSumBtnRow() {
+  const host = document.getElementById('geoSumBtnRow');
+  if (!host || !editCourseData) return;
+  const canGen = !!(editCourseData.osmCourseId || (editCourseData.osmCenter && editCourseData.osmCenter.length === 2));
+  const genHtml = canGen
+    ? '<button id="geoSumGenBtn" class="btn" style="font-size:.6rem;padding:4px 10px" onclick="generateGeoSummaries()">Generate</button>'
+    : '';
+  host.innerHTML =
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;padding:6px 0;border-top:1px solid var(--br)">'
+    +   '<label style="display:flex;align-items:center;gap:4px;font-size:.62rem;color:var(--tx2);cursor:pointer">'
+    +     '<input type="checkbox" ' + (_showGeoRow ? 'checked' : '') + ' onchange="toggleGeoRowVis(this.checked)" style="margin:0">'
+    +     'Show Geo'
+    +   '</label>'
+    +   '<label style="display:flex;align-items:center;gap:4px;font-size:.62rem;color:var(--tx2);cursor:pointer">'
+    +     '<input type="checkbox" ' + (_showNoteRow ? 'checked' : '') + ' onchange="toggleNoteRowVis(this.checked)" style="margin:0">'
+    +     'Show Notes'
+    +   '</label>'
+    +   '<div style="flex:1"></div>'
+    +   genHtml
+    +   '<button id="geoSumClearBtn" class="btn danger" style="font-size:.6rem;padding:4px 10px" onclick="clearGeoSummaries()">Clear Geo</button>'
+    + '</div>'
+    + '<div id="geoSumStatus" style="font-size:.6rem;color:var(--tx3);min-height:14px;margin-top:2px"></div>';
+}
+
+/* Show/hide toggle handlers — flip module state, re-render table only. */
+function toggleGeoRowVis(checked)  { _showGeoRow  = !!checked; renderHoleTable(); }
+function toggleNoteRowVis(checked) { _showNoteRow = !!checked; renderHoleTable(); }
+
+/* Set status line text. Auto-clears after `ms` if a positive number passed. */
+function _geoSumSetStatus(msg, ms) {
+  const el = document.getElementById('geoSumStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  if (ms && ms > 0) setTimeout(function(){
+    const cur = document.getElementById('geoSumStatus');
+    if (cur && cur.textContent === msg) cur.textContent = '';
+  }, ms);
+}
+
+/* Generate geo summaries from OSM/CDN data. In-memory only; user must Save Course
+   to persist. P1 policy: only fills empty geoSummary slots, preserves manual edits.
+   Mirrors _lrAttachGeoSummary's fetch decision tree (course id first, center fallback). */
+async function generateGeoSummaries() {
+  if (!editCourseData) return;
+  if (!currentEditTeeId) { _geoSumSetStatus('No tee selected.'); return; }
+  const tee = editCourseData.tees.find(t=>t.id===currentEditTeeId);
+  if (!tee || !Array.isArray(tee.holes)) { _geoSumSetStatus('Selected tee has no holes.'); return; }
+  const btn = document.getElementById('geoSumGenBtn');
+  if (btn) btn.disabled = true;
+  _geoSumSetStatus('Loading course geometry\u2026');
+  let geo = null;
+  try {
+    if (editCourseData.osmCourseId) {
+      try {
+        geo = await geomLoadByCourse(editCourseData.osmCourseId, editCourseData.osmCenter || null);
+      } catch (e) {
+        if (e && e.message === 'NO_COURSE_BOUNDARY' && editCourseData.osmCenter) {
+          geo = await geomLoadByCenter(editCourseData.osmCenter[0], editCourseData.osmCenter[1], 1500);
+        } else { throw e; }
+      }
+    } else if (editCourseData.osmCenter && editCourseData.osmCenter.length === 2) {
+      geo = await geomLoadByCenter(editCourseData.osmCenter[0], editCourseData.osmCenter[1], 1500);
+    } else {
+      _geoSumSetStatus('Course is not geotagged \u2014 cannot generate.');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    if (!geo || !geo.holes || Object.keys(geo.holes).length === 0) {
+      _geoSumSetStatus('No hole geometry found in OSM data \u2014 nothing to generate.');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    const summaries = buildGeoSummaries(geo);
+    if (!summaries || summaries.size === 0) {
+      _geoSumSetStatus('OSM data loaded but no summaries derivable.');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    /* P1: only fill empty slots. Apply to selected tee only. Also mirror onto editCourseData.holes
+       (the displayed working copy) when it's the same tee. */
+    let filled = 0, skipped = 0;
+    tee.holes.forEach(function(h){
+      const s = summaries.get(parseInt(h.number, 10));
+      if (!s) return;
+      if (h.geoSummary) { skipped++; return; }
+      h.geoSummary = s;
+      filled++;
+    });
+    /* Sync the visible working copy if the selected tee is what's currently rendered. */
+    if (editCourseData.holes) {
+      editCourseData.holes.forEach(function(h){
+        const tH = tee.holes.find(function(x){ return x.number === h.number; });
+        if (tH && tH.geoSummary && !h.geoSummary) h.geoSummary = tH.geoSummary;
+      });
+    }
+    if (filled === 0 && skipped > 0) {
+      _geoSumSetStatus('All slots already populated \u2014 Clear Geo first to refresh.', 5000);
+    } else {
+      _geoSumSetStatus('Filled ' + filled + ' hole' + (filled===1?'':'s')
+        + (skipped ? ' (' + skipped + ' kept)' : '')
+        + ' \u00B7 Save Course to persist.', 5000);
+    }
+    renderHoleTable();
+  } catch (err) {
+    _geoSumSetStatus('Generation failed: ' + (err && err.message ? err.message : 'unknown'));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/* Clear all geoSummary fields on the currently-selected tee. Two-tap confirm.
+   In-memory only — Save Course required to persist. Leaves note field untouched. */
+function clearGeoSummaries() {
+  if (!editCourseData) return;
+  if (!currentEditTeeId) { _geoSumSetStatus('No tee selected.'); return; }
+  const btn = document.getElementById('geoSumClearBtn');
+  if (_clearGeoConfirm) {
+    /* Second tap — commit */
+    _resetClearGeoConfirm();
+    const tee = editCourseData.tees.find(t=>t.id===currentEditTeeId);
+    if (!tee || !Array.isArray(tee.holes)) return;
+    let cleared = 0;
+    tee.holes.forEach(function(h){ if (h.geoSummary) { h.geoSummary = ''; cleared++; } });
+    if (editCourseData.holes) {
+      editCourseData.holes.forEach(function(h){ h.geoSummary = ''; });
+    }
+    _geoSumSetStatus('Cleared ' + cleared + ' geo summar' + (cleared===1?'y':'ies') + ' \u00B7 Save Course to persist.', 5000);
+    renderHoleTable();
+    return;
+  }
+  /* First tap — show confirm state */
+  _clearGeoConfirm = true;
+  if (btn) btn.textContent = 'Confirm clear?';
+  _geoSumSetStatus('Tap again to wipe Geo summaries on this tee. Auto-cancels in 4s.');
+  _clearGeoConfirmTimer = setTimeout(function(){
+    _resetClearGeoConfirm();
+    _geoSumSetStatus('');
+  }, 4000);
 }
 
 function updateHole(num,field,val) {
@@ -804,7 +979,9 @@ Object.assign(window, {
   addCourseFromRepo, onRepoSearch, _stripGeometry,
   /* G2 geotag */
   crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsClearGeotag, crsOpenGeotagModal,
-  _crsGeotagCloseModal
+  _crsGeotagCloseModal,
+  /* GEO-SUM: course-edit controls */
+  generateGeoSummaries, clearGeoSummaries, toggleGeoRowVis, toggleNoteRowVis
   /* G5 -- below superseded by geomOpenLocateModal in geomap.js:
      _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch, _crsGeotagToggleMap, _crsGeotagMapSearchHere */
 });
