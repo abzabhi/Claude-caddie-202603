@@ -149,17 +149,36 @@ export function vizTierIdx(hcp) {
 
 /**
  * Calculate the WHS handicap differential for a single round.
- * Formula: (gross - courseRating) × 113 / slopeRating
+ * Formula (18-hole): (gross - courseRating) × 113 / slopeRating
  *
- * @param {number|string} gross  Gross score
- * @param {number|string} rating Course rating
- * @param {number|string} slope  Slope rating
- * @returns {number|null}        Differential rounded to 1 dp, or null if inputs invalid
+ * WHS 2024 partial-round support (additive, backward compatible):
+ *   - holesPlayed defaults to 18 -- legacy 3-arg callers unchanged.
+ *   - holesPlayed < 9: returns null (WHS minimum for posting).
+ *   - holesPlayed === 9 (Front 9 / Back 9): rating halved, slope unchanged,
+ *     played-hole differential + Expected Score Differential (idx × 9/18).
+ *   - holesPlayed 10..17: rating scaled proportionally (rating × h/18),
+ *     slope unchanged, played differential + Expected Score Differential
+ *     (idx × (18 - h) / 18). Yields an immediate, valid 18-hole differential.
+ *
+ * @param {number|string} gross         Gross score for holes played
+ * @param {number|string} rating        Full 18-hole course rating
+ * @param {number|string} slope         Slope rating (always 18-hole, unscaled)
+ * @param {number}        [holesPlayed] Holes actually played (default 18)
+ * @param {number|null}   [handicapIndex] Active handicap index (required for partial rounds; if null, expected portion is 0)
+ * @returns {number|null}               Differential rounded to 1 dp, or null if inputs invalid / <9 holes
  */
-export function calcDiff(gross, rating, slope) {
+export function calcDiff(gross, rating, slope, holesPlayed = 18, handicapIndex = null) {
   const g = +gross, r = +rating, s = +slope;
   if (!g || !r || !s) return null;
-  return Math.round((g - r) * 113 / s * 10) / 10;
+  const h = +holesPlayed || 18;
+  if (h < 9) return null;                                   // WHS24-PARTIAL: <9 holes not postable
+  if (h === 18) return Math.round((g - r) * 113 / s * 10) / 10;  // unchanged 18-hole path
+  // Partial: proportional rating for played portion, Expected Score for unplayed.
+  const propRating  = r * (h / 18);
+  const playedDiff  = (g - propRating) * 113 / s;
+  const idx         = handicapIndex == null ? 0 : +handicapIndex;
+  const expectedDiff = idx * (18 - h) / 18;
+  return Math.round((playedDiff + expectedDiff) * 10) / 10;
 }
 
 /**
@@ -194,9 +213,26 @@ export function calcHandicap(rounds) {
  * @param {number|string} par    Par
  * @returns {number|null}
  */
-export function calcPlayHcp(idx, slope, rating, par) {
+/**
+ * Convert a handicap index to a playing handicap for a specific set of tee conditions.
+ *
+ * WHS24-PARTIAL: roundFormat='F9'|'B9' yields a 9-hole playing handicap by
+ * applying half-Index against half-Rating/half-Par. Slope stays full per
+ * WHS 2024 (slope is a ratio, not additive).
+ *
+ * @param {number|null}   idx          Handicap index
+ * @param {number|string} slope        Slope rating
+ * @param {number|string} rating       Course rating (full 18-hole)
+ * @param {number|string} par          Par (full 18-hole)
+ * @param {string}        [roundFormat] '18' (default), 'F9', or 'B9'
+ * @returns {number|null}
+ */
+export function calcPlayHcp(idx, slope, rating, par, roundFormat = '18') {
   if (idx === null || !slope || !rating || !par) return null;
-  return Math.round(idx * (+slope / 113) + (+rating - +par));
+  if (roundFormat === 'F9' || roundFormat === 'B9') {
+    return Math.round((+idx / 2) * (+slope / 113) + (+rating * 0.5 - +par * 0.5));
+  }
+  return Math.round(+idx * (+slope / 113) + (+rating - +par));
 }
 
 // -----------------------------------------------------------------------------

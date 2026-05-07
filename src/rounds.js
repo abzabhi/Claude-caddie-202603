@@ -2,7 +2,52 @@ import { calcHandicap, calcDiff, fmtDate, deriveStats, calcImplied } from './geo
 import { rounds, history, bag, courses, profile, removeRound, save, today, uid } from './store.js';
 import { getTypeLabel } from './clubs.js';
 
+/* WHS24-PARTIAL: returns user's active handicap index (manual override or calculated).
+   Mirrors the lookup used in renderHandicap. Returns null if neither available. */
+function _activeHcpIndex() {
+  const mode = localStorage.getItem('vc:hcpMode') || 'calculated';
+  const manualVal = localStorage.getItem('vc:manualHcp') || '';
+  if (mode === 'manual' && manualVal) {
+    const v = parseFloat(manualVal);
+    return isFinite(v) ? v : null;
+  }
+  return calcHandicap(rounds);
+}
+
+/* WHS24-PARTIAL: holesPlayed + diff for a given Round Format selection.
+   Front 9 / Back 9 = 9 holes; 18 = 18 holes. */
+function _holesPlayedFromFormat(fmt) {
+  return (fmt === 'F9' || fmt === 'B9') ? 9 : 18;
+}
+
+/* WHS24-PARTIAL: read Round Format from the Add Round form (radio set, default '18'). */
+function _readRoundFormat() {
+  const el = document.querySelector('input[name="rRoundFormat"]:checked');
+  return el && el.value ? el.value : '18';
+}
+
+/* WHS24-PARTIAL: ensure Round Format toggle exists in the Add Round form.
+   Idempotent -- inserts once next to the score field. Survives HTML not having it. */
+function _ensureRoundFormatToggle() {
+  if (document.getElementById('rRoundFormatRow')) return;
+  const anchor = document.getElementById('rScore');
+  if (!anchor) return;
+  const row = document.createElement('div');
+  row.id = 'rRoundFormatRow';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;margin:4px 0 6px;font-size:.62rem';
+  row.innerHTML =
+      '<span style="color:var(--tx3);letter-spacing:.06em;text-transform:uppercase">Format:</span>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="radio" name="rRoundFormat" value="18" checked onchange="updateDiffPreview()"> 18</label>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="radio" name="rRoundFormat" value="F9" onchange="updateDiffPreview()"> Front 9</label>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="radio" name="rRoundFormat" value="B9" onchange="updateDiffPreview()"> Back 9</label>';
+  // Insert just before the score input's parent field block, or at parent of anchor
+  const parent = anchor.closest('.field') || anchor.parentNode;
+  if (parent && parent.parentNode) parent.parentNode.insertBefore(row, parent);
+  else if (anchor.parentNode) anchor.parentNode.insertBefore(row, anchor);
+}
+
 function renderHandicap() {
+  _ensureRoundFormatToggle(); /* WHS24-PARTIAL */
   const rDateEl=document.getElementById('rDate'); if(rDateEl) rDateEl.value=today();
   updateCourseDropdowns();
   const mode = localStorage.getItem('vc:hcpMode')||'calculated';
@@ -75,8 +120,14 @@ function renderHandicap() {
           <div class="field" style="margin-bottom:0"><div class="flbl">Tee</div>
             <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:100%"></div>
           <div class="field" style="margin-bottom:0"><div class="flbl">Differential</div>
-            <span class="rnd-diff" id="rdiff-${r.id}" style="display:block;padding:3px 0">${r.diff!==null?r.diff:'\u2014'}</span></div>
+            <span class="rnd-diff" id="rdiff-${r.id}" style="display:block;padding:3px 0">${r.diff!==null?r.diff:'\u2014'}${r.partial?' <span style="font-size:.55rem;color:var(--tx3)">(partial)</span>':''}</span></div>
         </div>
+        <div class="field" style="margin-bottom:4px"><div class="flbl">Round Format</div>
+          <select class="rnd-edit" onchange="updateRound('${r.id}','holesPlayed',this.value)" style="width:100%">
+            <option value="18"${(!r.holesPlayed||r.holesPlayed===18)?' selected':''}>18 Holes</option>
+            <option value="9"${r.holesPlayed===9?' selected':''}>9 Holes</option>
+            ${(r.holesPlayed&&r.holesPlayed!==9&&r.holesPlayed!==18)?`<option value="${r.holesPlayed}" selected>${r.holesPlayed} Holes</option>`:''}
+          </select></div>
         ${girStr||r.notes||linkedBadges||playerBadges?`<div class="rnd-meta" style="padding:4px 0 6px">
           ${linkedBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px">${linkedBadges}</div>`:''}
           ${playerBadges?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:3px">${playerBadges}</div>`:''}
@@ -181,7 +232,10 @@ function onRoundTeeSelect() {
 }
 
 function updateDiffPreview() {
-  const d=calcDiff(document.getElementById('rScore').value,document.getElementById('rRating').value,document.getElementById('rSlope').value);
+  const fmt = _readRoundFormat(); /* WHS24-PARTIAL */
+  const holesPlayed = _holesPlayedFromFormat(fmt);
+  const idx = _activeHcpIndex();
+  const d=calcDiff(document.getElementById('rScore').value,document.getElementById('rRating').value,document.getElementById('rSlope').value,holesPlayed,idx);
   document.getElementById('diffPreview').textContent=d!==null?'Differential: '+d:'';
 }
 
@@ -198,7 +252,12 @@ function addRound() {
   const tee = isManual
     ? (document.getElementById('rTeeManual')?.value||'')
     : (document.getElementById('rTeeSelect')?.options[document.getElementById('rTeeSelect').selectedIndex]?.text||'');
-  const diff=calcDiff(score,rating,slope);
+  /* WHS24-PARTIAL: capture round format + active index for partial-round math */
+  const fmt = _readRoundFormat();
+  const holesPlayed = _holesPlayedFromFormat(fmt);
+  const partial = holesPlayed < 18;
+  const idx = _activeHcpIndex();
+  const diff=calcDiff(score,rating,slope,holesPlayed,idx);
   const notes=document.getElementById('rNotes')?.value||'';
   const sessionIds=[...document.querySelectorAll('.rnd-sess-chk:checked')].map(el=>el.value).filter(Boolean);
   const holes=[];
@@ -211,7 +270,7 @@ function addRound() {
     const nt=row.querySelector('.rh-notes')?.value?.trim()||'';
     if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt,yards:row.dataset.yards||''});
   });
-  rounds.unshift({id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,sessionIds,holes});
+  rounds.unshift({id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,holesPlayed,partial,sessionIds,holes}); /* WHS24-PARTIAL */
   save(); renderHandicap();
   document.getElementById('rScore').value='';
   document.getElementById('rRating').value='';document.getElementById('rSlope').value='';
@@ -224,6 +283,9 @@ function addRound() {
   document.getElementById('rTeeSelectRow').style.display='none';
   document.getElementById('rHoleGrid').style.display='none';
   document.getElementById('rSessLinker').style.display='none';
+  /* WHS24-PARTIAL: reset Round Format toggle to 18 after save */
+  const fmt18 = document.querySelector('input[name="rRoundFormat"][value="18"]');
+  if (fmt18) fmt18.checked = true;
   const mBtn=document.getElementById('rModeBtn');
   if(mBtn){mBtn.textContent='Simple';mBtn.classList.remove('on');}
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
@@ -462,9 +524,17 @@ function rndSaveLinks(id){
 
 function updateRound(id, field, val) {
   const r = rounds.find(x=>x.id===id); if(!r) return;
-  r[field] = val;
-  if(['score','rating','slope'].includes(field)) {
-    r.diff = calcDiff(r.score, r.rating, r.slope);
+  /* WHS24-PARTIAL: holesPlayed needs numeric coercion + partial flag sync */
+  if (field === 'holesPlayed') {
+    const hp = parseInt(val) || 18;
+    r.holesPlayed = hp;
+    r.partial = hp < 18;
+  } else {
+    r[field] = val;
+  }
+  if(['score','rating','slope','holesPlayed'].includes(field)) {
+    /* WHS24-PARTIAL: pass holesPlayed (default 18 for legacy rounds) + active index */
+    r.diff = calcDiff(r.score, r.rating, r.slope, r.holesPlayed||18, _activeHcpIndex());
     const el = document.getElementById('rdiff-'+id);
     if(el) el.textContent = r.diff!==null ? r.diff : '\u2014';
   }

@@ -145,7 +145,7 @@ export function serialise() {
   });
   lines.push(''); lines.push('=== ROUNDS ===');
   rounds.forEach(r=>{
-    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||'',r.countForHandicap===false?'0':'1',r.id||''].join(' | '));
+    lines.push('ROUND | '+[r.date,r.courseName||'',r.tee||'',r.rating,r.slope,r.par,r.score,r.diff!==null?r.diff:'',r.notes||'',r.countForHandicap===false?'0':'1',r.id||'',r.holesPlayed&&r.holesPlayed!==18?r.holesPlayed:'',r.partial?'1':''].join(' | ')); /* WHS24-PARTIAL: p[12]=holesPlayed (omit if 18), p[13]=partial flag */
     if(r.sessionIds?.length) lines.push('  SESSIONIDS | '+r.sessionIds.join(','));
     if(r.players?.length) lines.push('  PLAYERS | '+r.players.map(p=>`${p.name||''}:${p.isMe?'1':'0'}:${p.handicap??''}:${p.score??''}`).join(','));
     if(r.holes?.length) r.holes.forEach(h=>{

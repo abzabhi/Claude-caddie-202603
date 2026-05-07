@@ -654,6 +654,50 @@ function crsGeotagApply(courseId, osmCenter, osmCourseId) {
   save();
   _crsGeotagCloseModal();
   renderCourseList();
+  /* GEO-SUM-AUTO: kick off geo-summary fetch in the background AFTER the modal
+     closes so UX stays snappy. The helper runs save() + renderCourseList() again
+     once summaries are attached. Non-fatal: failures swallowed. */
+  _crsAttachGeoSummaryOnTag(updated);
+}
+
+/* GEO-SUM-AUTO: mirrors live-round.js _lrAttachGeoSummary. Pulls OSM/CDN geometry
+   for the just-tagged course, builds per-hole geoSummary strings, fills empty
+   slots only (P1 policy: never overwrite manual edits). Mutates the course in
+   place; persists via save() and triggers re-render on success. Non-fatal:
+   swallows all errors so tagging never appears to fail. */
+async function _crsAttachGeoSummaryOnTag(course) {
+  try {
+    if (!course || (!course.osmCourseId && !(course.osmCenter && course.osmCenter.length === 2))) return;
+    let geo = null;
+    if (course.osmCourseId) {
+      try {
+        geo = await geomLoadByCourse(course.osmCourseId, course.osmCenter || null);
+      } catch (e) {
+        if (e && e.message === 'NO_COURSE_BOUNDARY' && course.osmCenter) {
+          geo = await geomLoadByCenter(course.osmCenter[0], course.osmCenter[1], 1500);
+        } else { throw e; }
+      }
+    } else if (course.osmCenter && course.osmCenter.length === 2) {
+      geo = await geomLoadByCenter(course.osmCenter[0], course.osmCenter[1], 1500);
+    }
+    if (!geo || !geo.holes) return;
+    const summaries = buildGeoSummaries(geo);
+    if (!summaries || summaries.size === 0) return;
+    let changed = false;
+    (course.tees || []).forEach(function(tee) {
+      if (!Array.isArray(tee.holes)) return;
+      tee.holes.forEach(function(h) {
+        if (h && !h.geoSummary) { // P1: preserve manual edits
+          const s = summaries.get(parseInt(h.number, 10));
+          if (s) { h.geoSummary = s; changed = true; }
+        }
+      });
+    });
+    if (changed) {
+      save();
+      if (typeof renderCourseList === 'function') renderCourseList();
+    }
+  } catch (e) { /* non-fatal */ }
 }
 
 /* VIZMAP-3 -- clear a course's pin (osmCenter + osmCourseId). Modal already

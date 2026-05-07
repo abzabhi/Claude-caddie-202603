@@ -111,7 +111,7 @@ function _doProcessDataText(text) {
     }
     if(section==='rounds'&&line.startsWith('ROUND |')) {
       const p=line.split('|').map(s=>s.trim());
-      cur={id:p[11]||uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',sessionIds:[],holes:[],players:[]};
+      cur={id:p[11]||uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',holesPlayed:p[12]?parseInt(p[12]):18,partial:p[13]==='1',sessionIds:[],holes:[],players:[]}; /* WHS24-PARTIAL: p[12]=holesPlayed, p[13]=partial flag */
       newRounds.push(cur);
     } else if(section==='rounds'&&line.startsWith('SESSIONIDS |')&&cur) {
       cur.sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);
@@ -235,6 +235,8 @@ function _parseDataText(text) {
       } else if(line.startsWith('HOLE |')&&currentTee){
         const p=line.split('|').map(s=>s.trim());
         currentTee.holes.push({number:parseInt(p[1])||0,par:p[2]||'',yards:p[3]||'',handicap:p[4]||'',note:p[5]||''});
+      } else if(line.trimStart().startsWith('GEO |')&&currentTee&&currentTee.holes.length){ /* GEO-SUM-SYNC: rehydrate geoSummary from D1 pull */
+        currentTee.holes[currentTee.holes.length-1].geoSummary = line.trim();
       }
     }
     if(section==='handicap'){
@@ -244,7 +246,7 @@ function _parseDataText(text) {
     }
     if(section==='rounds'&&line.startsWith('ROUND |')){
       const p=line.split('|').map(s=>s.trim());
-      cur={id:p[11]||uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',sessionIds:[],holes:[],players:[]};
+      cur={id:p[11]||uid(),date:p[1]||today(),courseName:p[2]||'',tee:p[3]||'',rating:p[4]||'',slope:p[5]||'',par:p[6]||'',score:p[7]||'',diff:p[8]?parseFloat(p[8]):calcDiff(p[7],p[4],p[5]),notes:p[9]||'',countForHandicap:p[10]!=='0',holesPlayed:p[12]?parseInt(p[12]):18,partial:p[13]==='1',sessionIds:[],holes:[],players:[]}; /* WHS24-PARTIAL: p[12]=holesPlayed, p[13]=partial flag */
       newRounds.push(cur);
     } else if(section==='rounds'&&line.startsWith('SESSIONIDS |')&&cur){
       cur.sessionIds=line.replace(/^SESSIONIDS \| /,'').trim().split(',').filter(Boolean);

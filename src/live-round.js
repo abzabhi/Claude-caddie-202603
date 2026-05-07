@@ -2,7 +2,7 @@ import { uid, today, save, courses, rounds, history, profile, bag } from './stor
 /* PHASE-B3: Expose bag globally so gps-view can render club chip row when shot is armed. */
 if (typeof window !== 'undefined') window.bag = bag;
 import { ZONE_SEGMENT_LABELS, ZONE_RING_RADII, sgExpected } from './constants.js';
-import { calcDiff, clubSlug, localISO } from './geo.js'; /* CLEAN11 */
+import { calcDiff, calcHandicap, clubSlug, localISO } from './geo.js'; /* CLEAN11; WHS24-PARTIAL: calcHandicap for active index lookup */
 import { renderHandicap } from './rounds.js';
 /* G2 -- geomap integration for in-round map view */
 /* G4 -- geomGeocodeCity added for unified locate-modal city search */
@@ -234,6 +234,9 @@ lrState = {
   conditions: document.getElementById('lrConditions').value,
   mode,
   countForHandicap: document.getElementById('lrCountHcp').checked,
+  /* WHS24-PARTIAL: '18' (default) | 'F9' | 'B9'. Mid-round-toggleable.
+     Drives lrCalcDiffWithCap holesPlayed + lrSaveRound payload (holesPlayed/partial). */
+  roundFormat: '18',
   holes: holeArr,
   players,
   mePlayerId,
@@ -468,6 +471,7 @@ document.getElementById('lrNetBtn').className   = lrState.netView ? 'on' : '';
 document.getElementById('lrHdrTitle').textContent = lrState.courseName || 'GORDy Live Round';
 document.getElementById('lrHdrMeta').textContent  =
   `H${lrState.curHole+1}/${lrState.holes.length} \u00B7 ${LR_MODES[mode]?.label||mode}`;
+_lrEnsureRoundFormatToggle(); /* WHS24-PARTIAL */
 
 // Running score (me player or current)
 const meIdx = lrState.players.findIndex(p=>p.isMe);
@@ -1024,6 +1028,50 @@ if(meIdx<0) {
 }
 
 // -- Save -------------------------------------------------------------------
+/* WHS24-PARTIAL: idempotently inject [18][F9][B9] toggle row under the Live Round
+   header. Mid-round-toggleable. On change, persists via _lrPersist and re-renders
+   the diff note. Survives the lrRenderHole call cycle (only inserts once). */
+function _lrEnsureRoundFormatToggle() {
+  if (document.getElementById('lrRoundFormatRow')) {
+    // Sync active state on each render
+    var fmt = (lrState && lrState.roundFormat) || '18';
+    ['18','F9','B9'].forEach(function(v){
+      var b = document.getElementById('lrRoundFmt_'+v);
+      if (b) b.className = 'btn sec' + (fmt===v ? ' on' : '');
+    });
+    return;
+  }
+  var anchor = document.getElementById('lrHdrMeta');
+  if (!anchor || !anchor.parentNode) return;
+  var row = document.createElement('div');
+  row.id = 'lrRoundFormatRow';
+  row.style.cssText = 'display:flex;gap:4px;align-items:center;justify-content:center;margin-top:3px;font-size:.55rem';
+  var fmt = (lrState && lrState.roundFormat) || '18';
+  var mk = function(v, lbl) {
+    return '<button id="lrRoundFmt_'+v+'" class="btn sec'+(fmt===v?' on':'')+'" '
+      + 'style="font-size:.55rem;padding:2px 8px" '
+      + 'onclick="lrSetRoundFormat(\''+v+'\')">'+lbl+'</button>';
+  };
+  row.innerHTML = '<span style="color:var(--tx3);letter-spacing:.06em;text-transform:uppercase">Format:</span>'
+    + mk('18','18') + mk('F9','F9') + mk('B9','B9');
+  anchor.parentNode.insertBefore(row, anchor.nextSibling);
+}
+
+/* WHS24-PARTIAL: Round Format setter. Updates lrState, persists, refreshes UI. */
+function lrSetRoundFormat(fmt) {
+  if (!lrState) return;
+  if (fmt !== '18' && fmt !== 'F9' && fmt !== 'B9') return;
+  lrState.roundFormat = fmt;
+  _lrPersist();
+  // Refresh active button state
+  ['18','F9','B9'].forEach(function(v){
+    var b = document.getElementById('lrRoundFmt_'+v);
+    if (b) b.className = 'btn sec' + (fmt===v ? ' on' : '');
+  });
+  /* WHS24-PARTIAL: roundFormat affects diff at save-time only; no immediate UI refresh needed.
+     If the tally screen is currently visible, lrRenderTally will re-pick the new format on next render. */
+}
+
 function lrCalcDiffWithCap(meIdx) {
 // Returns {diff, capped} where capped=true means net double bogey was applied
 const me = lrState.players[meIdx];
@@ -1031,11 +1079,28 @@ const rating = parseFloat(lrState.rating);
 const slope  = parseFloat(lrState.slope);
 if(!rating || !slope) return {diff: null, capped: false};
 
+/* WHS24-PARTIAL: holesPlayed = count of actual populated scores, capped by format intent.
+   - User picks F9, plays 9 holes -> holesPlayed=9
+   - User picks F9, plays only 7 holes -> holesPlayed=7 (returns null diff per WHS minimum)
+   - User picks 18, plays only 13 holes -> holesPlayed=13 (uses Expected Score for unplayed 5)
+   - User picks 18, plays all 18 -> holesPlayed=18 (standard 18-hole math)
+   Active handicap index resolved from localStorage (manual override or calculated). */
+const fmt = lrState.roundFormat || '18';
+const fmtCap = (fmt === 'F9' || fmt === 'B9') ? 9 : 18;
+const playedCount = me.scores.reduce((n,s)=>n+(s.score!=null?1:0),0);
+const holesPlayed = Math.min(playedCount, fmtCap);
+const idx = (function() {
+  const m = localStorage.getItem('vc:hcpMode') || 'calculated';
+  const mv = localStorage.getItem('vc:manualHcp') || '';
+  if (m === 'manual' && mv) { const v = parseFloat(mv); return isFinite(v) ? v : null; }
+  return calcHandicap(rounds);
+})();
+
 const hasSI = lrState.holes.every(h=>h.handicap>0);
 if(!hasSI || !me.handicap) {
   // No SI data \u2014 fall back to raw total
   const total = me.scores.reduce((t,s)=>t+(s.score||0),0);
-  return {diff: total ? calcDiff(total, rating, slope) : null, capped: false};
+  return {diff: total ? calcDiff(total, rating, slope, holesPlayed, idx) : null, capped: false};
 }
 
 // Apply net double bogey cap per hole
@@ -1050,7 +1115,7 @@ lrState.holes.forEach((h,i)=>{
   if(used < actual) anyCapped = true;
   cappedTotal += used;
 });
-const diff = calcDiff(cappedTotal, rating, slope);
+const diff = calcDiff(cappedTotal, rating, slope, holesPlayed, idx);
 return {diff, capped: anyCapped};
 }
 function lrSaveRound() {
@@ -1075,6 +1140,21 @@ const newRound = {
   diff,
   notes: lrState.conditions !== 'calm' ? lrState.conditions : '',
   countForHandicap: me ? lrState.countForHandicap : false,
+  /* WHS24-PARTIAL: persist actual holes played on the saved round.
+     Counts populated scores intersected with format intent (F9/B9 cap at 9).
+     partial = anything less than 18. */
+  holesPlayed: (function(){
+    if (!me) return 18;
+    const cap = (lrState.roundFormat==='F9'||lrState.roundFormat==='B9') ? 9 : 18;
+    const cnt = me.scores.reduce((n,s)=>n+(s.score!=null?1:0),0);
+    return Math.min(cnt, cap) || cap; // if no holes played, fall back to format cap
+  })(),
+  partial: (function(){
+    if (!me) return false;
+    const cap = (lrState.roundFormat==='F9'||lrState.roundFormat==='B9') ? 9 : 18;
+    const cnt = me.scores.reduce((n,s)=>n+(s.score!=null?1:0),0);
+    return Math.min(cnt, cap) < 18;
+  })(),
   sessionIds: [],
   holes: me ? me.scores.map((s,i)=>({
     n: lrState.holes[i].n,
@@ -3836,6 +3916,7 @@ Object.assign(window, {
   lrShowTally, lrShowTallyFromSummary, lrShowHole,
   lrEndRound, lrCancelEndBanner, lrConfirmEnd,
   lrSaveRound, lrCloseRound, lrExportPdf,
+  lrSetRoundFormat, /* WHS24-PARTIAL */
   lrDiscardRound, lrConfirmDiscard,
   lrAdj, lrSetGir, lrToggleNote, lrSaveNote,
   lrSetPlayer, lrRenderHole, lrRenderTally, lrShowScreen,
