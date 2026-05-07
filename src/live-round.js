@@ -15,6 +15,8 @@ import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomSearchByLocation
    round-specific glue; MapView owns markers, GPS watch, polygon source/layer,
    floating bubble/pill, draggable aim+tee. */
 import { MapView } from './mapview.js';
+/* GEO-SUM: parser + builder for per-hole geo summaries */
+import { buildGeoSummaries, parseGeoSummary } from './geoSummary.js';
 
 /* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
 function _localISO() { var n=new Date(),p=function(x){return x<10?'0'+x:''+x;}; return n.getFullYear()+'-'+p(n.getMonth()+1)+'-'+p(n.getDate())+'T'+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()); }
@@ -185,7 +187,7 @@ const tee    = course?.tees?.find(t=>t.id===teeId) || course?.tees?.[0] || null;
 // Build holes array
 let holeArr = [];
 if(tee?.holes?.length) {
-  holeArr = tee.holes.map(h=>({n:+h.number,par:+h.par||4,yards:+h.yards||0,handicap:+h.handicap||0}));
+  holeArr = tee.holes.map(h=>({n:+h.number,par:+h.par||4,yards:+h.yards||0,handicap:+h.handicap||0,geoSummary:h.geoSummary||''}));
 } else {
   const countRaw = document.getElementById('lrHoleCount').value;
   const count = countRaw==='custom'
@@ -349,6 +351,76 @@ function lrHasAnyHandicap() {
 return lrState.players.some(p=>p.handicap!==null);
 }
 
+/* GEO-SUM: Hazard Strip helper.
+   Returns HTML for a horizontal strip plotting parsed geoSummary hazards
+   and the dogleg apex along the hole's tee->green axis. Empty string when
+   no geoSummary or no hole yardage to scale against. Inline styling — does
+   not touch styles.css. Color palette: bunker=sand, water=blue, rough/woods=earth. */
+function _lrHazardStripHtml(hole) {
+  if (!hole || !hole.geoSummary) return '';
+  var totalYds = +hole.yards || 0;
+  if (totalYds <= 0) return '';
+  var parsed;
+  try { parsed = parseGeoSummary(hole.geoSummary); } catch (e) { return ''; }
+  if (!parsed) return '';
+
+  var COLORS = {
+    bunker: '#d4a045',
+    water:  '#3a8fb7',
+    rough:  '#5a7a3a',
+    woods:  '#6b4a2a'
+  };
+
+  var ticks = '';
+  // Dogleg apex tick (rendered as a centred chevron mark on the strip)
+  if (parsed.shape && parsed.shape.type === 'dogleg') {
+    var dPct = Math.max(0, Math.min(100, (parsed.shape.yds / totalYds) * 100));
+    var arrow = parsed.shape.dir === 'left' ? '\u25C0' : '\u25B6';
+    ticks += '<div title="dogleg ' + parsed.shape.dir + ' @ ' + parsed.shape.yds + 'y" '
+          +  'style="position:absolute;top:50%;left:' + dPct.toFixed(1) + '%;transform:translate(-50%,-50%);'
+          +  'font-size:.6rem;color:var(--tx2);pointer-events:none">' + arrow + '</div>';
+  }
+  // Fairway hazards: tick above (left) or below (right) midline
+  for (var i = 0; i < parsed.hazards.length; i++) {
+    var hz = parsed.hazards[i];
+    if (typeof hz.yds !== 'number' || hz.yds <= 0) continue;
+    var pct = Math.max(0, Math.min(100, (hz.yds / totalYds) * 100));
+    var color = COLORS[hz.label] || '#888';
+    var topPos = hz.side === 'left' ? '2px' : 'auto';
+    var botPos = hz.side === 'right' ? '2px' : 'auto';
+    ticks += '<div title="' + hz.label + '-' + hz.side + ' @ ' + hz.yds + 'y" '
+          +  'style="position:absolute;left:' + pct.toFixed(1) + '%;'
+          +  (topPos !== 'auto' ? 'top:' + topPos + ';' : '')
+          +  (botPos !== 'auto' ? 'bottom:' + botPos + ';' : '')
+          +  'transform:translateX(-50%);width:6px;height:10px;background:' + color + ';'
+          +  'border-radius:1px;pointer-events:none"></div>';
+  }
+  // Green flag at 100% — show colored dot if green has hazards
+  var greenDot = '';
+  if (parsed.green && parsed.green.length) {
+    var gColor = COLORS[parsed.green[0].label] || '#888';
+    greenDot = '<div title="green: ' + parsed.green.map(function(g){return g.label+'-'+g.side;}).join(',') + '" '
+            +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
+            +  'width:8px;height:8px;border-radius:50%;background:' + gColor + ';border:1px solid var(--bg)"></div>';
+  } else {
+    greenDot = '<div title="green: open" '
+            +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
+            +  'width:8px;height:8px;border-radius:50%;background:var(--ac2);border:1px solid var(--bg)"></div>';
+  }
+
+  return '<div class="card" style="margin-bottom:0;padding:8px 10px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:.55rem;color:var(--tx3);margin-bottom:6px;font-family:\'DM Mono\',monospace">'
+    +   '<span>TEE</span><span>HAZARDS</span><span>GREEN</span>'
+    + '</div>'
+    + '<div style="position:relative;height:22px;background:var(--gr3);border-radius:3px;border:1px solid var(--br)">'
+    +   ticks + greenDot
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:.5rem;color:var(--tx3);margin-top:3px;font-family:\'DM Mono\',monospace">'
+    +   '<span>0</span><span>' + totalYds + ' yds</span>'
+    + '</div>'
+  + '</div>';
+}
+
 // -- Render hole view --------------------------------------------------------
 function lrRenderHole() {
 if(!lrState) return;
@@ -369,7 +441,8 @@ const nEl = document.getElementById('lrHoleN');
 nEl.className = 'lr-hole-n '+pc;
 nEl.textContent = h.n;
 document.getElementById('lrHoleInfo').innerHTML =
-  `Par ${h.par}${h.yards?' \u00B7 '+h.yards+' yds':''} <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">\u270E</span>`;
+  `Par ${h.par}${h.yards?' \u00B7 '+h.yards+' yds':''} <span style="font-size:.5rem;opacity:.4;font-family:sans-serif">\u270E</span>`
+  + (h.geoSummary ? `<div style="font-size:.55rem;color:var(--tx3);margin-top:2px;line-height:1.2;font-family:'DM Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(h.geoSummary)}</div>` : '');
 document.getElementById('lrHoleSi').textContent =
   h.handicap ? `SI ${h.handicap}` : '';
 // Par picker \u2014 hide on hole change, highlight active par
@@ -453,6 +526,9 @@ if(shared) {
 //     + '</div>' + scroll.innerHTML;
 // }
 */
+
+/* GEO-SUM: Hazard Strip — shows parsed geoSummary as plotted ticks along hole length. */
+scroll.innerHTML += _lrHazardStripHtml(h);
 
 /* Phase 4: advanced mode collapsible */
 scroll.innerHTML += _lrAdvancedHtml(lrState.curHole, shared ? 0 : pi, !!shared);
@@ -2624,6 +2700,34 @@ async function _lrMapLoadCourseById(osmId, center) {
   }
 }
 */
+/* GEO-SUM: Attach per-hole geo summary strings to the active course's selected
+   tee. Called after each successful geomLoadByCourse / geomLoadByCenter so the
+   summaries persist on `course.tees[].holes[].geoSummary` (survives _stripGeometry,
+   round-trips through localStorage, exports to AI / backup). P1 policy: never
+   overwrite an existing geoSummary — preserves user manual edits. Non-fatal:
+   swallows all errors so a failure here cannot block map loading. */
+function _lrAttachGeoSummary(geo) {
+  try {
+    if (!geo || !geo.holes) return;
+    if (!lrState || !lrState.courseId) return;
+    var c = courses.find(function(x){ return x.id === lrState.courseId; });
+    if (!c) return;
+    var summaries = buildGeoSummaries(geo);
+    if (!summaries || summaries.size === 0) return;
+    var teeId = c.selectedTee;
+    var tee = (c.tees||[]).find(function(t){ return t.id === teeId; }) || (c.tees||[])[0];
+    if (!tee || !Array.isArray(tee.holes)) return;
+    var changed = false;
+    tee.holes.forEach(function(h){
+      if (h && !h.geoSummary) {  // P1: preserve manual edits
+        var s = summaries.get(parseInt(h.number, 10));
+        if (s) { h.geoSummary = s; changed = true; }
+      }
+    });
+    if (changed) save();
+  } catch (e) { /* non-fatal */ }
+}
+
 function _lrMapLoadHintEnsure(text) {
   /* PATCH-LRMAPLOAD — A1 helper: idempotent hint banner with stable id.
      Caller passes plain text; helper resets to text-only (clears any retry UI). */
@@ -2676,6 +2780,7 @@ async function _lrMapLoadCourseById(osmId, center) {
       return;
     }
     _lrMapGeo = geo;
+    _lrAttachGeoSummary(geo); /* GEO-SUM */
     try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
     /* PHASE-A: was lrState._mapOpen=true + lrRenderHole(); now opens GPS view directly. */
     if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
@@ -2712,6 +2817,7 @@ async function _lrMapLoadCourseById(osmId, center) {
           return;
         }
         _lrMapGeo = geoFb;
+        _lrAttachGeoSummary(geoFb); /* GEO-SUM */
         try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geoFb)); } catch(e) {}
         /* PHASE-A: was lrState._mapOpen=true + lrRenderHole(); now opens GPS view directly. */
         if (lrState) { lrState._mapSearchDone = true; _lrPersist(); }
@@ -2796,6 +2902,7 @@ async function _lrMapLoadForRound() {
       geo = await geomLoadByCenter(c.osmCenter[0], c.osmCenter[1], 1500);
     }
     _lrMapGeo = geo;
+    _lrAttachGeoSummary(geo); /* GEO-SUM */
     try { localStorage.setItem('gordy:activeRoundGeo', JSON.stringify(geo)); } catch(e) {}
     /* PHASE-A: was lrState._mapOpen=true + lrRenderHole(); now opens GPS view directly. */
     _lrPersist();
@@ -3311,6 +3418,7 @@ function _lrMapUnmount() {
     try { lrState._mapInstance.unmount(); } catch(e) {}
     lrState._mapInstance = null;
   }
+}
   /* PHASE-FIX: Clear the GPS view's map container so the next gpsViewOpen
      re-enters the canvas-injection branch in _renderMinimap. Without this,
      a quick discard->reload-into-GPS-view sequence leaves a stale #gpsMapCanvas
@@ -3318,8 +3426,6 @@ function _lrMapUnmount() {
      to skip re-mount and the new round to show a blank map. */
   var gw = document.getElementById('gpsMapWrap');
   if (gw) gw.innerHTML = '';
-}
-
 /* ─────────────────────────────────────────────────────────
    LR-EXTRAS: Timer / Drinks / Weather (additive)
    Hooks called from lrBeginRound, lrGoHole, lrConfirmEnd, lrRenderHole.
