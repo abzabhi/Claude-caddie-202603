@@ -139,6 +139,7 @@ export function serialise() {
       lines.push('  TEE | '+[t.id,t.name||'',t.rating||'',t.slope||'',t.yardage||''].join(' | '));
       (t.holes||[]).forEach(h => {
         lines.push('    HOLE | '+[h.number,h.par||'',h.yards||'',h.handicap||'',h.note||''].join(' | '));
+        if (h.geoSummary) lines.push('    '+h.geoSummary); /* GEO-SUM: separate line — mirrors AI-export format, avoids pipe collision */
       });
     });
   });
