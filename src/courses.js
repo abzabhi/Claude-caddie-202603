@@ -368,15 +368,20 @@ function renderHoleTable() {
       <td><input value="${h.handicap}" onchange="updateHole(${h.number},'handicap',this.value)" placeholder="9"></td>
     </tr>
     <tr class="geo-row" style="${geoVis}">
-      <td colspan="4" style="padding:0 4px 6px"><input value="${gs}" onchange="updateHole(${h.number},'geoSummary',this.value)" placeholder="GEO | dogleg-... or freeform" style="width:100%;font-size:.62rem;color:var(--tx3);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace"></td>
+      <td colspan="4" style="padding:0 4px 6px"><textarea rows="1" onchange="updateHole(${h.number},'geoSummary',this.value)" oninput="this.rows=1;this.rows=Math.min(3,Math.max(1,this.scrollHeight>this.clientHeight?Math.ceil(this.scrollHeight/18):1))" placeholder="GEO | dogleg-... or freeform" style="width:100%;font-size:.62rem;color:var(--tx2);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace;resize:none;overflow-y:auto;box-sizing:border-box;line-height:18px">${gs}</textarea></td>
     </tr>
     <tr class="note-row" style="${noteVis}">
-      <td colspan="4" style="padding:0 4px 6px"><input value="${nt}" onchange="updateHole(${h.number},'note',this.value)" placeholder="Hole notes (e.g. 'Bunker right of approach, water short')" style="width:100%;font-size:.62rem;color:var(--tx2);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace"></td>
+      <td colspan="4" style="padding:0 4px 6px"><textarea rows="1" onchange="updateHole(${h.number},'note',this.value)" oninput="this.rows=1;this.rows=Math.min(3,Math.max(1,this.scrollHeight>this.clientHeight?Math.ceil(this.scrollHeight/18):1))" placeholder="Hole notes (e.g. 'Bunker right of approach, water short')" style="width:100%;font-size:.62rem;color:var(--tx2);background:var(--bg);border:1px solid var(--br);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace;resize:none;overflow-y:auto;box-sizing:border-box;line-height:18px">${nt}</textarea></td>
     </tr>`;
   }).join('');
   updateHoleTotals();
   /* GEO-SUM: keep the controls row in sync each time the table re-renders. */
   _renderGeoSumBtnRow();
+  /* Auto-expand geo/note textareas for pre-existing content on render */
+  tbody.querySelectorAll('textarea').forEach(function(ta) {
+    ta.rows = 1;
+    if (ta.scrollHeight > ta.clientHeight) ta.rows = Math.min(3, Math.ceil(ta.scrollHeight / 18));
+  });
 }
 
 /* ============================================================================
