@@ -20,8 +20,15 @@
 // Internal constants
 // ---------------------------------------------------------------------------
 
-// Full union of all hazard types across gps-view and geoSummary. Cart path, driving range, tee ignored.
-var HAZARD_TYPES = ['bunker', 'water_hazard', 'lateral_water_hazard', 'woods', 'rough'];
+// Raw OSM tags we want to pull (intentionally excluding 'rough')
+var HAZARD_TYPES = ['bunker', 'water_hazard', 'lateral_water_hazard', 'woods'];
+
+// Map normalized internal labels (post-_hazardLabel) to Human UI strings
+var HAZARD_DICT = {
+  'bunker': 'Bunker',
+  'water':  'Water',
+  'woods':  'Woods'
+};
 
 // Minimum bearing change (degrees) across the full centreline to call a dogleg.
 var DOGLEG_THRESHOLD_DEG = 20;
@@ -307,18 +314,18 @@ function _holeHazards(hole, allFeatures) {
  * Returns 'open' if nothing found near the green.
  */
 function _greenSummary(hazards) {
-  var greenHazards = hazards.filter(function (h) { return h.nearGreen; });
-  if (!greenHazards.length) return 'open';
+  var greenHazards = hazards.filter(function (h) { return h.nearGreen && HAZARD_DICT[h.label]; });
+  if (!greenHazards.length) return 'Open';
 
-  // Group by side, prefer bunker label over rough
   var left  = greenHazards.filter(function (h) { return h.side === 'left'; });
   var right = greenHazards.filter(function (h) { return h.side === 'right'; });
 
   var parts = [];
-  if (left.length)  parts.push(left[0].label  + '-left');
-  if (right.length) parts.push(right[0].label + '-right');
-  return parts.join(',') || 'open';
+  if (left.length)  parts.push(HAZARD_DICT[left[0].label] + ' Left');
+  if (right.length) parts.push(HAZARD_DICT[right[0].label] + ' Right');
+  return parts.join(', ') || 'Open';
 }
+
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -357,29 +364,36 @@ function buildGeoSummaries(geo) {
     var greenStr = _greenSummary(hazards);
 
     // 5. Dogleg string
-    var doglegStr = 'straight';
+    var doglegStr = '';
     if (cl.dogleg) {
-      doglegStr = 'dogleg-' + cl.dogleg.dir + '@' + cl.dogleg.yds;
+      var dir = cl.dogleg.dir.charAt(0).toUpperCase() + cl.dogleg.dir.slice(1);
+      doglegStr = 'Dogleg ' + dir + ' at ' + cl.dogleg.yds + 'y';
     }
 
-    // 6. Fairway hazard string — deduplicate adjacent same-type-same-side
-    var hazardStr = 'clear';
+    // 6. Fairway hazard string
+    var hazardStr = '';
     if (fairwayHazards.length) {
       var seen = {};
       var parts = [];
       for (var h = 0; h < fairwayHazards.length; h++) {
         var fh = fairwayHazards[h];
-        var key = fh.label + '-' + fh.side;
-        // Round to nearest 5 yds to avoid near-duplicate entries
+        var humanLabel = HAZARD_DICT[fh.label];
+        if (!humanLabel) continue;
+        var sideCap = fh.side.charAt(0).toUpperCase() + fh.side.slice(1);
         var ydsR = Math.round(fh.yds / 5) * 5;
-        var entry = key + '@' + ydsR;
+        var entry = humanLabel + ' ' + sideCap + ' at ' + ydsR + 'y';
         if (!seen[entry]) { seen[entry] = true; parts.push(entry); }
       }
-      if (parts.length) hazardStr = 'hazard=' + parts.join(',');
+      if (parts.length) hazardStr = parts.join(', ');
     }
 
-    var line = 'GEO | ' + doglegStr + ' | ' + hazardStr + ' | green=' + greenStr;
-    result.set(holeNum, line);
+    // Assemble final string (omitting empty sections)
+    var finalParts = [];
+    if (doglegStr) finalParts.push(doglegStr);
+    if (hazardStr) finalParts.push(hazardStr);
+    finalParts.push('Green: ' + greenStr);
+
+    result.set(holeNum, 'GEO | ' + finalParts.join(' | '));
   }
 
   return result;
@@ -406,8 +420,9 @@ function geoLineForHole(geo, holeNumber) {
  * Parse a GEO summary string back into structured data for UI rendering.
  *
  * Accepts a raw string in the format produced by buildGeoSummaries:
- *   "GEO | dogleg-left@210 | hazard=bunker-left@195,water-right@240 | green=bunker-right"
- *   "GEO | straight | clear | green=open"
+ *   "GEO | Dogleg Left at 210y | Bunker Left at 195y, Water Right at 240y | Green: Open"
+ *   "GEO | Green: Open"
+ *   "GEO | Bunker Right at 150y | Green: Water Left"
  *
  * Returns:
  *   {
@@ -424,56 +439,43 @@ function geoLineForHole(geo, holeNumber) {
  */
 function parseGeoSummary(str) {
   var result = { shape: { type: 'straight' }, hazards: [], green: [] };
-  if (!str || typeof str !== 'string') return result;
+  if (!str || typeof str !== 'string' || str.indexOf('GEO |') !== 0) return result;
 
-  var parts = str.split('|').map(function (s) { return s.trim(); });
-  // Expected: ['GEO', '<shape>', '<hazards>', '<green>']
-  if (parts.length < 4 || parts[0] !== 'GEO') return result;
+  // Map Human UI strings back to the normalized labels expected by live-round.js COLORS
+  var reverseDict = { 'Bunker': 'bunker', 'Water': 'water', 'Woods': 'woods' };
 
-  // --- shape ---
-  var shapeStr = parts[1];
-  if (shapeStr && shapeStr.indexOf('dogleg-') === 0) {
-    var atIdx = shapeStr.indexOf('@');
-    var dir   = shapeStr.substring(7, atIdx > 0 ? atIdx : shapeStr.length);
-    var yds   = atIdx > 0 ? parseInt(shapeStr.substring(atIdx + 1), 10) : NaN;
-    if ((dir === 'left' || dir === 'right') && !isNaN(yds)) {
-      result.shape = { type: 'dogleg', dir: dir, yds: yds };
-    }
+  // Parse Dogleg
+  var doglegMatch = str.match(/Dogleg\s+(Left|Right)\s+at\s+(\d+)y/i);
+  if (doglegMatch) {
+    result.shape = {
+      type: 'dogleg',
+      dir: doglegMatch[1].toLowerCase(),
+      yds: parseInt(doglegMatch[2], 10)
+    };
   }
 
-  // --- fairway hazards ---
-  var hazStr = parts[2];
-  if (hazStr && hazStr.indexOf('hazard=') === 0) {
-    var hazList = hazStr.substring(7).split(',');
-    for (var i = 0; i < hazList.length; i++) {
-      var entry = hazList[i].trim(); if (!entry) continue;
-      var atI = entry.indexOf('@');
-      if (atI < 0) continue;
-      var labelSide = entry.substring(0, atI);
-      var yI        = parseInt(entry.substring(atI + 1), 10);
-      var dashI     = labelSide.lastIndexOf('-');
-      if (dashI < 0 || isNaN(yI)) continue;
-      var label = labelSide.substring(0, dashI);
-      var side  = labelSide.substring(dashI + 1);
-      if (side !== 'left' && side !== 'right') continue;
-      result.hazards.push({ label: label, side: side, yds: yI });
-    }
+  // Parse Fairway Hazards
+  var hazardRegex = /(Bunker|Water|Woods)\s+(Left|Right)\s+at\s+(\d+)y/gi;
+  var match;
+  while ((match = hazardRegex.exec(str)) !== null) {
+    result.hazards.push({
+      label: reverseDict[match[1]] || 'bunker',
+      side: match[2].toLowerCase(),
+      yds: parseInt(match[3], 10)
+    });
   }
 
-  // --- green ---
-  var grnStr = parts[3];
-  if (grnStr && grnStr.indexOf('green=') === 0) {
-    var grnVal = grnStr.substring(6);
-    if (grnVal && grnVal !== 'open') {
-      var grnList = grnVal.split(',');
-      for (var g = 0; g < grnList.length; g++) {
-        var ge = grnList[g].trim(); if (!ge) continue;
-        var dI = ge.lastIndexOf('-');
-        if (dI < 0) continue;
-        var gLabel = ge.substring(0, dI);
-        var gSide  = ge.substring(dI + 1);
-        if (gSide !== 'left' && gSide !== 'right') continue;
-        result.green.push({ label: gLabel, side: gSide });
+  // Parse Green (pushing expected object shape { label, side })
+  var greenMatch = str.match(/Green:\s+([^|]+)/i);
+  if (greenMatch && greenMatch[1].trim().toLowerCase() !== 'open') {
+    var greenParts = greenMatch[1].split(',');
+    for (var i = 0; i < greenParts.length; i++) {
+      var gp = greenParts[i].trim();
+      var parts = gp.split(' '); // e.g. ["Bunker", "Left"]
+      if (parts.length >= 2) {
+        var label = reverseDict[parts[0]] || 'bunker';
+        var side = parts[1].toLowerCase();
+        result.green.push({ label: label, side: side });
       }
     }
   }
