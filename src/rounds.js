@@ -72,6 +72,49 @@ function renderHandicap() {
   document.getElementById('roundCount').textContent=`(${n})`;
   document.getElementById('roundHistCard').style.display=n?'block':'none';
 
+  /* SCORE-VIEW: global toggle persisted in localStorage. Drives collapsed row + expanded card display. */
+  const _scoreView = localStorage.getItem('vc:roundScoreView') || 'diff';
+
+  /* SCORE-VIEW: inject toggle row idempotently above the round list */
+  if (!document.getElementById('roundScoreViewRow') && document.getElementById('roundHistCard')) {
+    const row = document.createElement('div');
+    row.id = 'roundScoreViewRow';
+    row.style.cssText = 'display:flex;gap:4px;align-items:center;margin:0 0 6px;font-size:.55rem';
+    row.innerHTML = '<span style="color:var(--tx3);letter-spacing:.06em;text-transform:uppercase">Show:</span>'
+      + ['diff','gross','net'].map(v=>`<button id="rsvBtn_${v}" class="btn sec" style="font-size:.55rem;padding:2px 8px" onclick="rndSetScoreView('${v}')">${v==='diff'?'Differential':v==='gross'?'Gross':'Net Raw'}</button>`).join('');
+    const anchor = document.getElementById('roundListActive')?.parentNode || document.getElementById('roundHistCard');
+    if (anchor) anchor.insertBefore(row, anchor.firstChild);
+  }
+  /* Sync active button state */
+  ['diff','gross','net'].forEach(v=>{
+    const b = document.getElementById('rsvBtn_'+v);
+    if (b) b.className = 'btn sec' + (_scoreView===v?' on':'');
+  });
+
+  /* SCORE-VIEW: compute what to show in the collapsed row and expanded card for a round.
+     gross: r.score / approx-par (e.g. "51 / 36" for a 9-hole round)
+     net:   (r.score - playHcp) / approx-par  — unadjusted, no NDB cap
+     diff:  r.diff (default) */
+  const _scoreDisplay = r => {
+    const hp = r.holesPlayed || 18;
+    const fullPar = parseInt(r.par) || 72;
+    const approxPar = hp < 18 ? Math.round(fullPar * hp / 18) : fullPar;
+    if (_scoreView === 'gross') {
+      const sc = r.score || '\u2014';
+      return { val: sc, sub: `/ ${approxPar}`, label: 'Gross' };
+    }
+    if (_scoreView === 'net') {
+      const sc = parseInt(r.score);
+      if (!sc || !r.rating || !r.slope || !r.par) return { val: r.score||'\u2014', sub: `/ ${approxPar}`, label: 'Net Raw' };
+      const playHcp = Math.round(_activeHcpIndex() * (+r.slope/113) + (+r.rating - fullPar));
+      const adj = hp < 18 ? Math.round(playHcp * hp / 18) : playHcp; // prorate for partial
+      return { val: sc - adj, sub: `/ ${approxPar}`, label: 'Net Raw' };
+    }
+    /* diff (default) */
+    const partialTag = r.partial ? ' <span style="font-size:.5rem;color:var(--tx3)">(partial)</span>' : '';
+    return { val: r.diff !== null ? r.diff : '\u2014', sub: '', label: 'Diff', partialTag };
+  };
+
   const eligible = rounds.filter(r=>r.countForHandicap!==false && !(r.players?.length>=2));
   const top20Ids = new Set(eligible.slice(0,20).map(r=>r.id));
   const buckets = {active:[], excluded:[], multi:[], archive:[]};
@@ -97,13 +140,14 @@ function renderHandicap() {
     const playerBadges = isMulti
       ? r.players.map(p=>`<span class="rnd-badge">${p.isMe?'\u2605 ':''} ${escHtml(p.name||'?')}${p.score?' \u00B7 '+p.score:''}</span>`).join('')
       : '';
+    const disp = _scoreDisplay(r); /* SCORE-VIEW */
     return `<div class="rnd-card" id="rnd-${r.id}">
       <!-- Collapsed header: tap to expand -->
       <div class="rnd-row" onclick="rndToggleCard('${r.id}')" style="cursor:pointer">
         <span style="font-size:.68rem;color:var(--tx3);flex-shrink:0;white-space:nowrap">${fmtDate(r.date)}</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:var(--tx);margin:0 6px">${escHtml(r.courseName||'\u2014')}</span>
         <span style="font-size:.72rem;color:var(--tx2);flex-shrink:0;margin-right:4px">${r.score||'\u2014'}</span>
-        <span class="rnd-diff" style="flex-shrink:0">${r.diff!==null?r.diff:'\u2014'}</span>
+        <span class="rnd-diff" style="flex-shrink:0">${disp.val}${disp.sub?` <span style="font-size:.55rem;color:var(--tx3)">${disp.sub}</span>`:''}</span>
         <span id="rnd-chev-${r.id}" style="font-size:.6rem;color:var(--tx3);margin-left:4px;flex-shrink:0">\u25BC</span>
       </div>
       <!-- Expanded body: all editable fields, meta, actions -->
@@ -119,8 +163,8 @@ function renderHandicap() {
         <div class="g2" style="margin-bottom:4px">
           <div class="field" style="margin-bottom:0"><div class="flbl">Tee</div>
             <input class="rnd-edit" type="text" value="${r.tee||''}" placeholder="Tee" onchange="updateRound('${r.id}','tee',this.value)" style="width:100%"></div>
-          <div class="field" style="margin-bottom:0"><div class="flbl">Differential</div>
-            <span class="rnd-diff" id="rdiff-${r.id}" style="display:block;padding:3px 0">${r.diff!==null?r.diff:'\u2014'}${r.partial?' <span style="font-size:.55rem;color:var(--tx3)">(partial)</span>':''}</span></div>
+          <div class="field" style="margin-bottom:0"><div class="flbl">${disp.label||'Differential'}</div>
+            <span class="rnd-diff" id="rdiff-${r.id}" style="display:block;padding:3px 0">${disp.val}${disp.sub?` <span style="font-size:.55rem;color:var(--tx3)">${disp.sub}</span>`:''}${disp.partialTag||''}</span></div>
         </div>
         <div class="field" style="margin-bottom:4px"><div class="flbl">Round Format</div>
           <select class="rnd-edit" onchange="updateRound('${r.id}','holesPlayed',this.value)" style="width:100%">
@@ -323,6 +367,13 @@ function addRound() {
   const mBtn=document.getElementById('rModeBtn');
   if(mBtn){mBtn.textContent='Simple';mBtn.classList.remove('on');}
   document.querySelectorAll('.rnd-sess-chk').forEach(c=>{c.checked=false;});
+}
+
+/* SCORE-VIEW: save selection and re-render round list */
+function rndSetScoreView(v) {
+  if (v !== 'diff' && v !== 'gross' && v !== 'net') return;
+  localStorage.setItem('vc:roundScoreView', v);
+  renderHandicap();
 }
 
 function rndToggleCard(id) {
@@ -924,6 +975,7 @@ Object.assign(window, {
   renderHandicap, onRoundCourseSelect, onRoundTeeSelect, updateDiffPreview,
   addRound, deleteRound, confirmDeleteRound, updateRound, toggleRndSection, rndRegenPdf,
   rndToggleCard, rndToggleDetail, rndToggleLink, rndDetailView, rndSaveLinks,
+  rndSetScoreView, /* SCORE-VIEW */
   toggleRoundMode, rndGridView, rndGirCycle, toggleRndLinker,
   exportRoundTask, exportProfilePdf, renderExportCard, runExportCard, _rndSummaryPdf
 });
