@@ -239,6 +239,34 @@ function updateDiffPreview() {
   document.getElementById('diffPreview').textContent=d!==null?'Differential: '+d:'';
 }
 
+/* WHS24-NDB: apply net double bogey cap to each hole and return capped total.
+   Only applies when ALL of: per-hole scores exist, every hole has SI (1-18),
+   user has an active handicap index, rating/slope/par valid. Returns
+   { cappedTotal, anyCapped, applied } where applied=true means cap was applied.
+   When applied=false, caller should use raw total. */
+function _applyNDBCap(holes, rating, slope, par, idx) {
+  if (!Array.isArray(holes) || !holes.length) return { cappedTotal: 0, anyCapped: false, applied: false };
+  if (idx == null) return { cappedTotal: 0, anyCapped: false, applied: false };
+  const r = +rating, s = +slope, p = +par;
+  if (!r || !s || !p) return { cappedTotal: 0, anyCapped: false, applied: false };
+  // Need every hole to have SI 1-18 and a numeric par + numeric score
+  const allHaveSI = holes.every(h => +h.si > 0 && +h.par > 0 && h.score !== '' && h.score != null);
+  if (!allHaveSI) return { cappedTotal: 0, anyCapped: false, applied: false };
+  const playHcp = Math.round(idx * (s/113) + (r - p));
+  let cappedTotal = 0, anyCapped = false;
+  holes.forEach(h => {
+    const hPar = +h.par, hSi = +h.si, hScore = +h.score;
+    let strokes = 0;
+    if (playHcp >= hSi) strokes++;
+    if (playHcp >= 18 + hSi) strokes++;
+    const maxScore = hPar + 2 + strokes;
+    const used = Math.min(hScore, maxScore);
+    if (used < hScore) anyCapped = true;
+    cappedTotal += used;
+  });
+  return { cappedTotal, anyCapped, applied: true };
+}
+
 function addRound() {
   const score=document.getElementById('rScore').value;
   const rating=document.getElementById('rRating').value;
@@ -257,7 +285,6 @@ function addRound() {
   const holesPlayed = _holesPlayedFromFormat(fmt);
   const partial = holesPlayed < 18;
   const idx = _activeHcpIndex();
-  const diff=calcDiff(score,rating,slope,holesPlayed,idx);
   const notes=document.getElementById('rNotes')?.value||'';
   const sessionIds=[...document.querySelectorAll('.rnd-sess-chk:checked')].map(el=>el.value).filter(Boolean);
   const holes=[];
@@ -268,8 +295,15 @@ function addRound() {
     const gBtn=row.querySelector('.rnd-gir-btn');
     const gir=gBtn?.dataset.gir==='Y'?true:gBtn?.dataset.gir==='N'?false:null;
     const nt=row.querySelector('.rh-notes')?.value?.trim()||'';
-    if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt,yards:row.dataset.yards||''});
+    if(sc||pt||gir!==null) holes.push({n,par:row.dataset.par||'',score:sc,putts:pt,gir,notes:nt,yards:row.dataset.yards||'',si:row.dataset.si||''}); /* WHS24-NDB: include SI for cap calc */
   });
+  /* WHS24-NDB: apply net double bogey cap when detailed per-hole data is available.
+     Matches Live Round's lrCalcDiffWithCap behavior so manual + live diffs are consistent.
+     Falls back to raw score when per-hole data is incomplete. */
+  const parTotal = parseInt(document.getElementById('rPar').value)||0;
+  const ndb = _applyNDBCap(holes.filter(h=>h.score!==''), rating, slope, parTotal, idx);
+  const grossForDiff = ndb.applied ? ndb.cappedTotal : score;
+  const diff = calcDiff(grossForDiff, rating, slope, holesPlayed, idx);
   rounds.unshift({id:uid(),date:document.getElementById('rDate').value||today(),courseName,tee,rating,slope,par:document.getElementById('rPar').value||'',score,diff,notes,holesPlayed,partial,sessionIds,holes}); /* WHS24-PARTIAL */
   save(); renderHandicap();
   document.getElementById('rScore').value='';
@@ -561,20 +595,21 @@ function toggleRoundMode(){
 function _buildRoundHoleGrid(){
   const grid=document.getElementById('rHoleGrid');
   if(!grid) return;
-  let parMap={}, ydsMap={};
+  let parMap={}, ydsMap={}, siMap={}; /* WHS24-NDB: SI map for per-hole stroke allocation */
   const csel=document.getElementById('rCourseSelect')?.value||'';
   if(csel&&csel!=='__manual__'){
     const course=courses.find(c=>c.id===csel);
     const teeId=document.getElementById('rTeeSelect')?.value||'';
     const tee=course?.tees?.find(t=>t.id===teeId)||course?.tees?.[0];
-    if(tee?.holes) tee.holes.forEach(h=>{parMap[h.number]=h.par; ydsMap[h.number]=h.yards||'';});
+    if(tee?.holes) tee.holes.forEach(h=>{parMap[h.number]=h.par; ydsMap[h.number]=h.yards||''; siMap[h.number]=h.handicap||'';});
   }
   const makeRow=(n)=>{
     const par=parMap[n]||'';
     const yds=ydsMap[n]||'';
+    const si=siMap[n]||''; /* WHS24-NDB */
     const parN=parseInt(par)||0;
     const cls=parN===3?'par3-row':parN===5?'par5-row':'';
-    return `<tr class="rnd-hole-row ${cls}" data-hole="${n}" data-par="${par}" data-yards="${yds}">
+    return `<tr class="rnd-hole-row ${cls}" data-hole="${n}" data-par="${par}" data-yards="${yds}" data-si="${si}">
       <td style="color:var(--tx3);font-size:.55rem;min-width:20px;font-weight:600">${n}</td>
       <td style="color:var(--tx3);font-size:.6rem;text-align:center">${par||'\u2014'}</td>
       <td style="color:var(--tx3);font-size:.6rem;text-align:center">${yds||'\u2014'}</td>
