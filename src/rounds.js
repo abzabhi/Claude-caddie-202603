@@ -723,6 +723,11 @@ function _updateRndSubtotals(){
   if(el('sub-score-total')) el('sub-score-total').textContent=hasAny?fs+bs:'\u2014';
   if(el('sub-putts-total')) el('sub-putts-total').textContent=(front.some(r=>r.querySelector('.rh-putts')?.value?.trim())||back.some(r=>r.querySelector('.rh-putts')?.value?.trim()))?fp+bp:'\u2014';
   if(el('sub-gir-total'))   el('sub-gir-total').textContent  =(front.some(r=>r.querySelector('.rnd-gir-btn')?.dataset.gir)||back.some(r=>r.querySelector('.rnd-gir-btn')?.dataset.gir))?fg+bg:'\u2014';
+  const scoreInput = el('rScore');
+  if (scoreInput && hasAny) {
+    scoreInput.value = fs + bs;
+    updateDiffPreview();
+  }
 }
 
 function rndGridView(v){
