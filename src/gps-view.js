@@ -94,6 +94,7 @@ var _gvOriginalMapClickCb = null;
 var _gvJustArmedTs = 0;
 var _gvChevronInjected = false; /* did we attach our SVG to _userMarker.getElement() */
 var _holeNAtPrompt = -1;
+var _gvLastAimKey  = '';   /* serialised aim point; used to detect aim changes for strip refresh */
 
 /* ─────────────────────────────────────────────────────────
    LR-EXTRAS: lightweight toast for shot-tracker feedback
@@ -376,6 +377,7 @@ function gpsViewClose() {
   if (lr) {
     lr._gpsViewOpen = false;
     lr._gvDynamicHazards = null;
+    _gvLastAimKey = '';
     if (typeof window._lrPersist === 'function') window._lrPersist();
   }
   var screen = document.getElementById('gpsViewScreen');
@@ -1106,6 +1108,17 @@ function _renderHazards() {
   /* Expose dynamic hazards for live-round hazard strip. Cleared on gpsViewClose. */
   if (window.lrState) {
     window.lrState._gvDynamicHazards = { toAim: rowsToAim, aimToGreen: rowsAimToGreen };
+    /* Notify live-round strip that hazards have changed — but only when the aim
+       point actually moved, not on every GPS position tick. The live screen is
+       hidden while GPS view is open, so lrRenderHole is cheap (no visible repaint
+       cost) but we still gate it to avoid redundant work on every 3-second tick. */
+    var aimKey = aim ? (aim[0].toFixed(5) + ',' + aim[1].toFixed(5)) : '';
+    if (aimKey !== _gvLastAimKey) {
+      _gvLastAimKey = aimKey;
+      if (typeof window.lrRenderHole === 'function') {
+        try { window.lrRenderHole(); } catch(e) {}
+      }
+    }
   }
   /* Cap each column at 4 rows. */
   var capped1 = rowsToAim.slice(0, 4);
