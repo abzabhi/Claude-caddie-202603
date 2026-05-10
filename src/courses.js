@@ -2,7 +2,9 @@ import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse
 import { MapView } from './mapview.js';
 import { setVizInitDone } from './viz.js';
 import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap, geomOpenLocateModal,
-         geomLoadByCourse, geomLoadByCenter, geomGetHazardsInPlay } from './geomap.js'; /* G2, G5; GEO-SUM: load fns */
+         geomLoadByCourse, geomLoadByCenter, geomGetHazardsInPlay,
+         /* UNIFY-MAP — shared primitives for unified map mechanics */
+         geomDistanceYds, geomGetHoleEntry, geomMidAim, HAZARD_META } from './geomap.js'; /* G2, G5; GEO-SUM: load fns; UNIFY-MAP */
 import { buildGeoSummaries } from './geoSummary.js'; /* GEO-SUM */
 
 const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
@@ -1119,7 +1121,11 @@ async function _crsGeotagMapSearchHere() {
 }
 
 /* Course preview hazard + yardage renderer. Called on mount and on every aim change.
-   Uses geomGetHazardsInPlay from geomap.js for all corridor math — no local Turf. */
+   Uses geomGetHazardsInPlay from geomap.js for all corridor math — no local Turf.
+   UNIFY-MAP: now uses shared geomDistanceYds, geomGetHoleEntry, geomMidAim, HAZARD_META.
+   When aimPt is not supplied, defaults to centreline midpoint via geomMidAim so the
+   preview initializes identically to live-round / GPS view. Yardage display now shows
+   ball→aim and aim→green to match the live surfaces. */
 window._crsPreviewRenderHazards = function(aimPt) {
   var hazEl = document.getElementById('crsPreviewHazards');
   var ydsEl = document.getElementById('crsPreviewYards');
@@ -1128,16 +1134,20 @@ window._crsPreviewRenderHazards = function(aimPt) {
   var holeN = window._crsPreviewMapView._holeN;
   if (!geo || !geo.holes) return;
 
+  /* UNIFY-MAP — shared hole-entry lookup. Original loop preserved per comment-don't-delete:
   var holeEntry = null;
   for (var k in geo.holes) {
     if (String(geo.holes[k].ref) === String(holeN)) { holeEntry = geo.holes[k]; break; }
   }
+  */
+  var holeEntry = geomGetHoleEntry(geo, holeN);
   if (!holeEntry) return;
 
   var teePt  = (holeEntry.line && holeEntry.line.length) ? holeEntry.line[0] : (holeEntry.tee || null);
   var greenPt = holeEntry.green || (holeEntry.line ? holeEntry.line[holeEntry.line.length - 1] : null);
   var ballPt  = teePt; /* Baseline is always tee for preview mode */
 
+  /* UNIFY-MAP — _distYds replaced by shared geomDistanceYds. Original preserved per comment-don't-delete:
   function _distYds(p1, p2) {
     if (!p1 || !p2) return 0;
     var R = 6371e3;
@@ -1147,15 +1157,38 @@ window._crsPreviewRenderHazards = function(aimPt) {
           + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam / 2) * Math.sin(dLam / 2);
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * 1.09361;
   }
+  */
 
+  /* UNIFY-MAP — aim defaults to centreline midpoint via geomMidAim so the courses preview
+     initializes identically to live-round / GPS view (which auto-place the reticle at
+     the same spot via MapView._placeAimMarker). When aimPt is supplied (user dragged
+     the reticle), we honour it. */
+  var aim = aimPt || geomMidAim(holeEntry) || greenPt;
+
+  /* UNIFY-MAP — yardage display now matches live-round / GPS view: ball→aim and aim→green.
+     Original tee-to-pin single-value display preserved per comment-don't-delete:
   var ydsToGreen = (ballPt && greenPt) ? Math.round(_distYds(ballPt, greenPt)) : null;
   ydsEl.innerHTML = '<div style="text-align:center;padding:14px 8px 10px">'
     + '<div style="font-family:\'DM Mono\',monospace;font-size:2.4rem;font-weight:700;color:var(--tx);line-height:1">'
     + (ydsToGreen != null ? ydsToGreen : '\u2014') + '</div>'
     + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">tee to pin</div>'
     + '</div>';
+  */
+  var ydsBallToAim   = (ballPt && aim)    ? geomDistanceYds(ballPt, aim)    : null;
+  var ydsAimToGreen  = (aim && greenPt)   ? geomDistanceYds(aim, greenPt)   : null;
+  ydsEl.innerHTML = '<div style="display:flex;justify-content:space-around;align-items:center;padding:10px 8px 8px">'
+    + '<div style="text-align:center">'
+    +   '<div style="font-family:\'DM Mono\',monospace;font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1">'
+    +     (ydsBallToAim != null ? ydsBallToAim : '\u2014') + '</div>'
+    +   '<div style="font-size:.5rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:3px">ball to aim</div>'
+    + '</div>'
+    + '<div style="text-align:center">'
+    +   '<div style="font-family:\'DM Mono\',monospace;font-size:1.6rem;font-weight:700;color:var(--tx);line-height:1">'
+    +     (ydsAimToGreen != null ? ydsAimToGreen : '\u2014') + '</div>'
+    +   '<div style="font-size:.5rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:3px">aim to green</div>'
+    + '</div>'
+    + '</div>';
 
-  var aim = aimPt || greenPt;
   if (!ballPt || !aim || !geo.polygons || !geo.polygons.features) { hazEl.innerHTML = ''; return; }
 
   /* ── USE SHARED GEOMAP ENGINE ── */
@@ -1163,6 +1196,7 @@ window._crsPreviewRenderHazards = function(aimPt) {
   var toAim     = hazResult.toAim     || [];
   var aimToGreen = hazResult.aimToGreen || [];
 
+  /* UNIFY-MAP — local HAZ_META replaced by shared HAZARD_META import. Original preserved per comment-don't-delete:
   var HAZ_META = {
     bunker:               { label: 'Bunker', icon: '\u26F1',       color: '#d4a017' },
     water:                { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
@@ -1170,11 +1204,12 @@ window._crsPreviewRenderHazards = function(aimPt) {
     water_hazard:         { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
     woods:                { label: 'Woods',  icon: '\uD83C\uDF32', color: '#3b6d11' }
   };
+  */
 
   var renderRows = function(rows) {
     if (!rows.length) return '<div style="font-size:.62rem;color:var(--tx3);padding:6px 0">None</div>';
     return rows.slice(0, 4).map(function(rw) {
-      var m = HAZ_META[rw.typ];
+      var m = HAZARD_META[rw.typ];
       if (!m) return '';
       return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--br);font-size:.65rem">'
         + '<span style="color:' + m.color + '">' + m.icon + '</span>'
