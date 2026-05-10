@@ -1383,6 +1383,120 @@ function _geomLocateInvokeSelect(osmId, center) {
   _geomLocateCallbacks = null;
 }
 
+// -----------------------------------------------------------------------------
+// Shared hazard corridor engine
+// -----------------------------------------------------------------------------
+
+/* Internal centroid helper — averaged ring coordinates for a Polygon feature.
+   Moved from gps-view.js (_gvPolyCentroid). Returns [lon, lat] or null. */
+function _geomPolyCentroid(f) {
+  if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
+  var ring = f.geometry.coordinates[0];
+  if (!ring || !ring.length) return null;
+  var sx = 0, sy = 0, n = 0;
+  for (var i = 0; i < ring.length; i++) { sx += ring[i][0]; sy += ring[i][1]; n++; }
+  return n ? [sx / n, sy / n] : null;
+}
+
+/**
+ * Compute hazards in play across two corridors: ball→aim and aim→green.
+ * Centralises the Turf.js 2-corridor math previously duplicated in gps-view.js.
+ *
+ * Corridor width: 25 yards. Uses centroid projection first; falls back to
+ * turf.booleanIntersects on a proper corridor polygon when Turf is available.
+ *
+ * @param {number[]} ballPt   [lon, lat] — ball position (or tee for shot 1)
+ * @param {number[]} aimPt    [lon, lat] — aim marker
+ * @param {number[]|null} greenPt [lon, lat] — hole green centre (null = skip corridor 2)
+ * @param {object[]} features  GeoJSON feature array (geo.polygons.features)
+ * @returns {{ toAim: object[], aimToGreen: object[] }}
+ *   Each array contains objects: { typ, dist, lr, ydsFromTee }
+ *   sorted ascending by dist. ydsFromTee is null when no tee reference available.
+ */
+export function geomGetHazardsInPlay(ballPt, aimPt, greenPt, features) {
+  var HAZARD_TYPES = { bunker: true, water: true, lateral_water_hazard: true, water_hazard: true, woods: true };
+  var M_TO_YDS = 1.0936133;
+  var toAim = [], aimToGreen = [];
+
+  /* Internal corridor check — projects hazard centroid onto start→end axis.
+     Returns { inCorridor, lr } or null for degenerate (zero-length) axes.
+     Moved from gps-view.js _gvCorridorCheck. */
+  function _corridorCheck(startLL, endLL, centroid, f) {
+    if (!startLL || !endLL || !centroid) return null;
+    var lat0 = startLL[1] * Math.PI / 180;
+    var R = 6371000;
+    var ax = (endLL[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+    var ay = (endLL[1] - startLL[1]) * Math.PI / 180 * R;
+    var aLen = Math.sqrt(ax * ax + ay * ay);
+    if (aLen < 1e-3) return null;
+    var ux = ax / aLen, uy = ay / aLen;
+    var rx = uy, ry = -ux;
+    var hx = (centroid[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+    var hy = (centroid[1] - startLL[1]) * Math.PI / 180 * R;
+    var t = (hx * ux + hy * uy) / aLen;
+    var perp = Math.abs(hx * rx + hy * ry);
+    var perpYds = perp * M_TO_YDS;
+    var cross = ux * hy - uy * hx;
+    var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
+    var inCorridor = (t >= 0 && t <= 1 && perpYds <= 25);
+
+    /* Turf polygon intersection fallback for Polygon features. */
+    if (!inCorridor && f && f.geometry && f.geometry.type === 'Polygon'
+        && window.turf && typeof window.turf.booleanIntersects === 'function'
+        && typeof window.turf.polygon === 'function') {
+      try {
+        var offM = 25 / M_TO_YDS;
+        var dLonPerM = 1 / (Math.cos(lat0) * R) * (180 / Math.PI);
+        var dLatPerM = 1 / R * (180 / Math.PI);
+        var pLon = rx * dLonPerM;
+        var pLat = ry * dLatPerM;
+        var fLon = ux * dLonPerM; void fLon;
+        var fLat = uy * dLatPerM; void fLat;
+        var s0lon = startLL[0], s0lat = startLL[1];
+        var e0lon = endLL[0],   e0lat = endLL[1];
+        var p1 = [s0lon + pLon * offM, s0lat + pLat * offM];
+        var p2 = [e0lon + pLon * offM, e0lat + pLat * offM];
+        var p3 = [e0lon - pLon * offM, e0lat - pLat * offM];
+        var p4 = [s0lon - pLon * offM, s0lat - pLat * offM];
+        var corridorPoly = window.turf.polygon([[p1, p2, p3, p4, p1]]);
+        if (window.turf.booleanIntersects(f, corridorPoly)) inCorridor = true;
+      } catch (e) { /* fall through to centroid result */ }
+    }
+    return { inCorridor: inCorridor, lr: lr_label };
+  }
+
+  for (var i = 0; i < features.length; i++) {
+    var f = features[i];
+    if (!f || !f.properties) continue;
+    var typ = f.properties.golf;
+    if (!HAZARD_TYPES[typ]) continue;
+    var c = _geomPolyCentroid(f);
+    if (!c) continue;
+
+    /* Corridor 1: ball → aim */
+    var c1 = _corridorCheck(ballPt, aimPt, c, f);
+    if (c1 && c1.inCorridor) {
+      var d1 = 0;
+      try { d1 = geomDistanceYds(ballPt, c); } catch(e) {}
+      toAim.push({ typ: typ, dist: Math.round(d1), lr: c1.lr || '', ydsFromTee: null });
+    }
+
+    /* Corridor 2: aim → green (skipped when greenPt not supplied) */
+    if (greenPt) {
+      var c2 = _corridorCheck(aimPt, greenPt, c, f);
+      if (c2 && c2.inCorridor) {
+        var d2 = 0;
+        try { d2 = geomDistanceYds(aimPt, c); } catch(e) {}
+        aimToGreen.push({ typ: typ, dist: Math.round(d2), lr: c2.lr || '', ydsFromTee: null });
+      }
+    }
+  }
+
+  toAim.sort(function(a, b){ return a.dist - b.dist; });
+  aimToGreen.sort(function(a, b){ return a.dist - b.dist; });
+  return { toAim: toAim, aimToGreen: aimToGreen };
+}
+
 if (typeof window !== 'undefined') {
   Object.assign(window, {
     geomCreateMap,
@@ -1402,6 +1516,7 @@ if (typeof window !== 'undefined') {
     geomStartGpsWatch,
     geomStopGpsWatch,
     geomGetCurrentPosition,
+    geomGetHazardsInPlay,
     geomGeocodeCity,  /* G4 */
     geomOpenLocateModal,  /* G5 */
     _geomLocateCitySearch, _geomLocatePanLoad, _geomLocateGpsLoad,
