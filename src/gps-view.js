@@ -979,8 +979,8 @@ function _renderYards() {
    Hazards in play
    ───────────────────────────────────────────────────────── */
 
-/* _gvCorridorCheck — moved to geomap.js as internal _corridorCheck inside
-   geomGetHazardsInPlay (DRY refactor). Preserved per "comment, don't delete" rule.
+// _gvCorridorCheck — moved to geomap.js as internal _corridorCheck inside
+// geomGetHazardsInPlay (DRY refactor). Preserved per "comment, don't delete" rule.
 // function _gvCorridorCheck(startLL, endLL, hazardCentroid, f) {
 //   if (!startLL || !endLL || !hazardCentroid) return null;
 //   var lat0 = startLL[1] * Math.PI / 180;
@@ -1019,11 +1019,10 @@ function _renderYards() {
 //       void fLon; void fLat;
 //       var corridorPoly = window.turf.polygon([[p1, p2, p3, p4, p1]]);
 //       if (window.turf.booleanIntersects(f, corridorPoly)) { inCorridor = true; }
-//     } catch (e) { /* fall through to centroid result */ }
+//     } catch (e) { } // fall through to centroid result
 //   }
 //   return { inCorridor: inCorridor, lr: lr_label };
 // }
-*/
 
 function _renderHazards() {
   var el = document.getElementById('gpsHazards');
