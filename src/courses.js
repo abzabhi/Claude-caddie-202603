@@ -2,7 +2,7 @@ import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse
 import { MapView } from './mapview.js';
 import { setVizInitDone } from './viz.js';
 import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap, geomOpenLocateModal,
-         geomLoadByCourse, geomLoadByCenter } from './geomap.js'; /* G2, G5; GEO-SUM: load fns */
+         geomLoadByCourse, geomLoadByCenter, geomGetHazardsInPlay } from './geomap.js'; /* G2, G5; GEO-SUM: load fns */
 import { buildGeoSummaries } from './geoSummary.js'; /* GEO-SUM */
 
 const GORDY_COURSES_INDEX_URL = 'https://raw.githubusercontent.com/abzabhi/gordy-courses/main/index.json';
@@ -564,14 +564,18 @@ function previewCourseMap() {
         + '<div style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--br)">'
         +   shelfHtml
         + '</div>'
-          /* map canvas with floating controls */
-        + '<div style="position:relative;flex:1">'
-        +   '<div id="crsPreviewMapCanvas" style="position:absolute;inset:0;background:#111"></div>'
-        +   '<div style="position:absolute;top:10px;right:10px;z-index:10;display:flex;flex-direction:column;gap:6px">'
-        +     '<button class="btn sec" style="font-size:.65rem;padding:5px 10px" '
-        +       'onclick="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(window._crsPreviewMapView._holeN,{resetAim:true})">Hole</button>'
-        +     '<button class="btn sec" style="font-size:.65rem;padding:5px 10px" '
-        +       'onclick="if(window._crsPreviewMapView) window._crsPreviewMapView.zoomGreen()">\u26F3</button>'
+          /* map canvas with floating controls + hazard/yards panel below */
+        + '<div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column">'
+        +   '<div style="position:relative;flex:1;min-height:0">'
+        +     '<div id="crsPreviewMapCanvas" style="position:absolute;inset:0;background:#111"></div>'
+        +     '<div style="position:absolute;top:8px;right:8px;z-index:30;display:flex;flex-direction:column;gap:6px;align-items:flex-end">'
+        +       '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(window._crsPreviewMapView._holeN, {resetAim:true})" title="Zoom to Hole">Hole</button>'
+        +       '<button class="btn sec" style="font-size:.62rem;padding:5px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" onclick="if(window._crsPreviewMapView) window._crsPreviewMapView.zoomGreen()" title="Zoom to Green">\u26F3</button>'
+        +     '</div>'
+        +   '</div>'
+        +   '<div style="background:var(--bg);border-top:1px solid var(--br);flex-shrink:0;display:flex;flex-direction:column;box-shadow:0 -4px 14px rgba(0,0,0,.45);z-index:30">'
+        +     '<div id="crsPreviewYards"></div>'
+        +     '<div id="crsPreviewHazards"></div>'
         +   '</div>'
         + '</div>';
       document.body.appendChild(overlay);
@@ -591,9 +595,13 @@ function previewCourseMap() {
         containerId: 'crsPreviewMapCanvas',
         geo: geo,
         holeN: firstHole,
-        idPrefix: 'prv'
+        idPrefix: 'prv',
+        onAimChange: function(ll) {
+          if (window._crsPreviewRenderHazards) window._crsPreviewRenderHazards(ll);
+        }
       });
       window._crsPreviewMapView.mount();
+      setTimeout(function() { if (window._crsPreviewRenderHazards) window._crsPreviewRenderHazards(null); }, 100);
     }
   });
 }
@@ -1109,6 +1117,79 @@ async function _crsGeotagMapSearchHere() {
     _crsGeotagSetStatus('Search failed: ' + (err && err.message ? err.message : 'unknown'));
   }
 }
+
+/* Course preview hazard + yardage renderer. Called on mount and on every aim change.
+   Uses geomGetHazardsInPlay from geomap.js for all corridor math — no local Turf. */
+window._crsPreviewRenderHazards = function(aimPt) {
+  var hazEl = document.getElementById('crsPreviewHazards');
+  var ydsEl = document.getElementById('crsPreviewYards');
+  if (!hazEl || !ydsEl || !window._crsPreviewMapView) return;
+  var geo = window._crsPreviewMapView._geo;
+  var holeN = window._crsPreviewMapView._holeN;
+  if (!geo || !geo.holes) return;
+
+  var holeEntry = null;
+  for (var k in geo.holes) {
+    if (String(geo.holes[k].ref) === String(holeN)) { holeEntry = geo.holes[k]; break; }
+  }
+  if (!holeEntry) return;
+
+  var teePt  = (holeEntry.line && holeEntry.line.length) ? holeEntry.line[0] : (holeEntry.tee || null);
+  var greenPt = holeEntry.green || (holeEntry.line ? holeEntry.line[holeEntry.line.length - 1] : null);
+  var ballPt  = teePt; /* Baseline is always tee for preview mode */
+
+  function _distYds(p1, p2) {
+    if (!p1 || !p2) return 0;
+    var R = 6371e3;
+    var phi1 = p1[1] * Math.PI / 180, phi2 = p2[1] * Math.PI / 180;
+    var dPhi = (p2[1] - p1[1]) * Math.PI / 180, dLam = (p2[0] - p1[0]) * Math.PI / 180;
+    var a = Math.sin(dPhi / 2) * Math.sin(dPhi / 2)
+          + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam / 2) * Math.sin(dLam / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * 1.09361;
+  }
+
+  var ydsToGreen = (ballPt && greenPt) ? Math.round(_distYds(ballPt, greenPt)) : null;
+  ydsEl.innerHTML = '<div style="text-align:center;padding:14px 8px 10px">'
+    + '<div style="font-family:\'DM Mono\',monospace;font-size:2.4rem;font-weight:700;color:var(--tx);line-height:1">'
+    + (ydsToGreen != null ? ydsToGreen : '\u2014') + '</div>'
+    + '<div style="font-size:.55rem;color:var(--tx3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px">tee to pin</div>'
+    + '</div>';
+
+  var aim = aimPt || greenPt;
+  if (!ballPt || !aim || !geo.polygons || !geo.polygons.features) { hazEl.innerHTML = ''; return; }
+
+  /* ── USE SHARED GEOMAP ENGINE ── */
+  var hazResult = geomGetHazardsInPlay(ballPt, aim, greenPt, geo.polygons.features);
+  var toAim     = hazResult.toAim     || [];
+  var aimToGreen = hazResult.aimToGreen || [];
+
+  var HAZ_META = {
+    bunker:               { label: 'Bunker', icon: '\u26F1',       color: '#d4a017' },
+    water:                { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+    lateral_water_hazard: { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+    water_hazard:         { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+    woods:                { label: 'Woods',  icon: '\uD83C\uDF32', color: '#3b6d11' }
+  };
+
+  var renderRows = function(rows) {
+    if (!rows.length) return '<div style="font-size:.62rem;color:var(--tx3);padding:6px 0">None</div>';
+    return rows.slice(0, 4).map(function(rw) {
+      var m = HAZ_META[rw.typ];
+      if (!m) return '';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--br);font-size:.65rem">'
+        + '<span style="color:' + m.color + '">' + m.icon + '</span>'
+        + '<span style="color:var(--tx);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + m.label + '</span>'
+        + '<span style="font-family:\'DM Mono\',monospace;color:var(--tx2);flex:0 0 auto">' + rw.dist + 'y' + (rw.lr ? ' ' + rw.lr : '') + '</span>'
+        + '</div>';
+    }).join('');
+  };
+
+  hazEl.innerHTML = '<div style="padding:6px 12px 10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div><div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">To Aim</div>'
+    + renderRows(toAim) + '</div>'
+    + '<div><div style="font-size:.55rem;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Aim \u2192 Green</div>'
+    + renderRows(aimToGreen) + '</div></div>';
+};
 
 export {
   getFavCourseId, renderCourseList, deleteCourse, toggleHomeCourse,
