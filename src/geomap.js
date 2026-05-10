@@ -1191,8 +1191,7 @@ export function geomOpenLocateModal(opts) {
     + '<div style="padding:10px 12px;border-top:1px solid var(--br);display:flex;gap:8px">'
     +   '<button class="btn" style="flex:1;font-size:.68rem;padding:9px 10px" '
     +     'onclick="_geomLocatePanLoad()">\uD83D\uDCCD Load course here</button>'
-    +   '<button class="btn sec" style="flex:1;font-size:.68rem;padding:9px 10px" '
-    +     'onclick="_geomLocateGpsLoad()">\uD83D\uDCE1 Use my GPS</button>'
+    +   (opts.hideGps ? '' : '<button class="btn sec" style="flex:1;font-size:.68rem;padding:9px 10px" onclick="_geomLocateGpsLoad()">\uD83D\uDCE1 Use my GPS</button>')
     + '</div>';
   document.body.appendChild(overlay);
 
