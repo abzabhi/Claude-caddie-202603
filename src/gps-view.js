@@ -154,6 +154,48 @@ function _gvShowToast(msg, kind) {
    Open / close / toggle
    ───────────────────────────────────────────────────────── */
 
+/* Install the _onAimChange wrap on MapView. Called from _renderMinimap after
+   _lrMapMount guarantees _mapInstance exists. Guard ensures one install per session. */
+function _gvInstallAimWrap() {
+  var lr = window.lrState;
+  if (!lr || !lr._mapInstance || _gvOriginalAimCb !== null) return;
+  _gvOriginalAimCb = lr._mapInstance._onAimChange || null;
+  lr._mapInstance._onAimChange = function(lngLat) {
+    if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
+    /* Always re-render on aim change so hazard strip + yards update immediately.
+       Confirmed safe: onAimChange fires only on tap or drag-end, never continuously. */
+    if (typeof gpsViewRender === 'function') gpsViewRender();
+    /* Tracker behaviour: only if explicitly enabled. */
+    if (!lr._trackerOn) return;
+    /* PHASE-SPRINT Task 4: One-tap flow. */
+    var rec = null;
+    if (typeof window.stRecordLocation === 'function') {
+      try { rec = window.stRecordLocation(lngLat); } catch(e) {}
+    }
+    if (rec) {
+      if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
+        try {
+          lr._mapInstance.setDispersionLines({
+            startLL: rec.gps_flight.startLngLat,
+            aimLL:   rec.gps_flight.endLngLat,
+            endLL:   rec.gps_flight.endLngLat
+          });
+        } catch(e2) {}
+      }
+      _gvRefreshLineStart();
+      var sNow = lr.players[lr.curPlayer].scores[lr.curHole];
+      var nNow = (sNow && Array.isArray(sNow.shots)) ? sNow.shots.length : 1;
+      _gvShowToast(
+        'Shot ' + nNow + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown'),
+        'success'
+      );
+      if (rec.lie === 'green' && !_puttMode) _puttMode = true;
+    } else {
+      _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
+    }
+  };
+}
+
 function gpsViewOpen() {
   var lr = window.lrState;
   if (!lr) return;
@@ -195,53 +237,11 @@ function gpsViewOpen() {
   _puttMode = false;
   _onGreenPromptShown = false;
   _holeNAtPrompt = -1;
-  /* LR-EXTRAS: wrap MapView's onAimChange so taps in tracker mode arm shots.
-     The original callback (persists lrState._mapAim) is preserved and called first.
-     IMPORTANT: this wrap handles ARMING ONLY. Landing is handled by the
-     onMapClick wrap below — when a shot is armed the aim is LOCKED, so a
-     second tap does not fire onAimChange (it surfaces via onMapClick instead). */
-  if (lr._mapInstance && _gvOriginalAimCb === null) {
-    _gvOriginalAimCb = lr._mapInstance._onAimChange || null;
-    lr._mapInstance._onAimChange = function(lngLat) {
-      if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
-      /* Always re-render on aim change so hazard strip + yards update immediately.
-         Confirmed safe: onAimChange fires only on tap or drag-end, never continuously. */
-      if (typeof gpsViewRender === 'function') gpsViewRender();
-      /* Tracker behaviour: only if explicitly enabled. */
-      if (!lr._trackerOn) return;
-      /* PHASE-SPRINT Task 4: One-tap flow. A single tap on the map immediately
-         records the shot at the tapped location. No arming step needed.
-         stRecordLocation handles start=lastShot/tee, end=lngLat, GPS-agnostic. */
-      var rec = null;
-      if (typeof window.stRecordLocation === 'function') {
-        try { rec = window.stRecordLocation(lngLat); } catch(e) {}
-      }
-      if (rec) {
-        /* Draw dispersion line: start → end (aim = end in one-tap flow, so
-           green line and red line overlap — both drawn for API consistency). */
-        if (lr._mapInstance && typeof lr._mapInstance.setDispersionLines === 'function') {
-          try {
-            lr._mapInstance.setDispersionLines({
-              startLL: rec.gps_flight.startLngLat,
-              aimLL:   rec.gps_flight.endLngLat,
-              endLL:   rec.gps_flight.endLngLat
-            });
-          } catch(e2) {}
-        }
-        /* Refresh line baseline so next shot starts from this end point. */
-        _gvRefreshLineStart();
-        var sNow = lr.players[lr.curPlayer].scores[lr.curHole];
-        var nNow = (sNow && Array.isArray(sNow.shots)) ? sNow.shots.length : 1;
-        _gvShowToast(
-          'Shot ' + nNow + ': ' + Math.round(rec.gps_flight.distanceYds) + 'y to ' + (rec.lie || 'unknown'),
-          'success'
-        );
-        if (rec.lie === 'green' && !_puttMode) _puttMode = true;
-      } else {
-        _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
-      }
-
-      /* PHASE-SPRINT: Old two-tap arm flow deprecated below — preserved as comment.
+  /* LR-EXTRAS: _onAimChange wrap is now installed in _gvInstallAimWrap(), called
+     from _renderMinimap after _lrMapMount() guarantees _mapInstance exists.
+     Installing here was too early — _mapInstance may be null on first open.
+     OLD inline wrap preserved as comment below for reference. */
+  /* PHASE-SPRINT: Old two-tap arm flow deprecated below — preserved as comment.
       // var armedAlready = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
       // if (armedAlready) return;
       // if (lr._mapInstance && typeof lr._mapInstance.clearDispersionLines === 'function') {
@@ -270,8 +270,6 @@ function gpsViewOpen() {
       // }
       // if (typeof gpsViewRender === 'function') gpsViewRender();
       */
-    };
-  }
 
   /* LR-EXTRAS: wrap MapView's onGpsTick so gps-view's _gpsLast stays fresh as
      the user walks. Without this, _gpsLast is seeded once at gpsViewOpen and
@@ -843,6 +841,9 @@ function _renderMinimap() {
     if (typeof window._lrMapMount === 'function') {
       try { window._lrMapMount(); } catch(e) { /* surfaced on next tick if it failed */ }
     }
+    /* Install _onAimChange wrap here, after _lrMapMount ensures _mapInstance exists.
+       Guard: only install once per GPS view session (_gvOriginalAimCb === null). */
+    _gvInstallAimWrap();
     /* PHASE-SPRINT Task 3: ResizeObserver replaces the 50ms setTimeout in gpsViewOpen.
        We attach here because this is the first moment #gpsMapCanvas exists in the DOM.
        Fires once when the canvas gains real dimensions, calls map.resize(), then
