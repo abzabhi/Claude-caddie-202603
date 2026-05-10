@@ -15,17 +15,22 @@
 */
 
 import { geomDistanceYds, geomBearingDeg, geomLieAtPoint, geomPointInPolygon,
-         geomStartGpsWatch, geomStopGpsWatch, geomGetHazardsInPlay } from './geomap.js';
+         geomStartGpsWatch, geomStopGpsWatch, geomGetHazardsInPlay,
+         /* UNIFY-MAP — shared hazard meta + hole lookup */
+         HAZARD_META, geomGetHoleEntry } from './geomap.js';
 
-/* Hazard classification table — extensible. Add a row here to surface a new
-   hazard type in the GPS view's "in play" list. No other code change needed. */
+/* UNIFY-MAP — GPS_HAZARDS table replaced by shared HAZARD_META from geomap.js.
+   Behavior is byte-identical: same keys (bunker, water, water_hazard,
+   lateral_water_hazard, woods), same labels, icons, colors. Original preserved
+   per comment-don't-delete:
 var GPS_HAZARDS = {
   bunker:                { label: 'Bunker', icon: '\u26F1', color: '#d4a017' },
   water:                 { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
   lateral_water_hazard:  { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
-  water_hazard:          { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },  /* LR-EXTRAS: CDN schema name */
+  water_hazard:          { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
   woods:                 { label: 'Woods',  icon: '\uD83C\uDF32', color: '#3b6d11' }
 };
+*/
 
 /* Geometry data-access helpers (shape: {holes:{key:{ref,tee,green,line,bounds}}, polygons:FC}). */
 function _gvGetGeo() {
@@ -35,6 +40,10 @@ function _gvGetGeo() {
     ? lr._mapInstance.getGeometry()
     : (lr._mapInstance._geo || null);
 }
+/* UNIFY-MAP — _gvHoleEntry retained as a thin wrapper around shared
+   geomGetHoleEntry. The wrapper preserves all existing callsites (which pass
+   only `geo` and rely on the function to look up the current hole from
+   window.lrState). Original lookup loop preserved per comment-don't-delete:
 function _gvHoleEntry(geo) {
   var lr = window.lrState;
   if (!geo || !geo.holes || !lr) return null;
@@ -43,6 +52,12 @@ function _gvHoleEntry(geo) {
     if (String(geo.holes[key].ref) === want) return geo.holes[key];
   }
   return null;
+}
+*/
+function _gvHoleEntry(geo) {
+  var lr = window.lrState;
+  if (!lr) return null;
+  return geomGetHoleEntry(geo, lr.curHole + 1);
 }
 /* _gvPolyCentroid — moved to geomap.js as _geomPolyCentroid (DRY refactor).
    Preserved per "comment, don't delete" rule.
@@ -1099,7 +1114,8 @@ function _renderHazards() {
       return '<div style="font-size:.62rem;color:var(--tx3);padding:6px 0">None</div>';
     }
     return rows.map(function(rw) {
-      var meta = GPS_HAZARDS[rw.typ];
+      /* UNIFY-MAP — GPS_HAZARDS replaced by shared HAZARD_META. Original: var meta = GPS_HAZARDS[rw.typ]; */
+      var meta = HAZARD_META[rw.typ];
       return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--br);font-size:.65rem">'
         +   '<span style="color:' + meta.color + '">' + meta.icon + '</span>'
         +   '<span style="color:var(--tx);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + meta.label + '</span>'
