@@ -33,8 +33,8 @@ var HAZARD_DICT = {
 // Minimum bearing change (degrees) across the full centreline to call a dogleg.
 var DOGLEG_THRESHOLD_DEG = 20;
 
-// Corridor half-width in yards — matches gps-view _gvCorridorCheck perpYds <= 40.
-var CORRIDOR_WIDTH_YDS = 40;
+// Corridor half-width in yards — matches gps-view _gvCorridorCheck perpYds <= 25.
+var CORRIDOR_WIDTH_YDS = 25;
 
 // Green zone: hazard centroid within this direct radius of the green anchor is flagged green-zone.
 // Matches gps-view philosophy: same geometry, direct distance, 30-yard radius.
@@ -261,10 +261,11 @@ function _corridorCheck(startLL, endLL, hazardCentroid) {
  *
  * Each descriptor: { label: string, side: string, yds: number, nearGreen: boolean }
  */
-function _holeHazards(hole, allFeatures) {
+function _holeHazards(hole, allFeatures, ownerMap) {
   if (!hole.line || hole.line.length < 2) return [];
   var tee   = hole.line[0];
   var green = Array.isArray(hole.green) ? hole.green : hole.line[hole.line.length - 1];
+  var holeNum = parseInt(hole.ref, 10);
 
   var hazards = [];
 
@@ -274,6 +275,9 @@ function _holeHazards(hole, allFeatures) {
 
     var golfType = f.properties.golf;
     if (HAZARD_TYPES.indexOf(golfType) === -1) continue;
+
+    /* Exclusive assignment: skip hazards whose closest centreline belongs to another hole. */
+    if (ownerMap && ownerMap.has(f) && ownerMap.get(f) !== holeNum) continue;
 
     var c = _centroid(f);
     if (!c) continue;
@@ -343,6 +347,38 @@ function buildGeoSummaries(geo) {
 
   var allFeatures = (geo.polygons && geo.polygons.features) || [];
 
+  /* Pre-computation: build a Map<featureObject, ownerHoleNum> assigning each
+     hazard to the hole whose centreline is mathematically closest. This prevents
+     bunkers between adjacent fairways from being claimed by both holes.
+     Uses turf.nearestPointOnLine for accurate perpendicular distance; only runs
+     once per course load so performance cost is acceptable. */
+  var ownerMap = new Map();
+  if (window.turf && typeof window.turf.nearestPointOnLine === 'function') {
+    var holeKeys = Object.keys(geo.holes);
+    for (var fi = 0; fi < allFeatures.length; fi++) {
+      var feat = allFeatures[fi];
+      if (!feat || !feat.properties) continue;
+      if (HAZARD_TYPES.indexOf(feat.properties.golf) === -1) continue;
+      var fc = _centroid(feat);
+      if (!fc) continue;
+      var minD = Infinity;
+      var ownerNum = null;
+      for (var hi = 0; hi < holeKeys.length; hi++) {
+        var hEntry = geo.holes[holeKeys[hi]];
+        if (!hEntry || !hEntry.line || hEntry.line.length < 2) continue;
+        var hNum = parseInt(hEntry.ref, 10);
+        if (isNaN(hNum)) continue;
+        try {
+          var tLine = window.turf.lineString(hEntry.line);
+          var nearest = window.turf.nearestPointOnLine(tLine, window.turf.point(fc));
+          var d = _yds(fc, nearest.geometry.coordinates);
+          if (d !== null && d < minD) { minD = d; ownerNum = hNum; }
+        } catch (e) {}
+      }
+      if (ownerNum !== null) ownerMap.set(feat, ownerNum);
+    }
+  }
+
   var keys = Object.keys(geo.holes);
   for (var k = 0; k < keys.length; k++) {
     var hole = geo.holes[keys[k]];
@@ -354,8 +390,8 @@ function buildGeoSummaries(geo) {
     // 1. Centreline analysis
     var cl = _analysecentreline(hole.line);
 
-    // 2. Hazard assignment
-    var hazards = _holeHazards(hole, allFeatures);
+    // 2. Hazard assignment (ownerMap filters cross-fairway claims)
+    var hazards = _holeHazards(hole, allFeatures, ownerMap);
 
     // 3. Non-green hazards (fairway / approach zone)
     var fairwayHazards = hazards.filter(function (h) { return !h.nearGreen; });
