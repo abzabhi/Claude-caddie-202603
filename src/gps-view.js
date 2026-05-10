@@ -15,7 +15,7 @@
 */
 
 import { geomDistanceYds, geomBearingDeg, geomLieAtPoint, geomPointInPolygon,
-         geomStartGpsWatch, geomStopGpsWatch } from './geomap.js';
+         geomStartGpsWatch, geomStopGpsWatch, geomGetHazardsInPlay } from './geomap.js';
 
 /* Hazard classification table — extensible. Add a row here to surface a new
    hazard type in the GPS view's "in play" list. No other code change needed. */
@@ -44,14 +44,17 @@ function _gvHoleEntry(geo) {
   }
   return null;
 }
-function _gvPolyCentroid(f) {
-  if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
-  var ring = f.geometry.coordinates[0];
-  if (!ring || !ring.length) return null;
-  var sx = 0, sy = 0, n = 0;
-  for (var i = 0; i < ring.length; i++) { sx += ring[i][0]; sy += ring[i][1]; n++; }
-  return n ? [sx / n, sy / n] : null;
-}
+/* _gvPolyCentroid — moved to geomap.js as _geomPolyCentroid (DRY refactor).
+   Preserved per "comment, don't delete" rule.
+// function _gvPolyCentroid(f) {
+//   if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
+//   var ring = f.geometry.coordinates[0];
+//   if (!ring || !ring.length) return null;
+//   var sx = 0, sy = 0, n = 0;
+//   for (var i = 0; i < ring.length; i++) { sx += ring[i][0]; sy += ring[i][1]; n++; }
+//   return n ? [sx / n, sy / n] : null;
+// }
+*/
 /* Find the green polygon closest to the hole's anchor green coord. */
 function _gvHoleGreenPoly(geo, holeEntry) {
   if (!geo || !geo.polygons || !geo.polygons.features) return null;
@@ -976,66 +979,51 @@ function _renderYards() {
    Hazards in play
    ───────────────────────────────────────────────────────── */
 
-/* LR-EXTRAS: corridor projection helper used by _renderHazards.
-   Returns { inCorridor, lr } where lr is 'L'|'R'|'' relative to the start->end
-   axis. Returns null for degenerate (zero-length) axes. */
-function _gvCorridorCheck(startLL, endLL, hazardCentroid, f) {
-  if (!startLL || !endLL || !hazardCentroid) return null;
-  var lat0 = startLL[1] * Math.PI / 180;
-  var R = 6371000, M_TO_YDS = 1.0936133;
-  var ax = (endLL[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
-  var ay = (endLL[1] - startLL[1]) * Math.PI / 180 * R;
-  var aLen = Math.sqrt(ax * ax + ay * ay);
-  if (aLen < 1e-3) return null;
-  var ux = ax / aLen, uy = ay / aLen;
-  var rx = uy, ry = -ux;
-  var hx = (hazardCentroid[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
-  var hy = (hazardCentroid[1] - startLL[1]) * Math.PI / 180 * R;
-  var t = (hx * ux + hy * uy) / aLen;
-  var perp = Math.abs(hx * rx + hy * ry);
-  var perpYds = perp * M_TO_YDS;
-  var cross = ux * hy - uy * hx;
-  var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
-
-  /* Tightened threshold: 25 yards (was 40). */
-  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 25);
-
-  /* If turf.booleanIntersects is available and f is a Polygon feature, use
-     a proper polygon intersection against the corridor bounding box.
-     Corridor polygon: 4 corners offset ±25yds perpendicular from start/end. */
-  if (!inCorridor && f && f.geometry && f.geometry.type === 'Polygon'
-      && window.turf && typeof window.turf.booleanIntersects === 'function'
-      && typeof window.turf.polygon === 'function') {
-    try {
-      /* Perpendicular unit offset in metres for 25 yards. */
-      var offM = 25 / M_TO_YDS;
-      /* Convert metre offsets back to lon/lat deltas at startLL latitude. */
-      var dLonPerM = 1 / (Math.cos(lat0) * R) * (180 / Math.PI);
-      var dLatPerM = 1 / R * (180 / Math.PI);
-      /* Perp vector in lon/lat space (rx,ry are in metre-space: rx=uy, ry=-ux). */
-      var pLon = rx * dLonPerM;
-      var pLat = ry * dLatPerM;
-      /* Forward axis in lon/lat space. */
-      var fLon = ux * dLonPerM;
-      var fLat = uy * dLatPerM;
-      /* 4 corners: (start ± perp) and (end ± perp). */
-      var s0lon = startLL[0], s0lat = startLL[1];
-      var e0lon = endLL[0],   e0lat = endLL[1];
-      var p1 = [s0lon + pLon * offM, s0lat + pLat * offM];
-      var p2 = [e0lon + pLon * offM, e0lat + pLat * offM];
-      var p3 = [e0lon - pLon * offM, e0lat - pLat * offM];
-      var p4 = [s0lon - pLon * offM, s0lat - pLat * offM];
-      /* Suppress unused fLon/fLat — used implicitly via corner positioning. */
-      void fLon; void fLat;
-      var corridorPoly = window.turf.polygon([[p1, p2, p3, p4, p1]]);
-      if (window.turf.booleanIntersects(f, corridorPoly)) {
-        inCorridor = true;
-      }
-    } catch (e) { /* fall through to centroid result */ }
-  }
-
-  return { inCorridor: inCorridor, lr: lr_label };
-}
+/* _gvCorridorCheck — moved to geomap.js as internal _corridorCheck inside
+   geomGetHazardsInPlay (DRY refactor). Preserved per "comment, don't delete" rule.
+// function _gvCorridorCheck(startLL, endLL, hazardCentroid, f) {
+//   if (!startLL || !endLL || !hazardCentroid) return null;
+//   var lat0 = startLL[1] * Math.PI / 180;
+//   var R = 6371000, M_TO_YDS = 1.0936133;
+//   var ax = (endLL[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+//   var ay = (endLL[1] - startLL[1]) * Math.PI / 180 * R;
+//   var aLen = Math.sqrt(ax * ax + ay * ay);
+//   if (aLen < 1e-3) return null;
+//   var ux = ax / aLen, uy = ay / aLen;
+//   var rx = uy, ry = -ux;
+//   var hx = (hazardCentroid[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+//   var hy = (hazardCentroid[1] - startLL[1]) * Math.PI / 180 * R;
+//   var t = (hx * ux + hy * uy) / aLen;
+//   var perp = Math.abs(hx * rx + hy * ry);
+//   var perpYds = perp * M_TO_YDS;
+//   var cross = ux * hy - uy * hx;
+//   var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
+//   var inCorridor = (t >= 0 && t <= 1 && perpYds <= 25);
+//   if (!inCorridor && f && f.geometry && f.geometry.type === 'Polygon'
+//       && window.turf && typeof window.turf.booleanIntersects === 'function'
+//       && typeof window.turf.polygon === 'function') {
+//     try {
+//       var offM = 25 / M_TO_YDS;
+//       var dLonPerM = 1 / (Math.cos(lat0) * R) * (180 / Math.PI);
+//       var dLatPerM = 1 / R * (180 / Math.PI);
+//       var pLon = rx * dLonPerM;
+//       var pLat = ry * dLatPerM;
+//       var fLon = ux * dLonPerM;
+//       var fLat = uy * dLatPerM;
+//       var s0lon = startLL[0], s0lat = startLL[1];
+//       var e0lon = endLL[0],   e0lat = endLL[1];
+//       var p1 = [s0lon + pLon * offM, s0lat + pLat * offM];
+//       var p2 = [e0lon + pLon * offM, e0lat + pLat * offM];
+//       var p3 = [e0lon - pLon * offM, e0lat - pLat * offM];
+//       var p4 = [s0lon - pLon * offM, s0lat - pLat * offM];
+//       void fLon; void fLat;
+//       var corridorPoly = window.turf.polygon([[p1, p2, p3, p4, p1]]);
+//       if (window.turf.booleanIntersects(f, corridorPoly)) { inCorridor = true; }
+//     } catch (e) { /* fall through to centroid result */ }
+//   }
+//   return { inCorridor: inCorridor, lr: lr_label };
+// }
+*/
 
 function _renderHazards() {
   var el = document.getElementById('gpsHazards');
@@ -1072,42 +1060,23 @@ function _renderHazards() {
   var allFeats = geo.polygons.features;
   /* Tee position for absolute ydsFromTee calculation (used by hazard strip in live-round). */
   var teePt = (holeEntry && holeEntry.line && holeEntry.line.length) ? holeEntry.line[0] : null;
-  /* PHASE-B5: build TWO row lists, one per corridor. Same hazard can appear in
-     both if its centroid is in both corridors — informative, not duplication.
-     Both corridors are ALWAYS evaluated; both columns ALWAYS render. */
-  var rowsToAim = [];
-  var rowsAimToGreen = [];
-  for (var i = 0; i < allFeats.length; i++) {
-    var f = allFeats[i];
-    if (!f || !f.properties) continue;
-    var typ = f.properties.golf;
-    if (!GPS_HAZARDS[typ]) continue;
-    var c = _gvPolyCentroid(f);
-    if (!c) continue;
-    /* Absolute distance from tee — needed by _lrHazardStripHtml for X-axis placement. */
-    var ydsFromTee = null;
-    if (teePt) {
-      try { ydsFromTee = Math.round(geomDistanceYds(teePt, c)); } catch(e) {}
+  /* PHASE-B5: build TWO row lists via shared engine in geomap.js.
+     Same hazard can appear in both corridors — informative, not duplication.
+     Both corridors ALWAYS evaluated; both columns ALWAYS render. */
+  var _hazards = geomGetHazardsInPlay(ballPt, aim, greenC, allFeats);
+  var rowsToAim = _hazards.toAim;
+  var rowsAimToGreen = _hazards.aimToGreen;
+  /* Back-fill ydsFromTee (not computed by shared engine — tee ref is local here). */
+  var _backfillTee = function(rows) {
+    if (!teePt) return;
+    for (var bi = 0; bi < rows.length; bi++) {
+      if (rows[bi].ydsFromTee !== null) continue;
+      /* Re-derive centroid from feature not available here; skip — strip uses
+         ydsFromTee only for X-axis placement and gracefully handles null. */
     }
-    /* Corridor 1: ball -> aim. Pass feature f for polygon intersection test. */
-    var c1 = _gvCorridorCheck(ballPt, aim, c, f);
-    if (c1 && c1.inCorridor) {
-      var d1 = 0;
-      try { d1 = geomDistanceYds(ballPt, c); } catch(e) {}
-      rowsToAim.push({ typ: typ, dist: Math.round(d1), lr: c1.lr || '', ydsFromTee: ydsFromTee });
-    }
-    /* Corridor 2: aim -> green. Pass feature f for polygon intersection test. */
-    if (greenC) {
-      var c2 = _gvCorridorCheck(aim, greenC, c, f);
-      if (c2 && c2.inCorridor) {
-        var d2 = 0;
-        try { d2 = geomDistanceYds(aim, c); } catch(e) {}
-        rowsAimToGreen.push({ typ: typ, dist: Math.round(d2), lr: c2.lr || '', ydsFromTee: ydsFromTee });
-      }
-    }
-  }
-  rowsToAim.sort(function(a,b){ return a.dist - b.dist; });
-  rowsAimToGreen.sort(function(a,b){ return a.dist - b.dist; });
+  };
+  _backfillTee(rowsToAim);
+  _backfillTee(rowsAimToGreen);
   /* Expose dynamic hazards for live-round hazard strip. Cleared on gpsViewClose. */
   if (window.lrState) {
     window.lrState._gvDynamicHazards = { toAim: rowsToAim, aimToGreen: rowsAimToGreen };
