@@ -514,6 +514,8 @@ function _vizMapRenderAskb() {
   if (!map) return;
   var hcp = getHandicap() || 25;
   var handed = profile.handed || 'Right-handed';
+  vizMapState.shotWarnings = {};
+  var _hazardTags = { bunker: 'Bunker', water_hazard: 'Water', lateral_water_hazard: 'Water', woods: 'Trees' };
   var html = '';
   for (var p = 0; p < 3; p++) {
     if (!vizPathVisible[p]) continue;
@@ -534,6 +536,32 @@ function _vizMapRenderAskb() {
       var color = ['#f1c40f','#e67e22','#3498db'][p];
       var openG = '<g transform="translate(' + pt.x + ',' + pt.y + ')">';
       if (showEllipse) {
+        /* Turf hazard intersection */
+        if (vizMapState.geo && vizMapState.geo.polygons && vizMapState.geo.polygons.features) {
+          try {
+            var prevLL = j === 0
+              ? (_vizHoleAxis(_vizCurHoleGeo()) ? (_vizHoleAxis(_vizCurHoleGeo()).tee || wps[j]) : wps[j])
+              : wps[j - 1];
+            var brg = window.turf.bearing(window.turf.point(prevLL), window.turf.point(wps[j]));
+            var ellipsePoly = window.turf.ellipse(
+              window.turf.point(wps[j]),
+              (disp.rxR + disp.rxL) / 2,
+              (disp.dl + disp.ds) / 2,
+              { angle: brg + (disp.tilt || 0), units: 'yards', steps: 32 }
+            );
+            var foundHazards = new Set();
+            vizMapState.geo.polygons.features.forEach(function(f) {
+              var tag = f.properties && (f.properties.golf || f.properties.natural);
+              if (_hazardTags[tag] && window.turf.booleanIntersects(ellipsePoly, f)) {
+                foundHazards.add(_hazardTags[tag]);
+              }
+            });
+            if (foundHazards.size) {
+              vizMapState.shotWarnings[p + '-' + j] = Array.from(foundHazards);
+            }
+          } catch (e) { /* turf errors must not break render */ }
+        }
+
         html += openG
           + vizRenderEllipse(p*10+j, 0, 0,
               disp.rxR*pxPerYd, disp.rxL*pxPerYd, disp.dl*pxPerYd, disp.ds*pxPerYd,
@@ -606,6 +634,9 @@ function _vizMapRenderChainPanel() {
       html += '<span style="color:var(--tx3);min-width:18px">' + (s+1) + '.</span>';
       html += '<select onchange="vizUpdatePath(' + p + ',' + s + ',this.value)" style="font-size:.62rem;min-width:90px">' + clubOpts + '</select>';
       if (distYds) html += '<span style="color:var(--tx3);font-size:.58rem">' + distYds + '</span>';
+      if (vizMapState.shotWarnings && vizMapState.shotWarnings[p + '-' + s] && vizMapState.shotWarnings[p + '-' + s].length) {
+        html += '<span style="color:var(--danger);font-size:.58rem;font-weight:600;margin-left:4px">\u26A0 ' + vizMapState.shotWarnings[p + '-' + s].join(', ') + '</span>';
+      }
       html += '<button onclick="_vizMapRemoveShot(' + p + ',' + s + ')" style="font-size:.6rem;padding:1px 5px;background:transparent;border:1px solid var(--br);border-radius:3px;cursor:pointer;color:var(--tx3)">\u00D7</button>';
       html += '</div>';
     }
