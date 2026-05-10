@@ -358,14 +358,15 @@ return lrState.players.some(p=>p.handicap!==null);
    Returns HTML for a horizontal strip plotting parsed geoSummary hazards
    and the dogleg apex along the hole's tee->green axis. Empty string when
    no geoSummary or no hole yardage to scale against. Inline styling — does
-   not touch styles.css. Color palette: bunker=sand, water=blue, rough/woods=earth. */
+   not touch styles.css. Color palette: bunker=sand, water=blue, rough/woods=earth.
+   When GPS view is active, reads window.lrState._gvDynamicHazards (set by
+   gps-view.js _renderHazards) and plots live Turf-calculated positions instead
+   of parsing the static geoSummary string. Falls back to parseGeoSummary when
+   dynamic data is absent (GPS view closed). */
 function _lrHazardStripHtml(hole) {
-  if (!hole || !hole.geoSummary) return '';
+  if (!hole) return '';
   var totalYds = +hole.yards || 0;
   if (totalYds <= 0) return '';
-  var parsed;
-  try { parsed = parseGeoSummary(hole.geoSummary); } catch (e) { return ''; }
-  if (!parsed) return '';
 
   var COLORS = {
     bunker: '#d4a045',
@@ -375,6 +376,90 @@ function _lrHazardStripHtml(hole) {
   };
 
   var ticks = '';
+
+  /* ── Dynamic path: GPS view is open and has computed live hazard arrays ── */
+  var dynHaz = window.lrState && window.lrState._gvDynamicHazards;
+  if (dynHaz) {
+    /* Deduplicate: toAim wins over aimToGreen at same (typ + ydsFromTee). */
+    var seen = {};
+
+    /* toAim — solid filled ticks */
+    var toAim = dynHaz.toAim || [];
+    for (var i = 0; i < toAim.length; i++) {
+      var hz = toAim[i];
+      if (hz.ydsFromTee === null || hz.ydsFromTee === undefined) continue;
+      var key = hz.typ + '-' + hz.ydsFromTee;
+      if (seen[key]) continue;
+      seen[key] = true;
+      var pct = Math.max(0, Math.min(100, (hz.ydsFromTee / totalYds) * 100));
+      var color = COLORS[hz.typ] || '#888';
+      var topPos = hz.lr === 'L' ? '2px' : 'auto';
+      var botPos = hz.lr === 'R' ? '2px' : 'auto';
+      ticks += '<div title="' + (hz.typ || '') + (hz.lr ? '-' + hz.lr : '') + ' @ ' + hz.ydsFromTee + 'y (' + hz.dist + 'y from ball)" '
+            +  'style="position:absolute;left:' + pct.toFixed(1) + '%;'
+            +  (topPos !== 'auto' ? 'top:' + topPos + ';' : '')
+            +  (botPos !== 'auto' ? 'bottom:' + botPos + ';' : '')
+            +  'transform:translateX(-50%);width:6px;height:10px;background:' + color + ';'
+            +  'border-radius:1px;pointer-events:none"></div>';
+    }
+
+    /* aimToGreen — hollow/faded ticks (past the landing zone) */
+    var aimToGreen = dynHaz.aimToGreen || [];
+    for (var j = 0; j < aimToGreen.length; j++) {
+      var hz2 = aimToGreen[j];
+      if (hz2.ydsFromTee === null || hz2.ydsFromTee === undefined) continue;
+      var key2 = hz2.typ + '-' + hz2.ydsFromTee;
+      if (seen[key2]) continue; /* toAim already drew this one solid */
+      seen[key2] = true;
+      var pct2 = Math.max(0, Math.min(100, (hz2.ydsFromTee / totalYds) * 100));
+      var color2 = COLORS[hz2.typ] || '#888';
+      var topPos2 = hz2.lr === 'L' ? '2px' : 'auto';
+      var botPos2 = hz2.lr === 'R' ? '2px' : 'auto';
+      ticks += '<div title="' + (hz2.typ || '') + (hz2.lr ? '-' + hz2.lr : '') + ' @ ' + hz2.ydsFromTee + 'y (past aim)" '
+            +  'style="position:absolute;left:' + pct2.toFixed(1) + '%;'
+            +  (topPos2 !== 'auto' ? 'top:' + topPos2 + ';' : '')
+            +  (botPos2 !== 'auto' ? 'bottom:' + botPos2 + ';' : '')
+            +  'transform:translateX(-50%);width:6px;height:10px;'
+            +  'border:1px solid ' + color2 + ';background:transparent;opacity:0.5;'
+            +  'border-radius:1px;pointer-events:none"></div>';
+    }
+
+    /* Green dot: always from static geoSummary (dynamic corridors don't cover greenside). */
+    var greenDot = '';
+    var parsedGreen = [];
+    if (hole.geoSummary) {
+      try { parsedGreen = parseGeoSummary(hole.geoSummary).green || []; } catch(e) {}
+    }
+    if (parsedGreen.length) {
+      var gColor = COLORS[parsedGreen[0].label] || '#888';
+      greenDot = '<div title="green: ' + parsedGreen.map(function(g){ return g.label + '-' + g.side; }).join(',') + '" '
+              +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
+              +  'width:8px;height:8px;border-radius:50%;background:' + gColor + ';border:1px solid var(--bg)"></div>';
+    } else {
+      greenDot = '<div title="green: open" '
+              +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
+              +  'width:8px;height:8px;border-radius:50%;background:var(--ac2);border:1px solid var(--bg)"></div>';
+    }
+
+    return '<div class="card" style="margin-bottom:0;padding:8px 10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;font-size:.55rem;color:var(--tx3);margin-bottom:6px;font-family:\'DM Mono\',monospace">'
+      +   '<span>TEE</span><span>HAZARDS</span><span>GREEN</span>'
+      + '</div>'
+      + '<div style="position:relative;height:22px;background:var(--gr3);border-radius:3px;border:1px solid var(--br)">'
+      +   ticks + greenDot
+      + '</div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:.5rem;color:var(--tx3);margin-top:3px;font-family:\'DM Mono\',monospace">'
+      +   '<span>0</span><span>' + totalYds + ' yds</span>'
+      + '</div>'
+    + '</div>';
+  }
+
+  /* ── Static fallback path: parse geoSummary string as before ── */
+  if (!hole.geoSummary) return '';
+  var parsed;
+  try { parsed = parseGeoSummary(hole.geoSummary); } catch (e) { return ''; }
+  if (!parsed) return '';
+
   // Dogleg apex tick (rendered as a centred chevron mark on the strip)
   if (parsed.shape && parsed.shape.type === 'dogleg') {
     var dPct = Math.max(0, Math.min(100, (parsed.shape.yds / totalYds) * 100));
@@ -384,29 +469,29 @@ function _lrHazardStripHtml(hole) {
           +  'font-size:.6rem;color:var(--tx2);pointer-events:none">' + arrow + '</div>';
   }
   // Fairway hazards: tick above (left) or below (right) midline
-  for (var i = 0; i < parsed.hazards.length; i++) {
-    var hz = parsed.hazards[i];
-    if (typeof hz.yds !== 'number' || hz.yds <= 0) continue;
-    var pct = Math.max(0, Math.min(100, (hz.yds / totalYds) * 100));
-    var color = COLORS[hz.label] || '#888';
-    var topPos = hz.side === 'left' ? '2px' : 'auto';
-    var botPos = hz.side === 'right' ? '2px' : 'auto';
-    ticks += '<div title="' + hz.label + '-' + hz.side + ' @ ' + hz.yds + 'y" '
-          +  'style="position:absolute;left:' + pct.toFixed(1) + '%;'
-          +  (topPos !== 'auto' ? 'top:' + topPos + ';' : '')
-          +  (botPos !== 'auto' ? 'bottom:' + botPos + ';' : '')
-          +  'transform:translateX(-50%);width:6px;height:10px;background:' + color + ';'
+  for (var si = 0; si < parsed.hazards.length; si++) {
+    var shz = parsed.hazards[si];
+    if (typeof shz.yds !== 'number' || shz.yds <= 0) continue;
+    var spct = Math.max(0, Math.min(100, (shz.yds / totalYds) * 100));
+    var scolor = COLORS[shz.label] || '#888';
+    var stopPos = shz.side === 'left' ? '2px' : 'auto';
+    var sbotPos = shz.side === 'right' ? '2px' : 'auto';
+    ticks += '<div title="' + shz.label + '-' + shz.side + ' @ ' + shz.yds + 'y" '
+          +  'style="position:absolute;left:' + spct.toFixed(1) + '%;'
+          +  (stopPos !== 'auto' ? 'top:' + stopPos + ';' : '')
+          +  (sbotPos !== 'auto' ? 'bottom:' + sbotPos + ';' : '')
+          +  'transform:translateX(-50%);width:6px;height:10px;background:' + scolor + ';'
           +  'border-radius:1px;pointer-events:none"></div>';
   }
   // Green flag at 100% — show colored dot if green has hazards
-  var greenDot = '';
+  var sgreenDot = '';
   if (parsed.green && parsed.green.length) {
-    var gColor = COLORS[parsed.green[0].label] || '#888';
-    greenDot = '<div title="green: ' + parsed.green.map(function(g){return g.label+'-'+g.side;}).join(',') + '" '
+    var sgColor = COLORS[parsed.green[0].label] || '#888';
+    sgreenDot = '<div title="green: ' + parsed.green.map(function(g){ return g.label + '-' + g.side; }).join(',') + '" '
             +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
-            +  'width:8px;height:8px;border-radius:50%;background:' + gColor + ';border:1px solid var(--bg)"></div>';
+            +  'width:8px;height:8px;border-radius:50%;background:' + sgColor + ';border:1px solid var(--bg)"></div>';
   } else {
-    greenDot = '<div title="green: open" '
+    sgreenDot = '<div title="green: open" '
             +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
             +  'width:8px;height:8px;border-radius:50%;background:var(--ac2);border:1px solid var(--bg)"></div>';
   }
@@ -416,7 +501,7 @@ function _lrHazardStripHtml(hole) {
     +   '<span>TEE</span><span>HAZARDS</span><span>GREEN</span>'
     + '</div>'
     + '<div style="position:relative;height:22px;background:var(--gr3);border-radius:3px;border:1px solid var(--br)">'
-    +   ticks + greenDot
+    +   ticks + sgreenDot
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;font-size:.5rem;color:var(--tx3);margin-top:3px;font-family:\'DM Mono\',monospace">'
     +   '<span>0</span><span>' + totalYds + ' yds</span>'
