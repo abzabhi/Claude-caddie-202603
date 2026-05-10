@@ -1384,6 +1384,238 @@ function _geomLocateInvokeSelect(osmId, center) {
 }
 
 // -----------------------------------------------------------------------------
+// UNIFY-MAP — Shared hazard meta + unification primitives
+//
+// Centralised constants and helpers used by all map surfaces (live-round,
+// gps-view, courses preview, viz) and by the static geoSummary export.
+// Goal: every surface initializes from the same auto aim point, classifies
+// the same hazard types, uses the same hazard meta table, and looks up
+// the same hole entry.
+//
+// Pure additions — no existing geomap.js function is modified by introducing
+// these. Consumers migrate to these in subsequent steps.
+// -----------------------------------------------------------------------------
+
+/**
+ * UNIFY-MAP — canonical OSM hazard tag whitelist.
+ * Truthy = treated as a hazard by corridor / hazards-in-play logic.
+ * Includes both water variants present in CDN course data.
+ */
+export var HAZARD_TYPES = {
+  bunker:                true,
+  water:                 true,
+  water_hazard:          true,
+  lateral_water_hazard:  true,
+  woods:                 true
+};
+
+/**
+ * UNIFY-MAP — canonical hazard display meta.
+ * Keys must match HAZARD_TYPES. Water variants share the same display meta.
+ *
+ * Values:
+ *   label  — short human-readable name
+ *   icon   — single-char emoji/glyph (matches existing surfaces byte-for-byte)
+ *   color  — accent color used by hazard list rows / dots / icons
+ */
+export var HAZARD_META = {
+  bunker:                { label: 'Bunker', icon: '\u26F1',       color: '#d4a017' },
+  water:                 { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+  water_hazard:          { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+  lateral_water_hazard:  { label: 'Water',  icon: '\uD83D\uDCA7', color: '#3b82f6' },
+  woods:                 { label: 'Woods',  icon: '\uD83C\uDF32', color: '#3b6d11' }
+};
+
+/**
+ * UNIFY-MAP — normalise CDN water variants to a single display key.
+ * Returns the input unchanged for non-water types.
+ *
+ * @param {string} golfType raw `properties.golf` value from a polygon feature
+ * @returns {string}
+ */
+export function normalizeHazardType(golfType) {
+  if (golfType === 'water_hazard' || golfType === 'lateral_water_hazard') return 'water';
+  return golfType;
+}
+
+/**
+ * UNIFY-MAP — single-segment corridor check.
+ *
+ * Projects a hazard centroid onto the start→end axis and reports whether it
+ * falls within the 25-yard half-width corridor between the two endpoints
+ * (t in [0,1] along the axis). When a feature is supplied AND the centroid
+ * test misses, falls back to a Turf polygon-vs-corridor-rectangle
+ * booleanIntersects test (catches long thin water hazards whose centroid
+ * sits outside the corridor while the hazard itself crosses it).
+ *
+ * Math is byte-identical to the private _corridorCheck currently inside
+ * geomGetHazardsInPlay (which itself was moved from gps-view.js
+ * _gvCorridorCheck). The private copy remains in place for now; this public
+ * function exposes the same math for external consumers (live-round cold
+ * path, geoSummary, future surfaces).
+ *
+ * Same 25-yard threshold used everywhere in the codebase.
+ *
+ * @param {number[]} startLL  [lon, lat] corridor start
+ * @param {number[]} endLL    [lon, lat] corridor end
+ * @param {number[]} centroid [lon, lat] hazard centroid
+ * @param {object}   [feature] optional GeoJSON feature for polygon-intersect fallback
+ * @returns {{ inCorridor: boolean, lr: 'L'|'R'|'' } | null}
+ *   null when the axis is degenerate (start≈end) or any input is missing.
+ */
+export function geomCorridorCheck(startLL, endLL, centroid, feature) {
+  if (!startLL || !endLL || !centroid) return null;
+  var lat0 = startLL[1] * Math.PI / 180;
+  var R = 6371000;
+  var M_TO_YDS = 1.0936133;
+  var ax = (endLL[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+  var ay = (endLL[1] - startLL[1]) * Math.PI / 180 * R;
+  var aLen = Math.sqrt(ax * ax + ay * ay);
+  if (aLen < 1e-3) return null;
+  var ux = ax / aLen, uy = ay / aLen;
+  var rx = uy, ry = -ux;
+  var hx = (centroid[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+  var hy = (centroid[1] - startLL[1]) * Math.PI / 180 * R;
+  var t = (hx * ux + hy * uy) / aLen;
+  var perp = Math.abs(hx * rx + hy * ry);
+  var perpYds = perp * M_TO_YDS;
+  var cross = ux * hy - uy * hx;
+  var lr_label = cross > 0 ? 'L' : (cross < 0 ? 'R' : '');
+  var inCorridor = (t >= 0 && t <= 1 && perpYds <= 25);
+
+  /* Turf polygon intersection fallback for Polygon features. */
+  if (!inCorridor && feature && feature.geometry && feature.geometry.type === 'Polygon'
+      && window.turf && typeof window.turf.booleanIntersects === 'function'
+      && typeof window.turf.polygon === 'function') {
+    try {
+      var offM = 25 / M_TO_YDS;
+      var dLonPerM = 1 / (Math.cos(lat0) * R) * (180 / Math.PI);
+      var dLatPerM = 1 / R * (180 / Math.PI);
+      var pLon = rx * dLonPerM;
+      var pLat = ry * dLatPerM;
+      var fLon = ux * dLonPerM; void fLon;
+      var fLat = uy * dLatPerM; void fLat;
+      var s0lon = startLL[0], s0lat = startLL[1];
+      var e0lon = endLL[0],   e0lat = endLL[1];
+      var p1 = [s0lon + pLon * offM, s0lat + pLat * offM];
+      var p2 = [e0lon + pLon * offM, e0lat + pLat * offM];
+      var p3 = [e0lon - pLon * offM, e0lat - pLat * offM];
+      var p4 = [s0lon - pLon * offM, s0lat - pLat * offM];
+      var corridorPoly = window.turf.polygon([[p1, p2, p3, p4, p1]]);
+      if (window.turf.booleanIntersects(feature, corridorPoly)) inCorridor = true;
+    } catch (e) { /* fall through to centroid result */ }
+  }
+  return { inCorridor: inCorridor, lr: lr_label };
+}
+
+/**
+ * UNIFY-MAP — canonical hole-entry lookup by ref.
+ *
+ * Replaces the per-surface duplicates:
+ *   gps-view.js  _gvHoleEntry
+ *   viz.js       _vizCurHoleGeo
+ *   geoSummary's inline hole-lookup loops
+ *
+ * Tolerant of numeric or string holeNumber (matches `String(ref)` comparison
+ * used everywhere in the codebase).
+ *
+ * @param {object} geo         loaded geo (return of geomLoadByCourse)
+ * @param {string|number} holeNumber  1-indexed hole number
+ * @returns {object|null}  the matching hole entry { ref, tee, green, line, bounds, ... } or null
+ */
+export function geomGetHoleEntry(geo, holeNumber) {
+  if (!geo || !geo.holes || holeNumber == null) return null;
+  var want = String(holeNumber);
+  for (var key in geo.holes) {
+    if (geo.holes[key] && String(geo.holes[key].ref) === want) return geo.holes[key];
+  }
+  return null;
+}
+
+/**
+ * UNIFY-MAP — canonical auto aim point for a hole.
+ *
+ * Returns the centreline midpoint when the hole has a centreline polyline
+ * (turf.length / 2 + along), otherwise falls back to the geometric midpoint
+ * between tee (or override start) and green. Math is byte-identical to the
+ * inline formula currently in MapView._placeAimMarker.
+ *
+ * Used by every surface to initialize the aim reticle to the same spot,
+ * and by geoSummary to compute the hazard-in-play set the live surfaces
+ * show at hole open.
+ *
+ * @param {object} holeEntry  hole entry from geomGetHoleEntry — { tee, green, line }
+ * @param {number[]} [startOverride]  optional [lon,lat] to use instead of holeEntry.tee
+ *                                     (mirrors MapView's teeOverride behavior)
+ * @returns {number[]|null}  [lon, lat] or null when inputs are insufficient
+ */
+export function geomMidAim(holeEntry, startOverride) {
+  if (!holeEntry || !holeEntry.green) return null;
+  var startPt = startOverride || holeEntry.tee || (holeEntry.line && holeEntry.line[0]) || null;
+  if (!startPt && !holeEntry.line) return null;
+
+  if (holeEntry.line && holeEntry.line.length >= 2 && window.turf) {
+    try {
+      var ls   = window.turf.lineString(holeEntry.line);
+      var half = window.turf.length(ls, { units: 'kilometers' }) / 2;
+      return window.turf.along(ls, half, { units: 'kilometers' }).geometry.coordinates;
+    } catch (e) {
+      /* fall through to tee-green midpoint */
+    }
+  }
+  if (!startPt) return null;
+  return [(startPt[0] + holeEntry.green[0]) / 2, (startPt[1] + holeEntry.green[1]) / 2];
+}
+
+/**
+ * UNIFY-MAP — project a yardage along a hole's tee→green axis into a
+ * [lng, lat] coordinate, with optional perpendicular offset.
+ *
+ * Moved from geoSummary.js (where it was an internal helper) to geomap.js
+ * so it lives alongside the rest of the projection math. Body is
+ * byte-identical to the geoSummary original; geoSummary will re-import
+ * this in a later step. Math mirrors viz.js _vizFrameToLngLat:
+ * turf.destination along the tee→green bearing, then perpendicular
+ * destination for the offset.
+ *
+ * @param {object} geo                Live geo object (return of geomLoadByCourse)
+ * @param {number|string} holeNumber  Hole ref to look up in geo.holes
+ * @param {number} alongYds           Yards from tee along the centreline axis
+ * @param {number} offsetYds          Perp offset; positive = right, negative = left
+ * @returns {number[]|null}           [lng, lat] or null if inputs invalid
+ */
+export function geoYdsToLngLat(geo, holeNumber, alongYds, offsetYds) {
+  if (!geo || !geo.holes || !window.turf) return null;
+  if (typeof alongYds !== 'number' || isNaN(alongYds)) return null;
+  var off = (typeof offsetYds === 'number' && !isNaN(offsetYds)) ? offsetYds : 0;
+  var want = String(holeNumber);
+  var hole = null;
+  for (var key in geo.holes) {
+    if (geo.holes[key] && String(geo.holes[key].ref) === want) { hole = geo.holes[key]; break; }
+  }
+  if (!hole) return null;
+  var tee   = (hole.line && hole.line[0]) || null;
+  var green = Array.isArray(hole.green) ? hole.green
+            : (hole.line && hole.line[hole.line.length - 1]) || null;
+  if (!tee || !green) return null;
+  try {
+    var brg     = window.turf.bearing(window.turf.point(tee), window.turf.point(green));
+    var brgN    = ((brg % 360) + 360) % 360;
+    var fwdPt   = window.turf.destination(window.turf.point(tee), alongYds, brgN, { units: 'yards' });
+    if (off === 0) return fwdPt.geometry.coordinates;
+    var perpBrg = (brgN + 90 + 360) % 360;
+    var finalPt = window.turf.destination(fwdPt, off, perpBrg, { units: 'yards' });
+    return finalPt.geometry.coordinates;
+  } catch (e) {
+    return null;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// END UNIFY-MAP block — existing geomap.js continues below unchanged
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
 // Shared hazard corridor engine
 // -----------------------------------------------------------------------------
 
@@ -1520,6 +1752,14 @@ if (typeof window !== 'undefined') {
     geomGeocodeCity,  /* G4 */
     geomOpenLocateModal,  /* G5 */
     _geomLocateCitySearch, _geomLocatePanLoad, _geomLocateGpsLoad,
-    _geomLocateSkip, _geomLocatePickCourse  /* G5 -- inline onclick handlers */
+    _geomLocateSkip, _geomLocatePickCourse,  /* G5 -- inline onclick handlers */
+    /* UNIFY-MAP — unification primitives */
+    HAZARD_TYPES,
+    HAZARD_META,
+    normalizeHazardType,
+    geomCorridorCheck,
+    geomGetHoleEntry,
+    geomMidAim,
+    geoYdsToLngLat
   });
 }
