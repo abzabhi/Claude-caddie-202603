@@ -16,7 +16,9 @@
 */
 
 import { geomCreateMap, geomRenderPath, geomRenderPaths, geomDistanceYds, geomBearingDeg,
-         geomStartGpsWatch, geomStopGpsWatch } from './geomap.js';
+         geomStartGpsWatch, geomStopGpsWatch,
+         /* UNIFY-MAP — shared auto-aim midpoint */
+         geomMidAim } from './geomap.js';
 
 export class MapView {
   /* opts:
@@ -540,7 +542,10 @@ export class MapView {
     if (!hole || !hole.green) return;
     var startPt = this._teeOverride || hole.tee || (hole.line && hole.line[0]) || null;
     if (!startPt && !hole.line) return;
-    /* Initialize aim at exact midpoint along hole centreline; fall back to tee->green midpoint. */
+    /* Initialize aim at exact midpoint along hole centreline; fall back to tee->green midpoint.
+       UNIFY-MAP: math now lives in geomMidAim (geomap.js). Behavior preserved byte-for-byte
+       — centreline midpoint via turf.length/2 + along, with tee→green midpoint fallback.
+       Original inline formula preserved per comment-don't-delete:
     if (!this._aim) {
       if (hole.line && hole.line.length >= 2 && window.turf) {
         try {
@@ -554,6 +559,11 @@ export class MapView {
         this._aim = [(startPt[0] + hole.green[0]) / 2, (startPt[1] + hole.green[1]) / 2];
       }
       if (this._onAimChange) { try { this._onAimChange(this._aim); } catch(e) {} }
+    }
+    */
+    if (!this._aim) {
+      this._aim = geomMidAim(hole, this._teeOverride);
+      if (this._aim && this._onAimChange) { try { this._onAimChange(this._aim); } catch(e) {} }
     }
     if (this._aimMarker) { try { this._aimMarker.remove(); } catch(e) {} this._aimMarker = null; }
     /* Reticle: 44px crosshair circle, matches screenshot aesthetic. */
