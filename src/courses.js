@@ -1,4 +1,5 @@
 import { uid, today, save, courses, rounds, profile, removeCourse, replaceCourse } from './store.js';
+import { MapView } from './mapview.js';
 import { setVizInitDone } from './viz.js';
 import { geomSearchByName, geomSearchByLocation, geomGetCurrentPosition, geomCreateMap, geomOpenLocateModal,
          geomLoadByCourse, geomLoadByCenter } from './geomap.js'; /* G2, G5; GEO-SUM: load fns */
@@ -511,7 +512,7 @@ async function generateGeoSummaries() {
 }
 
 /* Preview course map overlay — opens the locate modal in GPS-suppressed mode,
-   then spawns a full-screen MapLibre instance once the user selects a course.
+   then spawns a hole-by-hole MapView once the user selects a course.
    Destroyed on close to prevent WebGL context leaks. */
 function previewCourseMap() {
   geomOpenLocateModal({
@@ -519,30 +520,49 @@ function previewCourseMap() {
     hideGps: true,
     onSkip: closePreviewCourseMap,
     onSelect: async function(osmId, center) {
-      const overlay = document.createElement('div');
-      overlay.id = 'crsPreviewOverlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;flex-direction:column;font-family:\'DM Mono\',monospace;';
-      overlay.innerHTML = '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;">'
-        + '<span style="font-size:.8rem;font-weight:600">Course Preview</span>'
-        + '<button class="btn sec" style="font-size:.6rem;padding:4px 10px" onclick="closePreviewCourseMap()">Close</button></div>'
-        + '<div id="crsPreviewMap" style="flex:1;background:#111;"></div>';
-      document.body.appendChild(overlay);
-
-      window._crsPreviewMapInst = geomCreateMap('crsPreviewMap', { zoom: 15 });
+      let geo;
       try {
-        const geo = await geomLoadByCourse(osmId, center || null);
-        geomRenderGeometry(window._crsPreviewMapInst, geo);
+        geo = await geomLoadByCourse(osmId, center || null);
       } catch (err) {
         console.error('[Preview] Load failed', err);
+        return;
       }
+
+      const holeKeys = Object.keys(geo.holes || {}).sort(function(a, b){ return a - b; });
+      const holeOpts = holeKeys.map(function(k){
+        return '<option value="' + k + '">Hole ' + k + '</option>';
+      }).join('');
+
+      const overlay = document.createElement('div');
+      overlay.id = 'crsPreviewOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;flex-direction:column;font-family:\'DM Mono\',monospace';
+      overlay.innerHTML =
+          '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-shrink:0">'
+        +   '<span style="font-size:.8rem;font-weight:600">Course Preview</span>'
+        +   '<select onchange="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(parseInt(this.value),{resetAim:true})" '
+        +     'style="font-size:.65rem;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);padding:3px 6px">'
+        +     holeOpts
+        +   '</select>'
+        +   '<button class="btn sec" style="font-size:.6rem;padding:4px 10px" onclick="closePreviewCourseMap()">Close</button>'
+        + '</div>'
+        + '<div style="position:relative;flex:1"><div id="crsPreviewMapCanvas" style="position:absolute;inset:0;background:#111"></div></div>';
+      document.body.appendChild(overlay);
+
+      window._crsPreviewMapView = new MapView({
+        containerId: 'crsPreviewMapCanvas',
+        geo: geo,
+        holeN: parseInt(holeKeys[0]) || 1,
+        idPrefix: 'prv'
+      });
+      window._crsPreviewMapView.mount();
     }
   });
 }
 
 function closePreviewCourseMap() {
-  if (window._crsPreviewMapInst) {
-    try { window._crsPreviewMapInst.remove(); } catch (e) {}
-    window._crsPreviewMapInst = null;
+  if (window._crsPreviewMapView) {
+    try { window._crsPreviewMapView.unmount(); } catch (e) {}
+    window._crsPreviewMapView = null;
   }
   var overlay = document.getElementById('crsPreviewOverlay');
   if (overlay) overlay.remove();
