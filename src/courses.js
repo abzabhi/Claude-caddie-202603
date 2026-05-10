@@ -512,7 +512,7 @@ async function generateGeoSummaries() {
 }
 
 /* Preview course map overlay — opens the locate modal in GPS-suppressed mode,
-   then spawns a hole-by-hole MapView once the user selects a course.
+   then spawns a hole-by-hole MapView with a hole shelf and floating map controls.
    Destroyed on close to prevent WebGL context leaks. */
 function previewCourseMap() {
   geomOpenLocateModal({
@@ -528,38 +528,69 @@ function previewCourseMap() {
         return;
       }
 
-      const holeKeys = Object.keys(geo.holes || {}).sort(function(a, b){ return a - b; });
-      if (!holeKeys.length) { alert('No hole data found for this course.'); return; }
+      /* Build hole shelf from selected tee; fall back to geo.holes keys */
+      const tee = editCourseData && currentEditTeeId
+        ? (editCourseData.tees || []).find(function(t){ return t.id === currentEditTeeId; })
+        : null;
+      const holeList = (tee && tee.holes && tee.holes.length)
+        ? tee.holes
+        : Object.keys(geo.holes || {}).sort(function(a,b){ return a-b; }).map(function(k){ return { number: parseInt(k), par: '', yards: '' }; });
+      if (!holeList.length) { alert('No hole data found for this course.'); return; }
 
-      const holeOpts = holeKeys.map(function(k){
-        return '<option value="' + k + '">Hole ' + k + '</option>';
+      const firstHole = holeList[0].number || 1;
+
+      const shelfHtml = holeList.map(function(h){
+        const active = h.number === firstHole;
+        return '<button id="crsPhBtn' + h.number + '" onclick="window._crsPreviewSelectHole(' + h.number + ')" '
+          + 'style="padding:5px 7px;background:' + (active ? 'var(--gr3)' : 'var(--sf)') + ';'
+          + 'border:1px solid ' + (active ? 'var(--gr2)' : 'var(--br)') + ';border-radius:4px;'
+          + 'font-family:inherit;font-size:.6rem;color:' + (active ? 'var(--ac2)' : 'var(--tx2)') + ';'
+          + 'cursor:pointer;text-align:center;min-width:40px;flex-shrink:0">'
+          + 'H' + h.number + '<br>'
+          + '<span style="font-size:.52rem;color:var(--tx3)">P' + (h.par||'?') + '\xb7' + (h.yards||'?') + 'y</span>'
+          + '</button>';
       }).join('');
 
       const overlay = document.createElement('div');
       overlay.id = 'crsPreviewOverlay';
       overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;flex-direction:column;font-family:\'DM Mono\',monospace';
       overlay.innerHTML =
-          '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-shrink:0;background:var(--bg2)">'
-        +   '<div style="display:flex;align-items:center;gap:6px">'
-        +     '<span style="font-size:.8rem;font-weight:600;margin-right:4px">Preview</span>'
-        +     '<button class="btn sec" style="font-size:.7rem;padding:3px 10px" '
-        +       'onclick="var s=document.getElementById(\'crsPrvSel\');if(s.selectedIndex>0){s.selectedIndex--;s.dispatchEvent(new Event(\'change\'))}">&#8249;</button>'
-        +     '<select id="crsPrvSel" onchange="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(parseInt(this.value),{resetAim:true})" '
-        +       'style="font-size:.7rem;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);padding:4px 6px">'
-        +       holeOpts
-        +     '</select>'
-        +     '<button class="btn sec" style="font-size:.7rem;padding:3px 10px" '
-        +       'onclick="var s=document.getElementById(\'crsPrvSel\');if(s.selectedIndex<s.options.length-1){s.selectedIndex++;s.dispatchEvent(new Event(\'change\'))}">&#8250;</button>'
-        +   '</div>'
+          /* header */
+          '<div style="padding:8px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-shrink:0;background:var(--bg2)">'
+        +   '<span style="font-size:.78rem;font-weight:600">' + ((editCourseData && editCourseData.name) || 'Course Preview') + '</span>'
         +   '<button class="btn sec" style="font-size:.65rem;padding:4px 10px" onclick="closePreviewCourseMap()">Close</button>'
         + '</div>'
-        + '<div style="position:relative;flex:1"><div id="crsPreviewMapCanvas" style="position:absolute;inset:0;background:#111"></div></div>';
+          /* hole shelf */
+        + '<div style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--br)">'
+        +   shelfHtml
+        + '</div>'
+          /* map canvas with floating controls */
+        + '<div style="position:relative;flex:1">'
+        +   '<div id="crsPreviewMapCanvas" style="position:absolute;inset:0;background:#111"></div>'
+        +   '<div style="position:absolute;top:10px;right:10px;z-index:10;display:flex;flex-direction:column;gap:6px">'
+        +     '<button class="btn sec" style="font-size:.65rem;padding:5px 10px" '
+        +       'onclick="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(window._crsPreviewMapView._holeN,{resetAim:true})">Hole</button>'
+        +     '<button class="btn sec" style="font-size:.65rem;padding:5px 10px" '
+        +       'onclick="if(window._crsPreviewMapView) window._crsPreviewMapView.zoomGreen()">\u26F3</button>'
+        +   '</div>'
+        + '</div>';
       document.body.appendChild(overlay);
+
+      /* Global hole-select handler */
+      window._crsPreviewSelectHole = function(n) {
+        document.querySelectorAll('[id^=crsPhBtn]').forEach(function(b) {
+          var hn = parseInt(b.id.replace('crsPhBtn', ''));
+          b.style.background   = hn === n ? 'var(--gr3)' : 'var(--sf)';
+          b.style.borderColor  = hn === n ? 'var(--gr2)' : 'var(--br)';
+          b.style.color        = hn === n ? 'var(--ac2)' : 'var(--tx2)';
+        });
+        if (window._crsPreviewMapView) window._crsPreviewMapView.showHole(n, { resetAim: true });
+      };
 
       window._crsPreviewMapView = new MapView({
         containerId: 'crsPreviewMapCanvas',
         geo: geo,
-        holeN: parseInt(holeKeys[0]) || 1,
+        holeN: firstHole,
         idPrefix: 'prv'
       });
       window._crsPreviewMapView.mount();
@@ -572,6 +603,7 @@ function closePreviewCourseMap() {
     try { window._crsPreviewMapView.unmount(); } catch (e) {}
     window._crsPreviewMapView = null;
   }
+  delete window._crsPreviewSelectHole;
   var overlay = document.getElementById('crsPreviewOverlay');
   if (overlay) overlay.remove();
 }
