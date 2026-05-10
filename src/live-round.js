@@ -10,7 +10,10 @@ import { geomCreateMap, geomLoadByCenter, geomLoadByCourse, geomSearchByLocation
          geomRenderGeometry, geomShowHole,
          geomStartGpsWatch, geomStopGpsWatch, geomDistanceYds,
          geomBearingDeg, geomGetCurrentPosition, geomRenderPath,
-         geomGeocodeCity } from './geomap.js';
+         geomGeocodeCity,
+         /* UNIFY-MAP — shared corridor + hazard primitives */
+         geomCorridorCheck, geomGetHoleEntry, geomMidAim,
+         HAZARD_TYPES, normalizeHazardType } from './geomap.js';
 /* G2.5 -- view-layer primitives extracted into class. live-round retains
    round-specific glue; MapView owns markers, GPS watch, polygon source/layer,
    floating bubble/pill, draggable aim+tee. */
@@ -461,17 +464,20 @@ function _lrHazardStripHtml(hole) {
   var geo = _lrMapGeo;
   if (!geo.holes || !geo.polygons || !geo.polygons.features) return '';
 
-  /* Find this hole's geo entry. */
+  /* UNIFY-MAP — hole-entry lookup via shared geomGetHoleEntry. Original loop preserved:
   var wantRef = String(hole.n);
   var holeEntry = null;
   for (var hk in geo.holes) {
     if (String(geo.holes[hk].ref) === wantRef) { holeEntry = geo.holes[hk]; break; }
   }
+  */
+  var holeEntry = geomGetHoleEntry(geo, hole.n);
   if (!holeEntry || !holeEntry.line || holeEntry.line.length < 2) return '';
   var teePt  = holeEntry.line[0];
   var greenPt = Array.isArray(holeEntry.green) ? holeEntry.green : holeEntry.line[holeEntry.line.length - 1];
 
-  /* Default aim = fairway midpoint (same as MapView initial aim). */
+  /* Default aim = fairway midpoint (same as MapView initial aim).
+     UNIFY-MAP: math now lives in geomMidAim (geomap.js). Original formula preserved:
   var aimPt;
   if (lrState && lrState._mapAim && Array.isArray(lrState._mapAim)) {
     aimPt = lrState._mapAim;
@@ -484,8 +490,16 @@ function _lrHazardStripHtml(hole) {
       aimPt = [(teePt[0] + greenPt[0]) / 2, (teePt[1] + greenPt[1]) / 2];
     }
   }
+  */
+  var aimPt;
+  if (lrState && lrState._mapAim && Array.isArray(lrState._mapAim)) {
+    aimPt = lrState._mapAim;
+  } else {
+    aimPt = geomMidAim(holeEntry) || [(teePt[0] + greenPt[0]) / 2, (teePt[1] + greenPt[1]) / 2];
+  }
 
-  /* Inline corridor check — mirrors _gvCorridorCheck exactly. */
+  /* UNIFY-MAP — corridor check + hazard type tables now sourced from geomap.js.
+     Original inline copies preserved per comment-don't-delete:
   var GPS_HAZARD_TYPES = { bunker: 1, water_hazard: 1, lateral_water_hazard: 1, woods: 1 };
   var GPS_TYP_NORM = { water_hazard: 'water', lateral_water_hazard: 'water', bunker: 'bunker', woods: 'woods' };
   function _lrCorridor(startLL, endLL, hc) {
@@ -506,6 +520,9 @@ function _lrHazardStripHtml(hole) {
     var cross = ux * hy - uy * hx;
     return { inCorridor: inC, lr: cross > 0 ? 'L' : (cross < 0 ? 'R' : '') };
   }
+  */
+  /* Local centroid helper retained: _geomPolyCentroid in geomap.js is module-internal
+     (not exported). Math is identical to the shared version. */
   function _lrCentroid(f) {
     if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
     var ring = f.geometry.coordinates[0];
@@ -521,10 +538,12 @@ function _lrHazardStripHtml(hole) {
     var ff = allFeats[fi];
     if (!ff || !ff.properties) continue;
     var ftyp = ff.properties.golf;
-    if (!GPS_HAZARD_TYPES[ftyp]) continue;
+    /* UNIFY-MAP — was: if (!GPS_HAZARD_TYPES[ftyp]) continue; */
+    if (!HAZARD_TYPES[ftyp]) continue;
     var fc = _lrCentroid(ff);
     if (!fc) continue;
-    var normTyp = GPS_TYP_NORM[ftyp] || ftyp;
+    /* UNIFY-MAP — was: var normTyp = GPS_TYP_NORM[ftyp] || ftyp; */
+    var normTyp = normalizeHazardType(ftyp);
     /* ydsFromTee for X-axis placement. */
     var yft = null;
     try {
@@ -532,9 +551,11 @@ function _lrHazardStripHtml(hole) {
       var dy = (fc[1]-teePt[1]) * Math.PI/180 * 6371000;
       yft = Math.round(Math.sqrt(dx*dx + dy*dy) * 1.0936133);
     } catch(e2) {}
-    var r1 = _lrCorridor(teePt, aimPt, fc);
+    /* UNIFY-MAP — was: var r1 = _lrCorridor(teePt, aimPt, fc); */
+    var r1 = geomCorridorCheck(teePt, aimPt, fc, ff);
     if (r1 && r1.inCorridor) fbToAim.push({ typ: normTyp, lr: r1.lr, ydsFromTee: yft });
-    var r2 = _lrCorridor(aimPt, greenPt, fc);
+    /* UNIFY-MAP — was: var r2 = _lrCorridor(aimPt, greenPt, fc); */
+    var r2 = geomCorridorCheck(aimPt, greenPt, fc, ff);
     if (r2 && r2.inCorridor) fbAimToGreen.push({ typ: normTyp, lr: r2.lr, ydsFromTee: yft });
   }
 
