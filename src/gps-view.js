@@ -204,6 +204,9 @@ function gpsViewOpen() {
     _gvOriginalAimCb = lr._mapInstance._onAimChange || null;
     lr._mapInstance._onAimChange = function(lngLat) {
       if (_gvOriginalAimCb) { try { _gvOriginalAimCb(lngLat); } catch(e) {} }
+      /* Always re-render on aim change so hazard strip + yards update immediately.
+         Confirmed safe: onAimChange fires only on tap or drag-end, never continuously. */
+      if (typeof gpsViewRender === 'function') gpsViewRender();
       /* Tracker behaviour: only if explicitly enabled. */
       if (!lr._trackerOn) return;
       /* PHASE-SPRINT Task 4: One-tap flow. A single tap on the map immediately
@@ -237,7 +240,6 @@ function gpsViewOpen() {
       } else {
         _gvShowToast("Can\u2019t log shot \u2014 no tee position available", 'error');
       }
-      if (typeof gpsViewRender === 'function') gpsViewRender();
 
       /* PHASE-SPRINT: Old two-tap arm flow deprecated below — preserved as comment.
       // var armedAlready = (typeof window.stIsArmed === 'function') ? window.stIsArmed() : false;
