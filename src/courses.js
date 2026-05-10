@@ -529,6 +529,8 @@ function previewCourseMap() {
       }
 
       const holeKeys = Object.keys(geo.holes || {}).sort(function(a, b){ return a - b; });
+      if (!holeKeys.length) { alert('No hole data found for this course.'); return; }
+
       const holeOpts = holeKeys.map(function(k){
         return '<option value="' + k + '">Hole ' + k + '</option>';
       }).join('');
@@ -537,13 +539,19 @@ function previewCourseMap() {
       overlay.id = 'crsPreviewOverlay';
       overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;flex-direction:column;font-family:\'DM Mono\',monospace';
       overlay.innerHTML =
-          '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-shrink:0">'
-        +   '<span style="font-size:.8rem;font-weight:600">Course Preview</span>'
-        +   '<select onchange="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(parseInt(this.value),{resetAim:true})" '
-        +     'style="font-size:.65rem;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);padding:3px 6px">'
-        +     holeOpts
-        +   '</select>'
-        +   '<button class="btn sec" style="font-size:.6rem;padding:4px 10px" onclick="closePreviewCourseMap()">Close</button>'
+          '<div style="padding:10px 12px;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-shrink:0;background:var(--bg2)">'
+        +   '<div style="display:flex;align-items:center;gap:6px">'
+        +     '<span style="font-size:.8rem;font-weight:600;margin-right:4px">Preview</span>'
+        +     '<button class="btn sec" style="font-size:.7rem;padding:3px 10px" '
+        +       'onclick="var s=document.getElementById(\'crsPrvSel\');if(s.selectedIndex>0){s.selectedIndex--;s.dispatchEvent(new Event(\'change\'))}">&#8249;</button>'
+        +     '<select id="crsPrvSel" onchange="if(window._crsPreviewMapView) window._crsPreviewMapView.showHole(parseInt(this.value),{resetAim:true})" '
+        +       'style="font-size:.7rem;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);padding:4px 6px">'
+        +       holeOpts
+        +     '</select>'
+        +     '<button class="btn sec" style="font-size:.7rem;padding:3px 10px" '
+        +       'onclick="var s=document.getElementById(\'crsPrvSel\');if(s.selectedIndex<s.options.length-1){s.selectedIndex++;s.dispatchEvent(new Event(\'change\'))}">&#8250;</button>'
+        +   '</div>'
+        +   '<button class="btn sec" style="font-size:.65rem;padding:4px 10px" onclick="closePreviewCourseMap()">Close</button>'
         + '</div>'
         + '<div style="position:relative;flex:1"><div id="crsPreviewMapCanvas" style="position:absolute;inset:0;background:#111"></div></div>';
       document.body.appendChild(overlay);
