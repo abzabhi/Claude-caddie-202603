@@ -404,7 +404,8 @@ function _renderGeoSumBtnRow() {
   if (!host || !editCourseData) return;
   const canGen = !!(editCourseData.osmCourseId || (editCourseData.osmCenter && editCourseData.osmCenter.length === 2));
   const genHtml = canGen
-    ? '<button id="geoSumGenBtn" class="btn" style="font-size:.6rem;padding:4px 10px" onclick="generateGeoSummaries()">Generate</button>'
+    ? '<button id="crsPreviewBtn" class="btn" style="font-size:.6rem;padding:4px 10px;margin-right:8px" onclick="previewCourseMap()">Preview Map</button>'
+    + '<button id="geoSumGenBtn" class="btn" style="font-size:.6rem;padding:4px 10px" onclick="generateGeoSummaries()">Generate</button>'
     : '';
   host.innerHTML =
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:8px;padding:6px 0;border-top:1px solid var(--br)">'
@@ -507,6 +508,72 @@ async function generateGeoSummaries() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+/* Preview course map overlay — spawns a full-screen MapLibre instance to inspect
+   fairways and hazards. Mirrors generateGeoSummaries fetch decision tree.
+   Destroyed on close to prevent WebGL context leaks. */
+async function previewCourseMap() {
+  if (!editCourseData) return;
+  if (document.getElementById('crsPreviewOverlay')) return; /* already open */
+
+  /* Build overlay */
+  var overlay = document.createElement('div');
+  overlay.id = 'crsPreviewOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;flex-direction:column';
+
+  var header = '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--br);flex-shrink:0">'
+    + '<span style="font-size:.75rem;font-weight:700;color:var(--tx)">' + (editCourseData.name || 'Course Preview') + '</span>'
+    + '<button class="btn sec" style="font-size:.65rem;padding:4px 10px" onclick="closePreviewCourseMap()">Close</button>'
+    + '</div>';
+  var mapDiv = '<div id="crsPreviewMap" style="flex:1;min-height:0"></div>';
+  var statusDiv = '<div id="crsPreviewStatus" style="font-size:.6rem;color:var(--tx3);padding:4px 14px;flex-shrink:0;min-height:18px"></div>';
+
+  overlay.innerHTML = header + mapDiv + statusDiv;
+  document.body.appendChild(overlay);
+
+  /* Status helper */
+  function _setStatus(msg) {
+    var el = document.getElementById('crsPreviewStatus');
+    if (el) el.textContent = msg || '';
+  }
+
+  /* Instantiate map */
+  window._crsPreviewMapInst = geomCreateMap('crsPreviewMap', { zoom: 15 });
+  _setStatus('Loading course geometry\u2026');
+
+  /* Fetch geo — mirrors generateGeoSummaries decision tree */
+  var geo = null;
+  try {
+    if (editCourseData.osmCourseId) {
+      try {
+        geo = await geomLoadByCourse(editCourseData.osmCourseId, editCourseData.osmCenter || null);
+      } catch (e) {
+        if (e && e.message === 'NO_COURSE_BOUNDARY' && editCourseData.osmCenter) {
+          geo = await geomLoadByCenter(editCourseData.osmCenter[0], editCourseData.osmCenter[1], 1500);
+        } else { throw e; }
+      }
+    } else if (editCourseData.osmCenter && editCourseData.osmCenter.length === 2) {
+      geo = await geomLoadByCenter(editCourseData.osmCenter[0], editCourseData.osmCenter[1], 1500);
+    } else {
+      _setStatus('Course is not geotagged \u2014 cannot preview.');
+      return;
+    }
+    if (!geo) { _setStatus('No geometry returned.'); return; }
+    geomRenderGeometry(window._crsPreviewMapInst, geo);
+    _setStatus('');
+  } catch (err) {
+    _setStatus('Load failed: ' + (err && err.message ? err.message : 'unknown'));
+  }
+}
+
+function closePreviewCourseMap() {
+  if (window._crsPreviewMapInst) {
+    try { window._crsPreviewMapInst.remove(); } catch (e) {}
+    window._crsPreviewMapInst = null;
+  }
+  var overlay = document.getElementById('crsPreviewOverlay');
+  if (overlay) overlay.remove();
 }
 
 /* Clear all geoSummary fields on the currently-selected tee. Two-tap confirm.
@@ -1018,7 +1085,8 @@ export {
   renderHoleTable, updateHole, updateHoleTotals, saveCourse,
   _fetchCourseIndex, _fetchCourseFile, _stripGeometry,
   searchCourseRepo, addCourseFromRepo, onRepoSearch,
-  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsClearGeotag, crsOpenGeotagModal /* G2 + VIZMAP-3 */
+  crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsClearGeotag, crsOpenGeotagModal, /* G2 + VIZMAP-3 */
+  previewCourseMap, closePreviewCourseMap
 };
 
 Object.assign(window, {
@@ -1030,7 +1098,8 @@ Object.assign(window, {
   crsIsGeotagged, crsGeotagSearchByName, crsGeotagSearchByGps, crsGeotagApply, crsClearGeotag, crsOpenGeotagModal,
   _crsGeotagCloseModal,
   /* GEO-SUM: course-edit controls */
-  generateGeoSummaries, clearGeoSummaries, toggleGeoRowVis, toggleNoteRowVis
+  generateGeoSummaries, clearGeoSummaries, toggleGeoRowVis, toggleNoteRowVis,
+  previewCourseMap, closePreviewCourseMap
   /* G5 -- below superseded by geomOpenLocateModal in geomap.js:
      _crsGeotagDoNameSearch, _crsGeotagDoGpsSearch, _crsGeotagToggleMap, _crsGeotagMapSearchHere */
 });
