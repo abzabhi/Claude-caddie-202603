@@ -454,46 +454,134 @@ function _lrHazardStripHtml(hole) {
     + '</div>';
   }
 
-  /* ── Static fallback path: parse geoSummary string as before ── */
-  if (!hole.geoSummary) return '';
-  var parsed;
-  try { parsed = parseGeoSummary(hole.geoSummary); } catch (e) { return ''; }
-  if (!parsed) return '';
+  /* ── Fallback path: GPS view closed — compute corridors from geo directly.
+     Same two-corridor logic as gps-view._renderHazards, using fairway midpoint
+     as default aim so the strip always reflects real geometry. ── */
+  if (!_lrMapGeo || !window.turf) return '';
+  var geo = _lrMapGeo;
+  if (!geo.holes || !geo.polygons || !geo.polygons.features) return '';
 
-  // Dogleg apex tick (rendered as a centred chevron mark on the strip)
-  if (parsed.shape && parsed.shape.type === 'dogleg') {
-    var dPct = Math.max(0, Math.min(100, (parsed.shape.yds / totalYds) * 100));
-    var arrow = parsed.shape.dir === 'left' ? '\u25C0' : '\u25B6';
-    ticks += '<div title="dogleg ' + parsed.shape.dir + ' @ ' + parsed.shape.yds + 'y" '
-          +  'style="position:absolute;top:50%;left:' + dPct.toFixed(1) + '%;transform:translate(-50%,-50%);'
-          +  'font-size:.6rem;color:var(--tx2);pointer-events:none">' + arrow + '</div>';
+  /* Find this hole's geo entry. */
+  var wantRef = String(hole.n);
+  var holeEntry = null;
+  for (var hk in geo.holes) {
+    if (String(geo.holes[hk].ref) === wantRef) { holeEntry = geo.holes[hk]; break; }
   }
-  // Fairway hazards: tick above (left) or below (right) midline
-  for (var si = 0; si < parsed.hazards.length; si++) {
-    var shz = parsed.hazards[si];
-    if (typeof shz.yds !== 'number' || shz.yds <= 0) continue;
-    var spct = Math.max(0, Math.min(100, (shz.yds / totalYds) * 100));
-    var scolor = COLORS[shz.label] || '#888';
-    var stopPos = shz.side === 'left' ? '2px' : 'auto';
-    var sbotPos = shz.side === 'right' ? '2px' : 'auto';
-    ticks += '<div title="' + shz.label + '-' + shz.side + ' @ ' + shz.yds + 'y" '
-          +  'style="position:absolute;left:' + spct.toFixed(1) + '%;'
-          +  (stopPos !== 'auto' ? 'top:' + stopPos + ';' : '')
-          +  (sbotPos !== 'auto' ? 'bottom:' + sbotPos + ';' : '')
-          +  'transform:translateX(-50%);width:6px;height:10px;background:' + scolor + ';'
+  if (!holeEntry || !holeEntry.line || holeEntry.line.length < 2) return '';
+  var teePt  = holeEntry.line[0];
+  var greenPt = Array.isArray(holeEntry.green) ? holeEntry.green : holeEntry.line[holeEntry.line.length - 1];
+
+  /* Default aim = fairway midpoint (same as MapView initial aim). */
+  var aimPt;
+  if (lrState && lrState._mapAim && Array.isArray(lrState._mapAim)) {
+    aimPt = lrState._mapAim;
+  } else {
+    try {
+      var ls = window.turf.lineString(holeEntry.line);
+      var half = window.turf.length(ls, { units: 'kilometers' }) / 2;
+      aimPt = window.turf.along(ls, half, { units: 'kilometers' }).geometry.coordinates;
+    } catch(e) {
+      aimPt = [(teePt[0] + greenPt[0]) / 2, (teePt[1] + greenPt[1]) / 2];
+    }
+  }
+
+  /* Inline corridor check — mirrors _gvCorridorCheck exactly. */
+  var GPS_HAZARD_TYPES = { bunker: 1, water_hazard: 1, lateral_water_hazard: 1, woods: 1 };
+  var GPS_TYP_NORM = { water_hazard: 'water', lateral_water_hazard: 'water', bunker: 'bunker', woods: 'woods' };
+  function _lrCorridor(startLL, endLL, hc) {
+    if (!startLL || !endLL || !hc) return null;
+    var lat0 = startLL[1] * Math.PI / 180;
+    var R = 6371000, M_TO_YDS = 1.0936133;
+    var ax = (endLL[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+    var ay = (endLL[1] - startLL[1]) * Math.PI / 180 * R;
+    var aLen = Math.sqrt(ax * ax + ay * ay);
+    if (aLen < 1e-3) return null;
+    var ux = ax / aLen, uy = ay / aLen;
+    var rx = uy, ry = -ux;
+    var hx = (hc[0] - startLL[0]) * Math.PI / 180 * Math.cos(lat0) * R;
+    var hy = (hc[1] - startLL[1]) * Math.PI / 180 * R;
+    var t  = (hx * ux + hy * uy) / aLen;
+    var perpYds = Math.abs(hx * rx + hy * ry) * M_TO_YDS;
+    var inC = (t >= 0 && t <= 1 && perpYds <= 25);
+    var cross = ux * hy - uy * hx;
+    return { inCorridor: inC, lr: cross > 0 ? 'L' : (cross < 0 ? 'R' : '') };
+  }
+  function _lrCentroid(f) {
+    if (!f || !f.geometry || f.geometry.type !== 'Polygon') return null;
+    var ring = f.geometry.coordinates[0];
+    if (!ring || !ring.length) return null;
+    var sx = 0, sy = 0;
+    for (var ci = 0; ci < ring.length; ci++) { sx += ring[ci][0]; sy += ring[ci][1]; }
+    return [sx / ring.length, sy / ring.length];
+  }
+
+  var fbToAim = [], fbAimToGreen = [], fbSeen = {};
+  var allFeats = geo.polygons.features;
+  for (var fi = 0; fi < allFeats.length; fi++) {
+    var ff = allFeats[fi];
+    if (!ff || !ff.properties) continue;
+    var ftyp = ff.properties.golf;
+    if (!GPS_HAZARD_TYPES[ftyp]) continue;
+    var fc = _lrCentroid(ff);
+    if (!fc) continue;
+    var normTyp = GPS_TYP_NORM[ftyp] || ftyp;
+    /* ydsFromTee for X-axis placement. */
+    var yft = null;
+    try {
+      var dx = (fc[0]-teePt[0]) * Math.PI/180 * Math.cos(teePt[1]*Math.PI/180) * 6371000;
+      var dy = (fc[1]-teePt[1]) * Math.PI/180 * 6371000;
+      yft = Math.round(Math.sqrt(dx*dx + dy*dy) * 1.0936133);
+    } catch(e2) {}
+    var r1 = _lrCorridor(teePt, aimPt, fc);
+    if (r1 && r1.inCorridor) fbToAim.push({ typ: normTyp, lr: r1.lr, ydsFromTee: yft });
+    var r2 = _lrCorridor(aimPt, greenPt, fc);
+    if (r2 && r2.inCorridor) fbAimToGreen.push({ typ: normTyp, lr: r2.lr, ydsFromTee: yft });
+  }
+
+  /* Render fallback ticks using same dedup + solid/hollow logic. */
+  var fbSeen2 = {};
+  for (var ti = 0; ti < fbToAim.length; ti++) {
+    var fh = fbToAim[ti];
+    if (fh.ydsFromTee === null) continue;
+    var fkey = fh.typ + '-' + fh.ydsFromTee;
+    if (fbSeen2[fkey]) continue;
+    fbSeen2[fkey] = true;
+    var fpct = Math.max(0, Math.min(100, (fh.ydsFromTee / totalYds) * 100));
+    var fcol = COLORS[fh.typ] || '#888';
+    ticks += '<div title="' + fh.typ + (fh.lr ? '-' + fh.lr : '') + ' @ ' + fh.ydsFromTee + 'y" '
+          +  'style="position:absolute;left:' + fpct.toFixed(1) + '%;'
+          +  (fh.lr === 'L' ? 'top:2px;' : fh.lr === 'R' ? 'bottom:2px;' : '')
+          +  'transform:translateX(-50%);width:6px;height:10px;background:' + fcol + ';'
           +  'border-radius:1px;pointer-events:none"></div>';
   }
-  // Green flag at 100% — show colored dot if green has hazards
-  var sgreenDot = '';
-  if (parsed.green && parsed.green.length) {
-    var sgColor = COLORS[parsed.green[0].label] || '#888';
-    sgreenDot = '<div title="green: ' + parsed.green.map(function(g){ return g.label + '-' + g.side; }).join(',') + '" '
-            +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
-            +  'width:8px;height:8px;border-radius:50%;background:' + sgColor + ';border:1px solid var(--bg)"></div>';
+  for (var ti2 = 0; ti2 < fbAimToGreen.length; ti2++) {
+    var fh2 = fbAimToGreen[ti2];
+    if (fh2.ydsFromTee === null) continue;
+    var fkey2 = fh2.typ + '-' + fh2.ydsFromTee;
+    if (fbSeen2[fkey2]) continue;
+    fbSeen2[fkey2] = true;
+    var fpct2 = Math.max(0, Math.min(100, (fh2.ydsFromTee / totalYds) * 100));
+    var fcol2 = COLORS[fh2.typ] || '#888';
+    ticks += '<div title="' + fh2.typ + (fh2.lr ? '-' + fh2.lr : '') + ' @ ' + fh2.ydsFromTee + 'y (past aim)" '
+          +  'style="position:absolute;left:' + fpct2.toFixed(1) + '%;'
+          +  (fh2.lr === 'L' ? 'top:2px;' : fh2.lr === 'R' ? 'bottom:2px;' : '')
+          +  'transform:translateX(-50%);width:6px;height:10px;'
+          +  'border:1px solid ' + fcol2 + ';background:transparent;opacity:0.5;'
+          +  'border-radius:1px;pointer-events:none"></div>';
+  }
+
+  /* Green dot from parseGeoSummary (greenside geometry unchanged). */
+  var fbGreenDot = '';
+  var fbParsedGreen = [];
+  if (hole.geoSummary) { try { fbParsedGreen = parseGeoSummary(hole.geoSummary).green || []; } catch(e) {} }
+  if (fbParsedGreen.length) {
+    var fgc = COLORS[fbParsedGreen[0].label] || '#888';
+    fbGreenDot = '<div title="green: ' + fbParsedGreen.map(function(g){ return g.label+'-'+g.side; }).join(',') + '" '
+              +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
+              +  'width:8px;height:8px;border-radius:50%;background:' + fgc + ';border:1px solid var(--bg)"></div>';
   } else {
-    sgreenDot = '<div title="green: open" '
-            +  'style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
-            +  'width:8px;height:8px;border-radius:50%;background:var(--ac2);border:1px solid var(--bg)"></div>';
+    fbGreenDot = '<div title="green: open" style="position:absolute;right:-3px;top:50%;transform:translateY(-50%);'
+              +  'width:8px;height:8px;border-radius:50%;background:var(--ac2);border:1px solid var(--bg)"></div>';
   }
 
   return '<div class="card" style="margin-bottom:0;padding:8px 10px">'
@@ -501,7 +589,7 @@ function _lrHazardStripHtml(hole) {
     +   '<span>TEE</span><span>HAZARDS</span><span>GREEN</span>'
     + '</div>'
     + '<div style="position:relative;height:22px;background:var(--gr3);border-radius:3px;border:1px solid var(--br)">'
-    +   ticks + sgreenDot
+    +   ticks + fbGreenDot
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;font-size:.5rem;color:var(--tx3);margin-top:3px;font-family:\'DM Mono\',monospace">'
     +   '<span>0</span><span>' + totalYds + ' yds</span>'
