@@ -40,6 +40,17 @@ function _gvGetGeo() {
     ? lr._mapInstance.getGeometry()
     : (lr._mapInstance._geo || null);
 }
+
+/* UNIFY-MAP-FIX: zoom-to-green handler for the GPS map's overlay button.
+   Delegates to MapView.zoomGreen() — same code path used by courses preview's
+   button and by the legacy _lrZoomGreen wrapper. */
+function _gvZoomGreen() {
+  var lr = window.lrState;
+  if (lr && lr._mapInstance && typeof lr._mapInstance.zoomGreen === 'function') {
+    try { lr._mapInstance.zoomGreen(); } catch(e) {}
+  }
+}
+if (typeof window !== 'undefined') { window._gvZoomGreen = _gvZoomGreen; }
 /* UNIFY-MAP — _gvHoleEntry retained as a thin wrapper around shared
    geomGetHoleEntry. The wrapper preserves all existing callsites (which pass
    only `geo` and rely on the function to look up the current hole from
@@ -850,6 +861,15 @@ function _renderMinimap() {
       +   '<span style="background:#111;color:#fff;border-radius:999px;padding:3px 9px;font-size:.68rem">&mdash;</span>'
       +   '<span style="font-size:.56rem;color:#444">to aim</span>'
       + '</div>'
+      /* UNIFY-MAP-FIX: zoom-to-green button on GPS map (parity with courses preview).
+         Was previously rendered by _lrMapPanelHtml in live-round; that function went
+         dead during PHASE-A when the hybrid map panel was killed. Wiring it here on
+         the GPS view canvas — which is now the only live-round map surface. */
+      + '<button id="gpsZoomGreenBtn" class="btn sec" '
+      +   'style="position:absolute;top:8px;right:8px;z-index:30;'
+      +   'font-size:.62rem;padding:5px 10px;border-radius:20px;'
+      +   'box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.9" '
+      +   'onclick="_gvZoomGreen()" title="Zoom to Green">\u26F3</button>'
       + '<div id="gpsMapCanvas" style="position:absolute;inset:0;background:#111"></div>';
     _gvCanvasInjected = true;
     _gvLastShownHole  = -1;
