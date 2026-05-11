@@ -4,7 +4,9 @@ import { VIZ_COLORS, VIZ_PATH_COLORS, VIZ_LP, VIZ_ASYM, VIZ_LPROB, VIZ_ROLL, FLI
 import { vizGetDisp } from './dispersion.js';
 /* VIZMAP-2 -- map-backed hole planner */
 import { geomLoadByCourse, geomLoadByCenter, geomOpenLocateModal,
-         geomDistanceYds, geomBearingDeg } from './geomap.js';
+         geomDistanceYds, geomBearingDeg,
+         /* UNIFY-MAP — shared hole-entry lookup */
+         geomGetHoleEntry } from './geomap.js';
 import { MapView } from './mapview.js';
 
 /* CLEAN11 -- _localISO centralised to geo.js as localISO(); local copy commented out
@@ -333,6 +335,10 @@ function _vizLngLatToFrame(axis, lngLat) {
 
 // ── VIZMAP-2: helpers ─────────────────────────────────────────────────────────
 
+/* UNIFY-MAP — _vizCurHoleGeo retained as a thin wrapper around shared
+   geomGetHoleEntry. All seven existing callsites unchanged — they continue to
+   call the parameterless function which internally looks up vizSelectedHole.
+   Original lookup loop preserved per comment-don't-delete:
 function _vizCurHoleGeo() {
   if (!vizMapState.geo || !vizMapState.geo.holes) return null;
   var want = String(vizSelectedHole);
@@ -340,6 +346,10 @@ function _vizCurHoleGeo() {
     if (String(vizMapState.geo.holes[key].ref) === want) return vizMapState.geo.holes[key];
   }
   return null;
+}
+*/
+function _vizCurHoleGeo() {
+  return geomGetHoleEntry(vizMapState.geo, vizSelectedHole);
 }
 
 function _vizEnsureHoleEdit() {
