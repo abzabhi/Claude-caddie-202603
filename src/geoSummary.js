@@ -16,19 +16,35 @@
  *   GEO | dogleg-right@180 | hazard=water-left@160 | green=open
  */
 
+/* UNIFY-MAP — shared primitives for unified map mechanics. geoSummary now derives
+   hazards using the same two-corridor model live-round / GPS view show at hole
+   open: tee → autoAim and autoAim → green, with autoAim from geomMidAim. */
+import { geomCorridorCheck, geomGetHoleEntry, geomMidAim,
+         HAZARD_TYPES as GEOMAP_HAZARD_TYPES,
+         normalizeHazardType, HAZARD_META,
+         geoYdsToLngLat as geomGeoYdsToLngLat } from './geomap.js';
+
 // ---------------------------------------------------------------------------
 // Internal constants
 // ---------------------------------------------------------------------------
 
-// Raw OSM tags we want to pull (intentionally excluding 'rough')
-var HAZARD_TYPES = ['bunker', 'water_hazard', 'lateral_water_hazard', 'woods'];
-
-// Map normalized internal labels (post-_hazardLabel) to Human UI strings
-var HAZARD_DICT = {
-  'bunker': 'Bunker',
-  'water':  'Water',
-  'woods':  'Woods'
-};
+// UNIFY-MAP — local HAZARD_TYPES (array) replaced by shared GEOMAP_HAZARD_TYPES
+// (object) imported from geomap.js. Same five OSM tags, indexed differently:
+// .indexOf(x) === -1  becomes  !GEOMAP_HAZARD_TYPES[x]. Originals preserved per
+// comment-don't-delete:
+// var HAZARD_TYPES = ['bunker', 'water_hazard', 'lateral_water_hazard', 'woods'];
+// (Note: original 4-tag array; shared object also includes 'water' alias used by
+// internal-typed hazards. The non-OSM 'water' key is never matched against
+// f.properties.golf so behavior is preserved.)
+//
+// Local HAZARD_DICT (normalized-label -> display-string) replaced by shared
+// HAZARD_META (which carries label/icon/color objects). HAZARD_DICT[label] →
+// HAZARD_META[label].label. Original preserved:
+// var HAZARD_DICT = {
+//   'bunker': 'Bunker',
+//   'water':  'Water',
+//   'woods':  'Woods'
+// };
 
 // Minimum bearing change (degrees) across the full centreline to call a dogleg.
 var DOGLEG_THRESHOLD_DEG = 20;
@@ -155,13 +171,14 @@ function _analysecentreline(line) {
 // Hazard assignment and classification
 // ---------------------------------------------------------------------------
 
-/**
- * Get the hazard type label for export. Normalises both water variants.
- */
+/* UNIFY-MAP — _hazardLabel replaced by shared normalizeHazardType from geomap.js.
+   Body byte-identical: water_hazard/lateral_water_hazard → 'water'; everything
+   else passes through. Original preserved per comment-don't-delete:
 function _hazardLabel(golfType) {
   if (golfType === 'water_hazard' || golfType === 'lateral_water_hazard') return 'water';
   return golfType; // 'bunker', 'rough'
 }
+*/
 
 /**
  * Find the nearest point on a centreline to a given point,
@@ -224,12 +241,12 @@ function _sideOfLine(line, centroid) {
   return diff >= 0 ? 'right' : 'left';
 }
 
-/**
- * Corridor check — mirrors gps-view _gvCorridorCheck exactly.
- * Returns true if hazardCentroid falls within CORRIDOR_WIDTH_YDS of the
- * startLL->endLL axis and between the two endpoints (t in [0,1]).
- * Also returns side: 'left'|'right'.
- */
+/* UNIFY-MAP — _corridorCheck replaced by shared geomCorridorCheck from geomap.js.
+   Behavior preserved: same 25-yard threshold, same L/R cross-product convention
+   (but shared engine returns 'L'/'R'; callers translate to 'left'/'right' inline).
+   Shared engine also adds optional polygon-intersect fallback when feature is
+   passed as 4th arg — geoSummary opts in for better long-thin-water detection.
+   Original preserved per comment-don't-delete:
 function _corridorCheck(startLL, endLL, hazardCentroid) {
   if (!startLL || !endLL || !hazardCentroid) return null;
   var lat0 = startLL[1] * Math.PI / 180;
@@ -250,14 +267,18 @@ function _corridorCheck(startLL, endLL, hazardCentroid) {
   var side = cross > 0 ? 'left' : 'right'; // matches gps-view L/R convention, spelled out
   return { inCorridor: inCorridor, side: side };
 }
+*/
 
 /**
  * Given a hole and all course polygons, return an array of hazard descriptors
  * relevant to this hole, sorted by yardage from tee.
  *
- * A hazard is included if it falls within the 40-yard corridor (tee->green)
- * OR within GREEN_RADIUS_YDS direct distance of the green anchor — same
- * philosophy as gps-view's two-corridor + green-zone model.
+ * UNIFY-MAP: hazard inclusion now matches what live-round / GPS view show at hole
+ * open. Instead of a single tee→green corridor, we test two corridors against
+ * the autoAim point (geomMidAim): tee → autoAim and autoAim → green. A hazard
+ * is included if it falls in either corridor OR within GREEN_RADIUS_YDS direct
+ * distance of the green anchor. This mirrors the live two-corridor model and
+ * follows the actual fairway through doglegs.
  *
  * Each descriptor: { label: string, side: string, yds: number, nearGreen: boolean }
  */
@@ -267,6 +288,9 @@ function _holeHazards(hole, allFeatures, ownerMap) {
   var green = Array.isArray(hole.green) ? hole.green : hole.line[hole.line.length - 1];
   var holeNum = parseInt(hole.ref, 10);
 
+  /* UNIFY-MAP — auto aim = same midpoint live-round / GPS view show at hole open. */
+  var autoAim = geomMidAim(hole) || [(tee[0] + green[0]) / 2, (tee[1] + green[1]) / 2];
+
   var hazards = [];
 
   for (var i = 0; i < allFeatures.length; i++) {
@@ -274,7 +298,8 @@ function _holeHazards(hole, allFeatures, ownerMap) {
     if (!f || !f.properties) continue;
 
     var golfType = f.properties.golf;
-    if (HAZARD_TYPES.indexOf(golfType) === -1) continue;
+    /* UNIFY-MAP — was: if (HAZARD_TYPES.indexOf(golfType) === -1) continue; */
+    if (!GEOMAP_HAZARD_TYPES[golfType]) continue;
 
     /* Exclusive assignment: skip hazards whose closest centreline belongs to another hole. */
     if (ownerMap && ownerMap.has(f) && ownerMap.get(f) !== holeNum) continue;
@@ -282,9 +307,20 @@ function _holeHazards(hole, allFeatures, ownerMap) {
     var c = _centroid(f);
     if (!c) continue;
 
-    // Test 1: corridor tee->green (mirrors gps-view ball->aim->green corridor)
+    /* UNIFY-MAP — two-corridor test (matches live-round/GPS view at hole open).
+       Pass the feature as 4th arg so the shared engine's polygon-intersect
+       fallback runs for long thin water hazards. Side is taken from whichever
+       corridor matched first (tee→aim preferred). Original single-corridor call
+       preserved per comment-don't-delete:
     var corr = _corridorCheck(tee, green, c);
     var inCorridor = corr && corr.inCorridor;
+    */
+    var c1 = geomCorridorCheck(tee, autoAim, c, f);
+    var c2 = geomCorridorCheck(autoAim, green, c, f);
+    var inCorridor = !!((c1 && c1.inCorridor) || (c2 && c2.inCorridor));
+    /* Translate shared engine 'L'/'R' to geoSummary's 'left'/'right' string convention. */
+    var matchedLr = (c1 && c1.inCorridor) ? c1.lr : ((c2 && c2.inCorridor) ? c2.lr : '');
+    var corrSide = (matchedLr === 'L') ? 'left' : (matchedLr === 'R' ? 'right' : null);
 
     // Test 2: within GREEN_RADIUS_YDS direct distance of green anchor
     var distToGreen = _yds(c, green);
@@ -294,10 +330,11 @@ function _holeHazards(hole, allFeatures, ownerMap) {
 
     var nearest = _nearestOnLine(hole.line, c);
     // Side from corridor check if available; fall back to centreline side
-    var side = (corr && corr.side) ? corr.side : _sideOfLine(hole.line, c);
+    var side = corrSide || _sideOfLine(hole.line, c);
 
     hazards.push({
-      label:     _hazardLabel(golfType),
+      /* UNIFY-MAP — was: label: _hazardLabel(golfType), */
+      label:     normalizeHazardType(golfType),
       side:      side,
       yds:       nearest.yds,
       nearGreen: nearGreen
@@ -316,17 +353,18 @@ function _holeHazards(hole, allFeatures, ownerMap) {
 /**
  * Summarise green-area hazards as a short string.
  * Returns 'open' if nothing found near the green.
+ * UNIFY-MAP: HAZARD_DICT[x] replaced by HAZARD_META[x] && HAZARD_META[x].label.
  */
 function _greenSummary(hazards) {
-  var greenHazards = hazards.filter(function (h) { return h.nearGreen && HAZARD_DICT[h.label]; });
+  var greenHazards = hazards.filter(function (h) { return h.nearGreen && HAZARD_META[h.label]; });
   if (!greenHazards.length) return 'Open';
 
   var left  = greenHazards.filter(function (h) { return h.side === 'left'; });
   var right = greenHazards.filter(function (h) { return h.side === 'right'; });
 
   var parts = [];
-  if (left.length)  parts.push(HAZARD_DICT[left[0].label] + ' Left');
-  if (right.length) parts.push(HAZARD_DICT[right[0].label] + ' Right');
+  if (left.length)  parts.push(HAZARD_META[left[0].label].label + ' Left');
+  if (right.length) parts.push(HAZARD_META[right[0].label].label + ' Right');
   return parts.join(', ') || 'Open';
 }
 
@@ -358,7 +396,8 @@ function buildGeoSummaries(geo) {
     for (var fi = 0; fi < allFeatures.length; fi++) {
       var feat = allFeatures[fi];
       if (!feat || !feat.properties) continue;
-      if (HAZARD_TYPES.indexOf(feat.properties.golf) === -1) continue;
+      /* UNIFY-MAP — was: if (HAZARD_TYPES.indexOf(feat.properties.golf) === -1) continue; */
+      if (!GEOMAP_HAZARD_TYPES[feat.properties.golf]) continue;
       var fc = _centroid(feat);
       if (!fc) continue;
       var minD = Infinity;
@@ -413,7 +452,8 @@ function buildGeoSummaries(geo) {
       var parts = [];
       for (var h = 0; h < fairwayHazards.length; h++) {
         var fh = fairwayHazards[h];
-        var humanLabel = HAZARD_DICT[fh.label];
+        /* UNIFY-MAP — was: var humanLabel = HAZARD_DICT[fh.label]; */
+        var humanLabel = HAZARD_META[fh.label] && HAZARD_META[fh.label].label;
         if (!humanLabel) continue;
         var sideCap = fh.side.charAt(0).toUpperCase() + fh.side.slice(1);
         var ydsR = Math.round(fh.yds / 5) * 5;
@@ -537,6 +577,14 @@ function parseGeoSummary(str) {
  * @param {number} offsetYds          Perp offset; positive = right, negative = left
  * @returns {Array<number>|null}      [lng, lat] or null if inputs invalid
  */
+/**
+ * Project a yardage along the tee->green axis of a hole, with optional perp
+ * offset, into a [lng, lat] coordinate.
+ *
+ * UNIFY-MAP: function moved to geomap.js. This local symbol re-exports the
+ * shared implementation so existing callers (export at bottom + any external
+ * imports of geoSummary.js's geoYdsToLngLat) continue to work unchanged.
+ * Original local body preserved per comment-don't-delete:
 function geoYdsToLngLat(geo, holeNumber, alongYds, offsetYds) {
   if (!geo || !geo.holes || !window.turf) return null;
   if (typeof alongYds !== 'number' || isNaN(alongYds)) return null;
@@ -562,6 +610,10 @@ function geoYdsToLngLat(geo, holeNumber, alongYds, offsetYds) {
   } catch (e) {
     return null;
   }
+}
+*/
+function geoYdsToLngLat(geo, holeNumber, alongYds, offsetYds) {
+  return geomGeoYdsToLngLat(geo, holeNumber, alongYds, offsetYds);
 }
 
 // ---------------------------------------------------------------------------
