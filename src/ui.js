@@ -535,7 +535,7 @@ function showTab(id, skipHistory = false) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
-  if(event&&event.currentTarget) event.currentTarget.classList.add('active');
+  if(!skipHistory && typeof event!=='undefined' && event && event.currentTarget) event.currentTarget.classList.add('active');
   else { const _btn=[...document.querySelectorAll('.tab')].find(t=>t.getAttribute('onclick')?.includes("'"+id+"'")); if(_btn) _btn.classList.add('active'); }
   if(!skipHistory) { try{ window.history.pushState({tab:id}, '', '#'+id); }catch(e){} }
   if(id==='profile')  renderProfile();
