@@ -530,12 +530,14 @@ function onMergeFile(e, mode) {
 }
 
 // -- Tabs ---------------------------------------------------------------------
-function showTab(id) {
+function showTab(id, skipHistory = false) {
   try{ localStorage.setItem('gordy:lastTab',id); }catch(e){}
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   if(event&&event.currentTarget) event.currentTarget.classList.add('active');
+  else { const _btn=[...document.querySelectorAll('.tab')].find(t=>t.getAttribute('onclick')?.includes("'"+id+"'")); if(_btn) _btn.classList.add('active'); }
+  if(!skipHistory) { try{ window.history.pushState({tab:id}, '', '#'+id); }catch(e){} }
   if(id==='profile')  renderProfile();
   if(id==='clubs')    renderClubs();
   if(id==='courses')  renderCourseList();
@@ -894,12 +896,13 @@ function renderPerfSummary() {
 }
 
 // -- Tab navigation (programmatic) --------------------------------------------
-function showTabFromProfile(id) {
+function showTabFromProfile(id, skipHistory = false) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id)?.classList.add('active');
   const tabBtn = [...document.querySelectorAll('.tab')].find(t=>t.getAttribute('onclick')?.includes("'"+id+"'"));
   if(tabBtn) tabBtn.classList.add('active');
+  if(!skipHistory) { try{ window.history.pushState({tab:id}, '', '#'+id); }catch(e){} }
   if(id==='clubs')    renderClubs();
   if(id==='courses')  renderCourseList();
   if(id==='rounds')   renderHandicap();
@@ -1444,6 +1447,22 @@ function renderTrendsCard() {
     + skipNote;
 }
 
+// -- Back/forward history routing --------------------------------------------
+window.addEventListener('popstate', function(e) {
+  var validTabs=['profile','gordy','rounds','sessions','viz','clubs','courses','range','notes'];
+  if (e.state && e.state.tab && validTabs.indexOf(e.state.tab)!==-1) {
+    showTab(e.state.tab, true);
+    return;
+  }
+  var hash=(window.location.hash||'').replace('#','');
+  if (validTabs.indexOf(hash)!==-1) {
+    showTab(hash, true);
+  } else if (hash.indexOf('notes-')===0) {
+    // In-page anchor inside Notes tab — let the browser scroll natively, do not switch tabs.
+  } else {
+    showTab('profile', true);
+  }
+});
 
 Object.assign(window, {
   saveData, exportData, processDataText, dbLoadData, importData, onMergeFile,
