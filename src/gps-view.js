@@ -68,7 +68,10 @@ function _gvHoleEntry(geo) {
 function _gvHoleEntry(geo) {
   var lr = window.lrState;
   if (!lr) return null;
-  return geomGetHoleEntry(geo, lr.curHole + 1);
+  /* WHS24-PARTIAL (setup): use actual hole number from holes array, not
+     curHole+1, so B9 and partial-span rounds resolve the correct geo entry. */
+  var holeN = (lr.holes && lr.holes[lr.curHole]) ? lr.holes[lr.curHole].n : (lr.curHole + 1);
+  return geomGetHoleEntry(geo, holeN);
 }
 /* _gvPolyCentroid — moved to geomap.js as _geomPolyCentroid (DRY refactor).
    Preserved per "comment, don't delete" rule.
@@ -906,8 +909,10 @@ function _renderMinimap() {
       ro.observe(canvas);
     }());
   }
-  /* Snap to current hole on first render and on hole changes. */
-  var holeN = lr.curHole + 1;
+  /* Snap to current hole on first render and on hole changes.
+     WHS24-PARTIAL (setup): use actual hole number from holes array, not
+     curHole+1, so B9 (n=10..18) and partial-span rounds zoom correctly. */
+  var holeN = (lr.holes && lr.holes[lr.curHole]) ? lr.holes[lr.curHole].n : (lr.curHole + 1);
   if (holeN !== _gvLastShownHole && lr._mapInstance && typeof lr._mapInstance.showHole === 'function') {
     try { lr._mapInstance.showHole(holeN); } catch(e) {}
     _gvLastShownHole = holeN;
