@@ -48,6 +48,43 @@ foursomes:  'Two teams, alternate shot. One ball per team, players alternate hit
 };
 
 // -- Setup ------------------------------------------------------------------
+
+/* WHS24-PARTIAL (setup): inject Round Format radios + Start-at-hole input into
+   the setup screen. Idempotent. Mirrors _ensureRoundFormatToggle in rounds.js
+   for style consistency. Anchors above the Date/Conditions row inside the
+   Course card. Setup-time selection becomes the source of truth for
+   lrState.holes (slice) and lrState.curHole (start index) in lrBeginRound. */
+function _lrEnsureSetupFormatRow() {
+  if (document.getElementById('lrSetupFormatRow')) return;
+  // Anchor: the Date/Conditions g2 row sits inside the Course card; insert before it.
+  const dateEl = document.getElementById('lrDate');
+  if (!dateEl) return;
+  const dateRow = dateEl.closest('.g2') || dateEl.closest('.field');
+  if (!dateRow || !dateRow.parentNode) return;
+  const row = document.createElement('div');
+  row.id = 'lrSetupFormatRow';
+  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 6px;font-size:.62rem';
+  row.innerHTML =
+      '<span style="color:var(--tx3);letter-spacing:.06em;text-transform:uppercase">Format:</span>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="radio" name="lrSetupFormat" value="18" checked onchange="lrOnSetupFormatChange()"> 18</label>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="radio" name="lrSetupFormat" value="F9" onchange="lrOnSetupFormatChange()"> Front 9</label>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="radio" name="lrSetupFormat" value="B9" onchange="lrOnSetupFormatChange()"> Back 9</label>'
+    + '<span style="color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;margin-left:6px">Start hole:</span>'
+    + '<input id="lrSetupStartHole" type="number" min="1" max="18" value="1" inputmode="numeric" style="width:54px;background:var(--bg);border:1px solid var(--br);border-radius:4px;color:var(--tx);font-family:\'DM Mono\',monospace;font-size:.7rem;padding:4px 6px;outline:none;text-align:center">';
+  dateRow.parentNode.insertBefore(row, dateRow);
+}
+
+/* WHS24-PARTIAL (setup): on format change, snap start-hole input's default + clamp range. */
+function lrOnSetupFormatChange() {
+  const fmtEl = document.querySelector('input[name="lrSetupFormat"]:checked');
+  const fmt = fmtEl ? fmtEl.value : '18';
+  const sh = document.getElementById('lrSetupStartHole');
+  if (!sh) return;
+  if (fmt === 'B9') { sh.min = 10; sh.max = 18; sh.value = 10; }
+  else if (fmt === 'F9') { sh.min = 1; sh.max = 9; sh.value = 1; }
+  else { sh.min = 1; sh.max = 18; sh.value = 1; }
+}
+
 function lrStartSetup() {
 if(lrState) { lrExpand(); return; }
 // Populate course dropdown
@@ -59,6 +96,11 @@ document.getElementById('lrDate').value = today();
 // Init player slots with one player (you)
 lrInitPlayerSlots();
 lrOnModeChange();
+/* WHS24-PARTIAL (setup): ensure Format + Start-hole row is present, reset to defaults. */
+_lrEnsureSetupFormatRow();
+const fmt18 = document.querySelector('input[name="lrSetupFormat"][value="18"]');
+if (fmt18) fmt18.checked = true;
+lrOnSetupFormatChange();
 document.getElementById('lrOverlay').classList.add('active');
 lrShowScreen('lrSetup');
 }
@@ -187,6 +229,19 @@ const course = courseId ? courses.find(c=>c.id===courseId) : null;
 const teeId  = course ? document.getElementById('lrTeeSelect').value : null;
 const tee    = course?.tees?.find(t=>t.id===teeId) || course?.tees?.[0] || null;
 
+/* WHS24-PARTIAL (setup): read Round Format + Start-at-hole from setup form.
+   Format defines the hole-number range (F9: 1-9, B9: 10-18, 18: 1-18).
+   Start hole defaults: 1 for 18/F9, 10 for B9; clamped to format's range. */
+const fmtEl = document.querySelector('input[name="lrSetupFormat"]:checked');
+const lrFormat = fmtEl ? fmtEl.value : '18';
+const fmtMinN = (lrFormat === 'B9') ? 10 : 1;
+const fmtMaxN = (lrFormat === 'F9') ? 9 : 18;
+const startHoleRaw = parseInt(document.getElementById('lrSetupStartHole')?.value);
+const startHoleDefault = (lrFormat === 'B9') ? 10 : 1;
+let startHoleN = isFinite(startHoleRaw) ? startHoleRaw : startHoleDefault;
+if (startHoleN < fmtMinN) startHoleN = fmtMinN;
+if (startHoleN > fmtMaxN) startHoleN = fmtMaxN;
+
 // Build holes array
 let holeArr = [];
 if(tee?.holes?.length) {
@@ -198,6 +253,29 @@ if(tee?.holes?.length) {
     : +countRaw;
   holeArr = Array.from({length:count},(_,i)=>({n:i+1,par:4,yards:0,handicap:i+1}));
 }
+
+/* WHS24-PARTIAL (setup): restrict holeArr to the format's hole-number range.
+   F9 -> hole n in 1..9; B9 -> hole n in 10..18; 18 -> unchanged.
+   For tee-backed rounds, filter by n. For impromptu (generic 1..N), filter
+   if covered, else regenerate the correct range. */
+if (lrFormat === 'F9' || lrFormat === 'B9') {
+  const lo = fmtMinN, hi = fmtMaxN;
+  const filtered = holeArr.filter(h => h.n >= lo && h.n <= hi);
+  if (filtered.length === (hi - lo + 1)) {
+    holeArr = filtered;
+  } else if (!tee?.holes?.length) {
+    // impromptu fallback: generate the exact range
+    holeArr = Array.from({length: hi - lo + 1}, (_, i) => ({n: lo + i, par: 4, yards: 0, handicap: i + 1}));
+  } else {
+    alert('This tee does not have the holes needed for ' + (lrFormat === 'F9' ? 'Front 9' : 'Back 9') + '.');
+    return;
+  }
+}
+
+/* WHS24-PARTIAL (setup): curHole is the index inside holeArr of the chosen
+   start hole. Clamped above; fallback to 0 if not found. */
+let startIdx = holeArr.findIndex(h => h.n === startHoleN);
+if (startIdx < 0) startIdx = 0;
 
 // Build players
 const slots = [...document.querySelectorAll('.lr-player-slot')];
@@ -237,14 +315,15 @@ lrState = {
   conditions: document.getElementById('lrConditions').value,
   mode,
   countForHandicap: document.getElementById('lrCountHcp').checked,
-  /* WHS24-PARTIAL: '18' (default) | 'F9' | 'B9'. Mid-round-toggleable.
-     Drives lrCalcDiffWithCap holesPlayed + lrSaveRound payload (holesPlayed/partial). */
-  roundFormat: '18',
+  /* WHS24-PARTIAL: '18' (default) | 'F9' | 'B9'. Locked at setup; mid-round
+     toggle remains as save-time hint only. Drives lrCalcDiffWithCap
+     holesPlayed + lrSaveRound payload (holesPlayed/partial). */
+  roundFormat: lrFormat,
   holes: holeArr,
   players,
   mePlayerId,
   teams,
-  curHole: 0,       // 0-based index
+  curHole: startIdx,  // 0-based index within holeArr (WHS24-PARTIAL: respects setup start hole)
   curPlayer: 0,     // active player tab index
   netView: false,
   saved: false,
@@ -899,7 +978,9 @@ _lrPersist();
    {resetAim:true} replaces the manual aim/path clear. */
 if (lrState && lrState._mapInstance && _lrMapGeo) {
   lrState._mapAim = null; _lrPersist();
-  _lrMapShowHole(lrState.curHole + 1, { resetAim: true });
+  /* WHS24-PARTIAL (setup): pass actual hole number, not curHole+1, so B9
+     (n=10..18) and partial-span rounds zoom to the correct hole. */
+  _lrMapShowHole(lrState.holes[lrState.curHole].n, { resetAim: true });
 }
 /* LR-EXTRAS -- if GPS view is open, refresh it immediately so banner/yards/map
    snap to the new hole without waiting for the next 3s/10s tick. */
@@ -3442,7 +3523,9 @@ function _lrMapMount() {
          once per round and stays mounted; gpsViewClose just hides the parent screen. */
       containerId: 'gpsMapCanvas',
       geo:         _lrMapGeo,
-      holeN:       lrState.curHole + 1,
+      /* WHS24-PARTIAL (setup): seed MapView with actual hole number, not
+         curHole+1, so B9 (n=10..18) opens on the correct hole. */
+      holeN:       (lrState.holes && lrState.holes[lrState.curHole]) ? lrState.holes[lrState.curHole].n : (lrState.curHole + 1),
       idPrefix:    'lr',                /* preserve existing #lrAimDistBubble / #lrPlayerDistPill DOM ids */
       onAimChange: function(ll) {
         lrState._mapAim = ll;
@@ -3469,7 +3552,8 @@ function _lrMapMount() {
   } else {
     /* Re-render path may have torn down the canvas DOM; refresh geometry + hole + state. */
     lrState._mapInstance.setGeometry(_lrMapGeo);
-    lrState._mapInstance._holeN = lrState.curHole + 1;
+    /* WHS24-PARTIAL (setup): sync actual hole number, not curHole+1. */
+    lrState._mapInstance._holeN = (lrState.holes && lrState.holes[lrState.curHole]) ? lrState.holes[lrState.curHole].n : (lrState.curHole + 1);
   }
   /* Sync tee override into view before mount/re-mount.
      Note: _aim is NOT synced here — MapView owns aim state; onAimChange keeps
@@ -4104,6 +4188,7 @@ function lrxTick() {
 Object.assign(window, {
   lrStartSetup, lrAddPlayer, lrRemovePlayer, lrToggleMe,
   lrOnCourseSelect, lrOnHoleCountChange, lrOnModeChange,
+  lrOnSetupFormatChange, /* WHS24-PARTIAL (setup) */
   lrBeginRound, lrCancelSetup,
   lrTogParPicker, lrSetPar, lrSetView, lrSetNetView, lrGoHole,
   lrMinimize, lrExpand, lrUpdatePill,
