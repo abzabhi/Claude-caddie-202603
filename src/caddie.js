@@ -12,6 +12,10 @@ function getSkillText() {
   return localStorage.getItem('vc:skill') ||
     '[Skill unavailable \u2014 cache empty and Gist unreachable. Upload skill.md alongside this export file in your AI chat.]';
 }
+function getSkill2Text() {
+  return localStorage.getItem('vc:skill2') ||
+    '[Skill (part 2) unavailable \u2014 cache empty and Gist unreachable. Upload skill2.md alongside this export file in your AI chat.]';
+}
 function getRefText() {
   return localStorage.getItem('vc:ref') ||
     '[Reference data unavailable \u2014 cache empty and Gist unreachable. Upload reference-data.md alongside this export file in your AI chat.]';
@@ -219,10 +223,11 @@ function exportForAI() {
     ? calcPlayHcp(hcpIdx, +tee.slope, +tee.rating, +course.par)
     : null;
 
-  const skillText = getSkillText();
-  const refText   = getRefText();
-  const skillVer  = (skillText.match(/SkillVersion:\s*(\d+)/)||[])[1] || '?';
-  const refVer    = (refText.match(/ReferenceVersion:\s*(\d+)/)||[])[1] || '?';
+  const skillText  = getSkillText();
+  const skill2Text = getSkill2Text();
+  const refText    = getRefText();
+  const skillVer   = (skillText.match(/SkillVersion:\s*(\d+)/)||[])[1] || '?';
+  const refVer     = (refText.match(/ReferenceVersion:\s*(\d+)/)||[])[1] || '?';
 
   const L = [
     '=== VIRTUAL CADDIE EXPORT ===',
@@ -233,6 +238,8 @@ function exportForAI() {
     '',
     '=== INSTRUCTIONS ===',
     skillText,
+    '',
+    skill2Text,
     '',
     '=== REFERENCE ===',
     refText,
