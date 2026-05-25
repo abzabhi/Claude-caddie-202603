@@ -256,15 +256,17 @@ export function vizDrawHole(hcp,handed,fwYds,mode,pathClubs){
       const lx=Math.min(W-2,aimX+rxR+5);
       annots+=`<text x="${lx}" y="${eCy-3}" font-family="monospace" font-size="9" fill="${col}" font-weight="600">${escHtml('P'+(pi+1)+'\xb7'+d.label)}</text>`;
       annots+=`<line x1="${fwL-16}" y1="${carryY}" x2="${fwL-3}" y2="${carryY}" stroke="${col}" stroke-width="1" opacity=".8"/><text x="${fwL-18}" y="${carryY+4}" font-family="monospace" font-size="8" fill="${col}" text-anchor="end">${Math.round(yft)}y</text>`;
+
+      /* ASKB-3 -- observed overlay centred on straight-shot target (cx, carryY), simple radius. Renders on every node. */
+      const obs=askbGetObserved(club);
+      if(obs){
+        const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale * 0.85; /* ASKB-FIX -- -15% radial size */
+        annots+=vizRenderObservedMarker(cx,carryY,refR,obs,col);
+      }
+
       if(si===clubs.length-1){
         const pFw=Math.max(0,Math.min(1,vizNormCdf((fwYds/2-d.off)/(d.latH/1.5))-vizNormCdf((-fwYds/2-d.off)/(d.latH/1.5))));
         chips.push({label:'P'+(pi+1)+' \xb7 '+clubs.map(c=>c.identifier||c.type).join('\u2192'),col:baseCol,p:Math.round(pFw*100)});
-        /* ASKB-3 -- observed overlay centred on straight-shot target (cx, carryY), simple radius. */
-        const obs=askbGetObserved(club);
-        if(obs){
-          const refR=((d.latH + (d.dl + d.ds)/2) / 2) * scale * 0.85; /* ASKB-FIX -- -15% radial size */
-          annots+=vizRenderObservedMarker(cx,carryY,refR,obs,col);
-        }
       }
       legs.push({label:'P'+(pi+1)+' \xb7 '+d.label+' \xb7 '+Math.round(yft)+'y',col});
     });
@@ -389,12 +391,54 @@ function _vizSyncWaypointsToMap() {
   }
   var edit = vizHoleEdits[vizSelectedHole];
   var fw = (edit && edit.waypoints) || [[],[],[]];
+
+  var hcp = (typeof getHandicap === 'function' ? getHandicap() : null) || 25;
+  var handed = profile.handed || 'Right-handed';
+  var tee = vizActiveTee || (vizActiveCourse && vizActiveCourse.tees && vizActiveCourse.tees[0]);
+  var synHole = tee && tee.holes && tee.holes.find(function(h){ return h.number === vizSelectedHole; });
+  var holeYards = synHole && synHole.yards ? parseFloat(synHole.yards) : 500;
+
   for (var p = 0; p < 3; p++) {
     var arr = fw[p] || [];
+    var vPath = vizPaths[p] || [];
+
+    if (vPath.length < arr.length) {
+      arr = arr.slice(0, vPath.length);
+      _vizEnsureHoleEdit();
+      vizHoleEdits[vizSelectedHole].waypoints[p] = arr;
+      fw[p] = arr;
+    }
+
+    if (vPath.length > arr.length) {
+      var newArr = arr.slice();
+      var cumCarry = newArr.length > 0 ? newArr[newArr.length - 1].alongYds : 0;
+
+      for (var s = newArr.length; s < vPath.length; s++) {
+        var clubId = vPath[s];
+        var club = bag.find(function(c){ return c.id === clubId; });
+        if (club) {
+          var d = vizGetDisp(club, hcp, handed, profile.yardType || 'Total', vizYardMode);
+          if (d && d.carry) {
+            cumCarry += d.carry;
+            newArr.push({ alongYds: Math.min(cumCarry, holeYards - 5), offsetYds: d.off || 0 });
+          } else {
+            cumCarry += 100;
+            newArr.push({ alongYds: Math.min(cumCarry, holeYards - 5), offsetYds: 0 });
+          }
+        } else {
+          cumCarry += 100;
+          newArr.push({ alongYds: Math.min(cumCarry, holeYards - 5), offsetYds: 0 });
+        }
+      }
+      arr = newArr;
+      _vizEnsureHoleEdit();
+      vizHoleEdits[vizSelectedHole].waypoints[p] = arr;
+      fw[p] = arr;
+    }
+
     var lonlatArr = arr.map(function(f){ return _vizFrameToLngLat(axis, f.alongYds, f.offsetYds); });
     vizMapState.mapInstance.setWaypoints(p, lonlatArr);
   }
-  /* Recalibrate _lastWaypointCounts to avoid stale-add detection */
   vizMapState._lastWaypointCounts = [fw[0].length, fw[1].length, fw[2].length];
 }
 
@@ -522,11 +566,14 @@ function _vizMapRenderAskb() {
   if (!showEllipse && !showRadial) { vizMapState.askbSvg.innerHTML = ''; return; }
   var map = vizMapState.mapInstance.getMap();
   if (!map) return;
-  var hcp = getHandicap() || 25;
+  var hcp = (typeof getHandicap === 'function' ? getHandicap() : null) || 25;
   var handed = profile.handed || 'Right-handed';
   vizMapState.shotWarnings = {};
   var _hazardTags = { bunker: 'Bunker', water_hazard: 'Water', lateral_water_hazard: 'Water', woods: 'Trees' };
-  var html = '';
+
+  var defs = '';
+  var shapes = '';
+
   for (var p = 0; p < 3; p++) {
     if (!vizPathVisible[p]) continue;
     var wps = vizMapState.mapInstance.getWaypoints(p);
@@ -538,13 +585,16 @@ function _vizMapRenderAskb() {
       if (!club) continue;
       var disp = vizGetDisp(club, hcp, handed, profile.yardType||'Total', vizYardMode);
       if (!disp || !disp.carry) continue;
+
       var pt = map.project(wps[j]);
       var ll1 = window.turf.destination(window.turf.point(wps[j]), 1, 0, { units:'yards' }).geometry.coordinates;
       var pt1 = map.project(ll1);
       var pxPerYd = Math.hypot(pt1.x - pt.x, pt1.y - pt.y);
       if (!isFinite(pxPerYd) || pxPerYd <= 0) continue;
+
       var color = ['#f1c40f','#e67e22','#3498db'][p];
       var openG = '<g transform="translate(' + pt.x + ',' + pt.y + ')">';
+
       if (showEllipse) {
         /* Turf hazard intersection */
         if (vizMapState.geo && vizMapState.geo.polygons && vizMapState.geo.polygons.features) {
@@ -572,24 +622,26 @@ function _vizMapRenderAskb() {
           } catch (e) { /* turf errors must not break render */ }
         }
 
-        html += openG
-          + vizRenderEllipse(p*10+j, 0, 0,
-              disp.rxR*pxPerYd, disp.rxL*pxPerYd, disp.dl*pxPerYd, disp.ds*pxPerYd,
-              disp.tilt, color, disp.pR, disp.pL, disp.pS, disp.pLn, vizDisplayMode)
-          + '</g>';
+        var es = vizRenderEllipse(p*10+j, 0, 0,
+            disp.rxR*pxPerYd, disp.rxL*pxPerYd, disp.dl*pxPerYd, disp.ds*pxPerYd,
+            disp.tilt, color, disp.pR, disp.pL, disp.pS, disp.pLn, vizDisplayMode);
+
+        defs += es.match(/<clipPath[^>]*>.*?<\/clipPath>/s)?.[0] || '';
+        shapes += openG + es.replace(/<clipPath[^>]*>.*?<\/clipPath>/s, '') + '</g>';
       }
+
       if (showRadial) {
         var obs = askbGetObserved(club);
         if (obs) {
           var refR = ((disp.latH + (disp.dl + disp.ds)/2) / 2) * pxPerYd * 0.85;
-          html += openG
+          shapes += openG
             + vizRenderObservedMarker(0, 0, refR, obs, color)
             + '</g>';
         }
       }
     }
   }
-  vizMapState.askbSvg.innerHTML = html;
+  vizMapState.askbSvg.innerHTML = '<defs>' + defs + '</defs>' + shapes;
 }
 
 function _vizMapRepositionAskb() {
@@ -801,20 +853,19 @@ function _vizMapRenderPanel() {
   var panel = document.getElementById('vizMapPanel');
   if (!panel) return;
 
-  /* Show map panel, hide SVG card */
   panel.style.display = 'block';
   var card = document.getElementById('vizSvgCard');
   if (card) card.style.display = 'none';
 
-  /* If loaded and canvas already in place, just refresh in-place controls. */
   var canvas = document.getElementById('vizMapCanvas');
   if (vizMapState.fetchStatus === 'loaded' && canvas) {
+    _vizSyncWaypointsToMap();
+    _vizPlaceWaypointMarkers();
     _vizMapRenderChainPanel();
     _vizMapRenderAskb();
     return;
   }
 
-  /* Replace panel content (loading/failed/idle states, or first loaded render). */
   if (vizMapState.mapInstance) {
     _vizMapUnmount();
   }
