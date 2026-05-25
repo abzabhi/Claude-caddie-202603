@@ -2150,6 +2150,7 @@ async function _fetchAndCache(url, storeKey, verField) {
 // Fetch on load — silent, non-blocking; re-parse flight data after ref update
 Promise.allSettled([
   _fetchAndCache(GIST_SKILL_URL,      'vc:skill',      'SkillVersion'),
+  _fetchAndCache(GIST_SKILL2_URL,     'vc:skill2',     'Skill2Version'), // Add this line
   _fetchAndCache(GIST_REF_URL,        'vc:ref',        'ReferenceVersion').then(applyRefDataCache),
   _fetchAndCache(GIST_CLUB_TASK_URL,  'vc:clubTask',   'ClubTaskVersion'),
   _fetchAndCache(GIST_CRSE_TASK_URL,  'vc:courseTask', 'CourseTaskVersion'),
